@@ -1,0 +1,121 @@
+use STD.Math
+
+func main() {
+    assert(Math.nearly_equal(Math.pi(), 3.1415927), "pi")
+    assert(Math.nearly_equal(Math.half_pi(), Math.pi() * 0.5), "half pi")
+    assert(Math.nearly_equal(Math.two_pi(), Math.pi() * 2.0), "two pi")
+    assert(Math.nearly_equal(Math.radians(180.0), Math.pi()), "radians")
+    assert(Math.nearly_equal(Math.degrees(Math.pi()), 180.0, 0.00001), "degrees")
+    assert(Math.min(4.0, -2.0) == -2.0, "minimum")
+    assert(Math.max(4.0, -2.0) == 4.0, "maximum")
+    assert(Math.clamp(3.0, -1.0, 2.0) == 2.0, "clamp")
+    assert(Math.saturate(-1.0) == 0.0, "saturate lower")
+    assert(Math.saturate(2.0) == 1.0, "saturate upper")
+    assert(Math.abs(-42.0) == 42.0, "absolute")
+    assert(Math.lerp(10.0, 20.0, 0.25) == 12.5, "lerp")
+    assert(Math.mix(10.0, 20.0, 0.25) == 12.5, "mix")
+    assert(Math.nearly_equal(1.0, 1.0000005), "default tolerance")
+    assert(!Math.nearly_equal(1.0, 1.01, 0.001), "explicit tolerance")
+    assert(Math.sqrt(0.0) == 0.0, "square root zero")
+    assert(Math.sqrt(0.25) == 0.5, "square root fraction")
+    assert(Math.sqrt(144.0) == 12.0, "square root exact")
+    assert(Math.nearly_equal(Math.sqrt(2.0), 1.4142135, 0.00001), "square root irrational")
+    assert(Math.nearly_equal(Math.sqrt(10000000000.0), 100000.0, 0.01), "square root large")
+    let infinity = 1.0 / 0.0
+    assert(Math.sqrt(infinity) == infinity, "square root infinity")
+    let invalid = Math.sqrt(-1.0)
+    assert(invalid != invalid, "square root negative")
+    let tolerance = 0.00001
+    assert(Math.nearly_equal(Math.sin(0.0), 0.0, tolerance), "sine zero")
+    assert(Math.nearly_equal(Math.sin(Math.half_pi()), 1.0, tolerance), "sine half pi")
+    assert(Math.nearly_equal(Math.sin(-Math.half_pi()), -1.0, tolerance), "sine symmetry")
+    assert(Math.nearly_equal(Math.cos(0.0), 1.0, tolerance), "cosine zero")
+    assert(Math.nearly_equal(Math.cos(Math.pi()), -1.0, tolerance), "cosine pi")
+    assert(Math.nearly_equal(Math.tan(Math.pi() * 0.25), 1.0, tolerance), "tangent quarter pi")
+    assert(Math.nearly_equal(Math.asin(0.5), Math.pi() / 6.0, tolerance), "arc sine")
+    assert(Math.nearly_equal(Math.asin(-1.0), -Math.half_pi(), tolerance), "arc sine lower bound")
+    assert(Math.nearly_equal(Math.atan2(1.0, 1.0), Math.pi() * 0.25, tolerance), "atan2 first quadrant")
+    assert(Math.nearly_equal(Math.atan2(1.0, -1.0), Math.pi() * 0.75, tolerance), "atan2 second quadrant")
+    assert(Math.nearly_equal(Math.atan2(-1.0, -1.0), -Math.pi() * 0.75, tolerance), "atan2 third quadrant")
+    assert(Math.nearly_equal(Math.atan2(-1.0, 1.0), -Math.pi() * 0.25, tolerance), "atan2 fourth quadrant")
+    assert(Math.atan2(0.0, 0.0) == 0.0, "atan2 origin")
+    assert(Math.nearly_equal(Math.sin(Math.two_pi() * 1024.0 + Math.half_pi()), 1.0, 0.001), "large angle reduction")
+    let invalid_asin = Math.asin(2.0)
+    assert(invalid_asin != invalid_asin, "arc sine domain")
+    test_vec2()
+    test_vec3()
+    test_vec4()
+    test_quat()
+    test_mat3()
+    test_mat4()
+}
+
+func test_vec2() {
+    let vector = Math.Vec2(3.0, 4.0)
+    assert(vector.length_squared() == 25.0, "Vec2 squared length")
+    assert(vector.length() == 5.0, "Vec2 length")
+    assert(vector.normalized().nearly_equal(Math.Vec2(0.6, 0.8), 0.00001), "Vec2 normalized")
+    assert(vector.add(Math.Vec2.one()).nearly_equal(Math.Vec2(4.0, 5.0)), "Vec2 addition")
+    assert(vector.lerp(Math.Vec2(5.0, 8.0), 0.5).nearly_equal(Math.Vec2(4.0, 6.0)), "Vec2 lerp")
+    assert(Math.Vec2.right().to_str() == "{ 1.0 0.0 }", "Vec2 extensions")
+}
+
+func test_vec3() {
+    let right = Math.Vec3.right()
+    let up = Math.Vec3.up()
+    let back = Math.Vec3.back()
+    assert(right.cross(up).nearly_equal(back), "Vec3 cross product")
+    assert(right.dot(up) == 0.0, "Vec3 orthogonal dot product")
+    assert(Math.Vec3(2.0, 0.0, 0.0).normalized().nearly_equal(right), "Vec3 normalized")
+    assert(Math.Vec3(1.0, 2.0, 3.0).distance(Math.Vec3(1.0, 2.0, 6.0)) == 3.0, "Vec3 distance")
+    assert(right.to_str() == "{ 1.0 0.0 0.0 }", "Vec3 extensions")
+}
+
+func test_vec4() {
+    let vector = Math.Vec4(Math.Vec3(1.0, 2.0, 3.0), 4.0)
+    assert(vector.xyz().nearly_equal(Math.Vec3(1.0, 2.0, 3.0)), "Vec4 xyz")
+    assert(vector.multiply(2.0).nearly_equal(Math.Vec4(2.0, 4.0, 6.0, 8.0)), "Vec4 scalar multiply")
+    assert(Math.Vec4.unit_w().dot(vector) == 4.0, "Vec4 unit w")
+    assert(Math.Vec4.zero().normalized().nearly_equal(Math.Vec4.zero()), "Vec4 zero normalized")
+}
+
+func test_quat() {
+    let rotation = Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back())
+    let rotated = rotation.rotate(Math.Vec3.right())
+    assert(rotated.nearly_equal(Math.Vec3.up(), 0.00001), "Quat rotation")
+    assert(rotation.inverted().rotate(rotated).nearly_equal(Math.Vec3.right(), 0.00001), "Quat inverse")
+    assert(rotation.to_mat3().multiply(Math.Vec3.right()).nearly_equal(Math.Vec3.up(), 0.00001), "Quat Mat3")
+    assert(Math.Quat().length_squared() == 1.0, "Quat identity")
+}
+
+func test_mat3() {
+    let diagonal = Math.Mat3(
+        Math.Vec3(2.0, 0.0, 0.0),
+        Math.Vec3(0.0, 3.0, 0.0),
+        Math.Vec3(0.0, 0.0, 4.0)
+    )
+    let vector = Math.Vec3(1.0, 2.0, 3.0)
+    assert(diagonal.determinant() == 24.0, "Mat3 determinant")
+    assert(diagonal.multiply(vector).nearly_equal(Math.Vec3(2.0, 6.0, 12.0)), "Mat3 vector multiply")
+    assert(diagonal.inverted().multiply(diagonal.multiply(vector)).nearly_equal(vector, 0.00001), "Mat3 inverse")
+    assert(Math.Mat3.identity().multiply(vector).nearly_equal(vector), "Mat3 identity")
+    assert(Math.Mat3.zero().add(diagonal).x.nearly_equal(diagonal.x), "Mat3 extensions")
+}
+
+func test_mat4() {
+    let point = Math.Vec4(Math.Vec3(1.0, 2.0, 3.0), 1.0)
+    let translation = Math.Mat4.translation(Math.Vec3(5.0, -2.0, 1.0))
+    let translated = translation.multiply(point)
+    assert(translated.nearly_equal(Math.Vec4(6.0, 0.0, 4.0, 1.0)), "Mat4 translation")
+    assert(translation.inverted().multiply(translated).nearly_equal(point, 0.00001), "Mat4 inverse")
+
+    let scaling = Math.Mat4.scaling(Math.Vec3(2.0, 3.0, 4.0))
+    assert(scaling.multiply(point).nearly_equal(Math.Vec4(2.0, 6.0, 12.0, 1.0)), "Mat4 scaling")
+
+    let rotation = Math.Mat4.rotation(Math.half_pi(), Math.Vec3.back())
+    assert(rotation.multiply(Math.Vec4.unit_x()).xyz().nearly_equal(Math.Vec3.up(), 0.00001), "Mat4 rotation")
+
+    let view = Math.Mat4.look_at(Math.Vec3.zero(), Math.Vec3.front(), Math.Vec3.up())
+    assert(view.multiply(point).nearly_equal(point, 0.00001), "Mat4 look at")
+    assert(Math.Mat4.identity().multiply(point).nearly_equal(point), "Mat4 identity")
+}

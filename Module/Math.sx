@@ -1,0 +1,247 @@
+public func sqrt(value:float) float {
+    if value != value {
+        return value
+    }
+    if value < 0.0 {
+        return invalid_float(value)
+    }
+    if value == 0.0 || value + value == value {
+        return value
+    }
+
+    var estimate = 1.0
+    if value > 1.0 {
+        estimate = value
+    }
+    var previous = 0.0
+    var iteration = 0
+    while iteration < 128 {
+        let next = (estimate + value / estimate) * 0.5
+        if next == estimate || next == previous {
+            return next
+        }
+        previous = estimate
+        estimate = next
+        iteration += 1
+    }
+    return estimate
+}
+
+public func sin(value:float) float {
+    var angle = reduce_angle(value)
+    if angle > half_pi() {
+        angle = pi() - angle
+    }
+    if angle < -half_pi() {
+        angle = -pi() - angle
+    }
+    let squared = angle * angle
+    var result = 0.000002755732 + squared * -0.00000002505211
+    result = -0.0001984127 + squared * result
+    result = 0.008333333 + squared * result
+    result = -0.16666667 + squared * result
+    return angle * (1.0 + squared * result)
+}
+
+public func cos(value:float) float {
+    var angle = reduce_angle(value)
+    var sign = 1.0
+    if angle > half_pi() {
+        angle = pi() - angle
+        sign = -1.0
+    }
+    if angle < -half_pi() {
+        angle = -pi() - angle
+        sign = -1.0
+    }
+    let squared = angle * angle
+    var result = 0.000024801588 + squared * -0.0000002755732
+    result = -0.0013888889 + squared * result
+    result = 0.041666668 + squared * result
+    result = -0.5 + squared * result
+    return sign * (1.0 + squared * result)
+}
+
+public func tan(value:float) float {
+    return sin(value) / cos(value)
+}
+
+public func asin(value:float) float {
+    if value != value || value < -1.0 || value > 1.0 {
+        return invalid_float(value)
+    }
+    if value == 1.0 {
+        return half_pi()
+    }
+    if value == -1.0 {
+        return -half_pi()
+    }
+    return atan2(value, sqrt((1.0 - value) * (1.0 + value)))
+}
+
+public func atan2(y:float, x:float) float {
+    if x != x || y != y {
+        return invalid_float(x + y)
+    }
+    if x > 0.0 {
+        return atan(y / x)
+    }
+    if x < 0.0 {
+        if y >= 0.0 {
+            return atan(y / x) + pi()
+        }
+        return atan(y / x) - pi()
+    }
+    if y > 0.0 {
+        return half_pi()
+    }
+    if y < 0.0 {
+        return -half_pi()
+    }
+    return 0.0
+}
+
+public func pi() float {
+    return 3.1415927
+}
+
+public func half_pi() float {
+    return pi() * 0.5
+}
+
+public func two_pi() float {
+    return pi() * 2.0
+}
+
+public func epsilon() float {
+    return 0.000001
+}
+
+public func radians(degrees:float) float {
+    return degrees * (pi() / 180.0)
+}
+
+public func degrees(radians:float) float {
+    return radians * (180.0 / pi())
+}
+
+public func min(left:float, right:float) float {
+    if left < right {
+        return left
+    }
+    return right
+}
+
+public func max(left:float, right:float) float {
+    if left > right {
+        return left
+    }
+    return right
+}
+
+public func clamp(value:float, minimum:float, maximum:float) float {
+    return min(max(value, minimum), maximum)
+}
+
+public func saturate(value:float) float {
+    return clamp(value, 0.0, 1.0)
+}
+
+public func abs(value:float) float {
+    if value < 0.0 {
+        return 0.0 - value
+    }
+    return value
+}
+
+public func lerp(start:float, end:float, amount:float) float {
+    return start + (end - start) * amount
+}
+
+public func mix(start:float, end:float, amount:float) float {
+    return lerp(start, end, amount)
+}
+
+public func nearly_equal(left:float, right:float) bool {
+    return nearly_equal(left, right, epsilon())
+}
+
+public func nearly_equal(left:float, right:float, tolerance:float) bool {
+    return abs(left - right) <= tolerance
+}
+
+func invalid_float(value:float) float {
+    let zero = value - value
+    return zero / zero
+}
+
+func reduce_angle(value:float) float {
+    if value != value || (value != 0.0 && value + value == value) {
+        return invalid_float(value)
+    }
+
+    var angle = value
+    var sign = 1.0
+    if angle < 0.0 {
+        angle = -angle
+        sign = -1.0
+    }
+
+    let period = two_pi()
+    var scale = period
+    while scale * 2.0 <= angle {
+        scale *= 2.0
+    }
+    while scale > period {
+        if angle >= scale {
+            angle -= scale
+        }
+        scale *= 0.5
+    }
+    while angle > pi() {
+        angle -= period
+    }
+    return angle * sign
+}
+
+func atan(value:float) float {
+    if value != value {
+        return value
+    }
+
+    var argument = value
+    var sign = 1.0
+    if argument < 0.0 {
+        argument = -argument
+        sign = -1.0
+    }
+
+    var inverted = false
+    if argument > 1.0 {
+        argument = 1.0 / argument
+        inverted = true
+    }
+
+    var offset = 0.0
+    if argument > 0.41421357 {
+        argument = (argument - 1.0) / (argument + 1.0)
+        offset = pi() * 0.25
+    }
+
+    let squared = argument * argument
+    var result = 0.04761905 + squared * -0.04347826
+    result = -0.05263158 + squared * result
+    result = 0.05882353 + squared * result
+    result = -0.06666667 + squared * result
+    result = 0.07692308 + squared * result
+    result = -0.09090909 + squared * result
+    result = 0.11111111 + squared * result
+    result = -0.14285715 + squared * result
+    result = 0.2 + squared * result
+    result = -0.33333334 + squared * result
+    result = offset + argument * (1.0 + squared * result)
+    if inverted {
+        result = half_pi() - result
+    }
+    return result * sign
+}

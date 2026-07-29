@@ -9,7 +9,7 @@ public enum Version {
 public struct UUID {
     let storage:uint8[16]
 
-    public init(version:Version = Version.v4()) {
+    public init(version:Version = Version.v4) {
         self.storage = generate(version)
     }
 
@@ -18,11 +18,11 @@ public struct UUID {
     }
 
     public static func v4() UUID {
-        return UUID(Version.v4())
+        return UUID(Version.v4)
     }
 
     public static func v7() UUID {
-        return UUID(Version.v7())
+        return UUID(Version.v7)
     }
 
     public func to_bytes() uint8[16] {
@@ -56,7 +56,7 @@ func generate(version:Version) uint8[16] {
         bytes[index] = entropy[index]
         index++
     }
-    if version == Version.v7() {
+    if version == Version.v7 {
         let milliseconds = Platform.unix_milliseconds()
         bytes[0] = ((milliseconds / 1_099_511_627_776) % 256) as uint8
         bytes[1] = ((milliseconds / 4_294_967_296) % 256) as uint8

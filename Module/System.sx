@@ -16,17 +16,17 @@ public struct CompilationTarget {
 
 public func platform() OperatingSystem {
     let value = Platform.value()
-    if value == 1 { return OperatingSystem.macos() }
-    if value == 2 { return OperatingSystem.linux() }
-    if value == 3 { return OperatingSystem.windows() }
+    if value == 1 { return OperatingSystem.macos }
+    if value == 2 { return OperatingSystem.linux }
+    if value == 3 { return OperatingSystem.windows }
     panic("STD platform selection is invalid")
 }
 
 public func target() CompilationTarget {
     let selected_platform = platform()
     let architecture = Target.architecture()
-    if architecture == 1 { return CompilationTarget(platform:selected_platform, architecture:Architecture.arm64()) }
-    if architecture == 2 { return CompilationTarget(platform:selected_platform, architecture:Architecture.x64()) }
+    if architecture == 1 { return CompilationTarget(platform:selected_platform, architecture:Architecture.arm64) }
+    if architecture == 2 { return CompilationTarget(platform:selected_platform, architecture:Architecture.x64) }
     panic("STD target selection is invalid")
 }
 

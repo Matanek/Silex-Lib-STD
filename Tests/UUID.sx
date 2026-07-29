@@ -12,7 +12,7 @@ func main() {
     assert(identifier.to_bytes() == bytes, "UUID byte copy")
 
     let default_identifier = UUID()
-    let configured_v4 = UUID(UUID.Version.v4())
+    let configured_v4 = UUID(UUID.Version.v4)
     let explicit_v4 = UUID.v4()
     let default_bytes = default_identifier.to_bytes()
     let configured_bytes = configured_v4.to_bytes()
@@ -23,7 +23,7 @@ func main() {
     assert((default_bytes[8] >> 6) == 2, "default UUID IETF variant")
     assert(default_identifier.to_str().count() == 36, "UUID canonical text length")
 
-    let configured_v7 = UUID(UUID.Version.v7())
+    let configured_v7 = UUID(UUID.Version.v7)
     let explicit_v7 = UUID.v7()
     let configured_v7_bytes = configured_v7.to_bytes()
     let explicit_v7_bytes = explicit_v7.to_bytes()

@@ -103,7 +103,7 @@ print(identifier.to_str())
 ```
 
 `UUID()` constructs a version 4 value by default.
-`UUID(UUID.Version.v4())` and `UUID(UUID.Version.v7())` support a dynamic
+`UUID(UUID.Version.v4)` and `UUID(UUID.Version.v7)` support a dynamic
 version choice, while `UUID.v4()` and `UUID.v7()` are concise explicit
 factories. Choose version 4 when the creation time must not be encoded. Version
 7 embeds the current Unix timestamp in milliseconds before its random portion,

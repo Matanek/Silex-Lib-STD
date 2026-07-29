@@ -8,7 +8,7 @@ let process_random = C.function<
     name:"ProcessPrng"
 )
 
-func generate() int {
+func system_seed() int {
     var seed:uint32 = 0
     let success = process_random(C.mutable_pointer(seed), 4 as C.Size)
     if success == 0 {

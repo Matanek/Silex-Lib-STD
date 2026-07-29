@@ -1,10 +1,8 @@
-use STD.Randomizer.Seed
-
 public class Randomizer {
     var state:int
 
     public init() {
-        self.state = Seed.generate()
+        self.state = Platform.system_seed()
     }
 
     public init(seed:int) {

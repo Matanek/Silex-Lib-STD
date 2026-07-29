@@ -6,6 +6,6 @@ let system_random = C.function<func() uint32>(
     name:"arc4random"
 )
 
-func generate() int {
+func system_seed() int {
     return system_random() as int
 }

@@ -1,0 +1,52 @@
+use STD.File
+use STD.FileSystem
+use STD.System.Error
+
+func main() {
+    match run() {
+        failure(error) => { panic(error.operation + ": " + error.detail) }
+        success => {}
+    }
+}
+
+func run() Result<void, Error> {
+    let root = "/private/tmp/silex-std-filesystem-test"
+    let nested = root + "/a/b"
+    let source = nested + "/source.txt"
+    let copied = nested + "/copied.txt"
+    let renamed = nested + "/renamed.txt"
+    let ignored_copy = FileSystem.remove_file(copied)
+    let ignored_renamed = FileSystem.remove_file(renamed)
+    try FileSystem.create_directories(nested)
+    try File.write_all(source, "filesystem")
+
+    let information = try FileSystem.metadata(source)
+    assert(is_file(information.kind), "file kind")
+    assert(information.size == 10, "file size")
+
+    try FileSystem.copy_file(source, copied, true)
+    try FileSystem.rename(copied, renamed)
+    let entries = try FileSystem.list(nested)
+    assert(has_entry(entries, "source.txt"), "source listing")
+    assert(has_entry(entries, "renamed.txt"), "renamed listing")
+
+    try FileSystem.set_readonly(source, true)
+    assert((try FileSystem.metadata(source)).readonly, "readonly metadata")
+    try FileSystem.set_readonly(source, false)
+    let canonical = try FileSystem.canonicalize(source)
+    assert(canonical.count() > 0, "canonical path")
+
+    try FileSystem.remove_file(source)
+    try FileSystem.remove_file(renamed)
+    try FileSystem.remove_directory(nested)
+    try FileSystem.remove_directory(root + "/a")
+    try FileSystem.remove_directory(root)
+    return Result<void, Error>.success()
+}
+
+func has_entry(entries:FileSystem.Entry[], name:str) bool {
+    for entry in entries { if entry.name == name { return true } }
+    return false
+}
+
+func is_file(kind:FileSystem.Kind) bool { return match kind { file => true; else => false } }

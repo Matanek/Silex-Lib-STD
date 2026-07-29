@@ -1,0 +1,197 @@
+use Interop.C
+use Interop.Windows
+use STD.Text.Encoding
+use STD.Text.UTF8
+
+internal struct RawOutput { let status:int; let signaled:bool; let stdout:uint8[]; let stderr:uint8[]; let limited:bool; let error:int }
+struct PipeResult { let valid:bool; let read:uint; let write:uint }
+func output_status(value:RawOutput) int { return value.status }
+func output_signaled(value:RawOutput) bool { return value.signaled }
+func output_stdout(value:RawOutput) uint8[] { return value.stdout }
+func output_stderr(value:RawOutput) uint8[] { return value.stderr }
+func output_limited(value:RawOutput) bool { return value.limited }
+func output_error(value:RawOutput) int { return value.error }
+
+let system_create_pipe = C.function<func(C.MutablePointer<uint>, C.MutablePointer<uint>, C.Pointer<uint8>, uint32) int32>(library:Windows.kernel32, name:"CreatePipe")
+let system_set_handle = C.function<func(uint, uint32, uint32) int32>(library:Windows.kernel32, name:"SetHandleInformation")
+let system_create_process = C.function<func(C.Pointer<uint8>, C.MutablePointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, int32, uint32, C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:Windows.kernel32, name:"CreateProcessW")
+let system_read = C.function<func(uint, C.MutablePointer<uint32>, uint32, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"ReadFile")
+let system_write = C.function<func(uint, C.Pointer<uint8>, uint32, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"WriteFile")
+let system_peek = C.function<func(uint, C.Pointer<uint8>, uint32, C.Pointer<uint8>, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"PeekNamedPipe")
+let system_close = C.function<func(uint) int32>(library:Windows.kernel32, name:"CloseHandle")
+let system_terminate = C.function<func(uint, uint32) int32>(library:Windows.kernel32, name:"TerminateProcess")
+let system_exit_code = C.function<func(uint, C.MutablePointer<uint32>) int32>(library:Windows.kernel32, name:"GetExitCodeProcess")
+let system_wait = C.function<func(uint, uint32) uint32>(library:Windows.kernel32, name:"WaitForSingleObject")
+let system_error = C.function<func() uint32>(library:Windows.kernel32, name:"GetLastError")
+
+func run(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], input:@uint8[..], maximum:int) RawOutput? {
+    var line = quote(executable)
+    for argument in arguments { line = line + " " + quote(argument) }
+    var application_bytes = wide(executable, true)
+    var line_bytes = wide(line, true)
+    var environment_bytes:uint8[] = []
+    for entry in environment {
+        let encoded = wide(entry, false)
+        for byte in encoded { environment_bytes.append(byte) }
+        environment_bytes.append(0 as uint8)
+        environment_bytes.append(0 as uint8)
+    }
+    environment_bytes.append(0 as uint8)
+    environment_bytes.append(0 as uint8)
+    if environment.count() == 0 {
+        environment_bytes.append(0 as uint8)
+        environment_bytes.append(0 as uint8)
+    }
+    var directory_bytes = wide(directory, true)
+    let application_view = @application_bytes[0:application_bytes.count()]
+    let line_view = @line_bytes[0:line_bytes.count()]
+    let environment_view = @environment_bytes[0:environment_bytes.count()]
+    let directory_view = @directory_bytes[0:directory_bytes.count()]
+    let application_packed = C.string(application_view)
+    var line_packed = C.string(line_view)
+    let environment_packed = C.string(environment_view)
+    let directory_packed = C.string(directory_view)
+    let input_pipe = make_pipe()
+    let output_pipe = make_pipe()
+    let error_pipe = make_pipe()
+    if !input_pipe.valid || !output_pipe.valid || !error_pipe.valid { return null }
+    let ignored_input = system_set_handle(input_pipe.write, 1, 0)
+    let ignored_output = system_set_handle(output_pipe.read, 1, 0)
+    let ignored_error = system_set_handle(error_pipe.read, 1, 0)
+    var startup:int[13]
+    let startup_address = C.address_bits(C.mutable_pointer(startup))
+    let ignored_cb = C.store<uint32>(startup_address, 0 as uint, 104)
+    let ignored_flags = C.store<uint32>(startup_address, 60 as uint, 0x100)
+    let ignored_stdin = C.store<uint>(startup_address, 80 as uint, input_pipe.read)
+    let ignored_stdout = C.store<uint>(startup_address, 88 as uint, output_pipe.write)
+    let ignored_stderr = C.store<uint>(startup_address, 96 as uint, error_pipe.write)
+    var process_info:int[3]
+    var directory_pointer = C.address_bits(C.pointer(directory_packed))
+    if !has_directory { directory_pointer = 0 }
+    let created = system_create_process(
+        C.pointer(application_packed), C.mutable_string_pointer(line_packed), C.pointer_bits(0 as uint), C.pointer_bits(0 as uint),
+        1, 0x400, C.pointer(environment_packed), C.pointer_bits(directory_pointer), C.mutable_pointer(startup), C.mutable_pointer(process_info)
+    )
+    close_handle(input_pipe.read)
+    close_handle(output_pipe.write)
+    close_handle(error_pipe.write)
+    if created == 0 {
+        let code = system_error()
+        close_handle(input_pipe.write)
+        close_handle(output_pipe.read)
+        close_handle(error_pipe.read)
+        return RawOutput(status:0, signaled:false, stdout:[], stderr:[], limited:false, error:code as int)
+    }
+    let info_address = C.address_bits(C.mutable_pointer(process_info))
+    let process = C.load<uint>(info_address, 0 as uint)
+    let thread = C.load<uint>(info_address, 8 as uint)
+    close_handle(thread)
+    var standard_output:uint8[] = []
+    var standard_error:uint8[] = []
+    var input_offset = 0
+    var input_open = true
+    var output_open = true
+    var error_open = true
+    var finished = false
+    var limited = false
+    if input.count() == 0 {
+        close_handle(input_pipe.write)
+        input_open = false
+    }
+    while !finished || output_open || error_open {
+        if input_open {
+            if !write_byte(input_pipe.write, input[input_offset]) {
+                close_handle(input_pipe.write)
+                input_open = false
+            }
+            else {
+                input_offset++
+                if input_offset == input.count() { close_handle(input_pipe.write); input_open = false }
+            }
+        }
+        if output_open { output_open = collect_available(output_pipe.read, standard_output, finished) }
+        if error_open { error_open = collect_available(error_pipe.read, standard_error, finished) }
+        if !finished { finished = system_wait(process, 1) == 0 }
+        if !limited && standard_output.count() + standard_error.count() > maximum {
+            let ignored_terminate = system_terminate(process, 1)
+            limited = true
+        }
+    }
+    if input_open { close_handle(input_pipe.write) }
+    close_handle(output_pipe.read)
+    close_handle(error_pipe.read)
+    var exit_code:uint32 = 0
+    let got_code = system_exit_code(process, C.mutable_pointer(exit_code)) != 0
+    close_handle(process)
+    if !got_code { return null }
+    return RawOutput(status:exit_code as int, signaled:false, stdout:standard_output, stderr:standard_error, limited:limited, error:0)
+}
+
+func make_pipe() PipeResult {
+    var read:uint = 0
+    var write:uint = 0
+    var security:int[3]
+    let address = C.address_bits(C.mutable_pointer(security))
+    let ignored_length = C.store<uint32>(address, 0 as uint, 24)
+    let ignored_inherit = C.store<uint32>(address, 16 as uint, 1)
+    if system_create_pipe(C.mutable_pointer(read), C.mutable_pointer(write), C.mutable_pointer(security), 0) == 0 { return PipeResult(valid:false, read:0, write:0) }
+    return PipeResult(valid:true, read:read, write:write)
+}
+func close_handle(value:uint) { if value != 0 { let ignored = system_close(value) } }
+func write_byte(handle:uint, byte:uint8) bool {
+    var value:uint32 = byte as uint32
+    var written:uint32 = 0
+    return system_write(handle, C.mutable_pointer(value), 1, C.mutable_pointer(written), C.pointer_bits(0 as uint)) != 0 && written == 1
+}
+func collect_available(handle:uint, target:&uint8[], finished:bool) bool {
+    var available:uint32 = 0
+    if system_peek(handle, C.pointer_bits(0 as uint), 0, C.pointer_bits(0 as uint), C.mutable_pointer(available), C.pointer_bits(0 as uint)) == 0 { return !finished }
+    if available == 0 { return !finished }
+    var value:uint32 = 0
+    var count:uint32 = 0
+    if system_read(handle, C.mutable_pointer(value), 1, C.mutable_pointer(count), C.pointer_bits(0 as uint)) == 0 || count == 0 { return !finished }
+    target.append((value & 255) as uint8)
+    return true
+}
+func wide(text:str, terminated:bool) uint8[] {
+    var bytes = Encoding.encode(text, Encoding.Kind.utf16_little_endian())
+    if terminated {
+        bytes.append(0 as uint8)
+        bytes.append(0 as uint8)
+    }
+    return bytes
+}
+func quote(value:str) str {
+    let input = UTF8.bytes(value)
+    var output:uint8[] = [34 as uint8]
+    var slashes = 0
+    for byte in input {
+        if byte == 92 {
+            slashes++
+            continue
+        }
+        if byte == 34 {
+            append_byte(output, 92 as uint8, slashes * 2 + 1)
+            output.append(byte)
+            slashes = 0
+            continue
+        }
+        append_byte(output, 92 as uint8, slashes)
+        slashes = 0
+        output.append(byte)
+    }
+    append_byte(output, 92 as uint8, slashes * 2)
+    output.append(34 as uint8)
+    let view = @output[0:output.count()]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("command-line quoting failed") }
+    }
+}
+func append_byte(output:&uint8[], value:uint8, count:int) {
+    var index = 0
+    while index < count {
+        output.append(value)
+        index++
+    }
+}

@@ -1,0 +1,114 @@
+use STD.Collections.Dictionary
+use STD.Collections.Hashing
+use STD.Collections.Queue
+use STD.Collections.Set
+use STD.Collections.Stack
+
+func absolute_hash(value:@int) uint {
+    if value < 0 {
+        return (-value) as uint
+    }
+    return value as uint
+}
+
+func same_key(left:@int, right:@int) bool {
+    return absolute_hash(left) == absolute_hash(right)
+}
+
+class Token {
+    public let name:str
+}
+
+func main() {
+    assert(Hashing.hash("hello") == 11831194018420276491, "portable string hash")
+
+    var dictionary = Dictionary<int, str>(absolute_hash, same_key)
+    assert(dictionary.set(-7, "seven") == null, "new dictionary entry")
+    assert(dictionary.contains(7), "custom hash and equality callbacks")
+    assert(dictionary.get(-7) == "seven", "borrowed dictionary value")
+    if previous = dictionary.set(7, "updated") {
+        assert(previous == "seven", "replaced dictionary value")
+    } else {
+        assert(false, "previous dictionary value")
+    }
+    if key = dictionary.find_key("updated") {
+        assert(key == -7, "dictionary key found from value")
+    } else {
+        assert(false, "dictionary reverse lookup")
+    }
+    assert(dictionary.find_key("missing") == null, "missing dictionary value")
+    assert(dictionary.remove(-7), "removed dictionary association")
+    assert(!dictionary.remove(7), "missing dictionary association")
+    assert(!dictionary.contains(7), "dictionary key removed")
+
+    var values = Set<int>()
+    assert(values.add(42), "new set value")
+    assert(!values.add(42), "duplicate set value")
+    assert(values.contains(42), "default hashing callbacks")
+    assert(values.remove(42), "removed set value")
+    assert(!values.contains(42), "set value removed")
+
+    var queue = Queue<int>()
+    queue.add(1)
+    queue.add(2)
+    queue.add(3)
+    queue.add(2)
+    assert(queue.contains(2), "queue contains value")
+    assert(!queue.contains(4), "queue missing value")
+    assert(queue.remove(2), "queue removes oldest matching value")
+    assert(queue.peek() == 1, "borrowed queue front")
+    if first = queue.take() {
+        assert(first == 1, "queue order")
+    } else {
+        assert(false, "queue value")
+    }
+    if second = queue.take() {
+        assert(second == 3, "queue order after removal")
+    } else {
+        assert(false, "queue value after removal")
+    }
+    assert(queue.remove(2), "queue removes remaining value")
+    assert(!queue.remove(2), "queue removal reports absence")
+
+    var stack = Stack<int>()
+    stack.add(1)
+    stack.add(2)
+    stack.add(3)
+    stack.add(2)
+    assert(stack.contains(2), "stack contains value")
+    assert(!stack.contains(4), "stack missing value")
+    assert(stack.remove(2), "stack removes newest matching value")
+    assert(stack.peek() == 3, "borrowed stack top after removal")
+    if top = stack.take() {
+        assert(top == 3, "stack order after removal")
+    } else {
+        assert(false, "stack value")
+    }
+    assert(stack.remove(2), "stack removes remaining value")
+    assert(!stack.remove(2), "stack removal reports absence")
+
+    var token = Token(name:"same")
+    var alias = token
+    var distinct = Token(name:"same")
+
+    var indexed = Dictionary<int, Token>()
+    indexed.set(11, token)
+    if token_key = indexed.find_key(alias) {
+        assert(token_key == 11, "dictionary finds a shared class identity")
+    } else {
+        assert(false, "dictionary class identity")
+    }
+    assert(indexed.find_key(distinct) == null, "dictionary rejects a distinct class identity")
+
+    var token_queue = Queue<Token>()
+    token_queue.add(token)
+    assert(token_queue.contains(alias), "queue contains a shared class identity")
+    assert(!token_queue.contains(distinct), "queue rejects a distinct class identity")
+    assert(token_queue.remove(alias), "queue removes a shared class identity")
+
+    var token_stack = Stack<Token>()
+    token_stack.add(token)
+    assert(token_stack.contains(alias), "stack contains a shared class identity")
+    assert(!token_stack.contains(distinct), "stack rejects a distinct class identity")
+    assert(token_stack.remove(alias), "stack removes a shared class identity")
+}

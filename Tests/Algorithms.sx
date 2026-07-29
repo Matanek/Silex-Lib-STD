@@ -1,0 +1,69 @@
+use STD.Algorithms.Iteration
+use STD.Algorithms.Random
+use STD.Algorithms.Sort
+use STD.Iterator
+use STD.Randomizer
+
+func before(left:@int, right:@int) bool {
+    return left < right
+}
+
+func positive(value:@int) bool {
+    return value > 0
+}
+
+func same(left:@int, right:@int) bool {
+    return left == right
+}
+
+func doubled(value:@int) int {
+    return value * 2
+}
+
+func main() {
+    var values = [3, 1, 4, 2]
+    Sort.sort<int>(&values[0:values.count()], before)
+    assert(values[0] == 1, "first sorted value")
+    assert(values[1] == 2, "second sorted value")
+    assert(values[2] == 3, "third sorted value")
+    assert(values[3] == 4, "last sorted value")
+
+    let source:int[] = [-1, 2, 3]
+    var any_values = Iterator.iterate<int>(source)
+    assert(Iteration.any<int>(any_values, positive), "any callback")
+    var all_values = Iterator.iterate<int>(source)
+    assert(!Iteration.all<int>(all_values, positive), "all callback")
+    var count_values = Iterator.iterate<int>(source)
+    assert(Iteration.count_where<int>(count_values, positive) == 2, "count callback")
+    var find_values = Iterator.iterate<int>(source)
+    if found = Iteration.find<int>(find_values, positive) {
+        assert(found == 2, "find callback")
+    } else {
+        assert(false, "find callback result")
+    }
+    var contains_values = Iterator.iterate<int>(source)
+    assert(Iteration.contains<int>(contains_values, 3, same), "equality callback")
+    var map_values = Iterator.iterate<int>(source)
+    var mapped = Iteration.map<int, int>(map_values, doubled)
+    if first = mapped.next() {
+        assert(first == -2, "transform callback")
+    } else {
+        assert(false, "transform callback result")
+    }
+    var filter_values = Iterator.iterate<int>(source)
+    var filtered = Iteration.filter<int>(filter_values, positive)
+    if first = filtered.next() {
+        assert(first == 2, "filter callback")
+    } else {
+        assert(false, "filter callback result")
+    }
+
+    var randomizer = Randomizer(42)
+    if true {
+        let selected = Random.choose<int>(randomizer, @values[0:values.count()])
+        assert(selected >= 1 && selected <= 4, "random choice")
+    }
+    Random.shuffle<int>(randomizer, &values[0:values.count()])
+    Sort.sort<int>(&values[0:values.count()], before)
+    assert(values[0] == 1 && values[3] == 4, "random shuffle preserves values")
+}

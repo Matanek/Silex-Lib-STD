@@ -1,0 +1,195 @@
+use Interop.C
+use STD.System.Error
+use STD.System.ErrorKind
+use STD.Text.UTF8.bytes as utf8_bytes
+use STD.Path.Semantics
+
+public use str as Path
+
+struct Parsed {
+    let succeeded:bool
+    let absolute:bool
+    let root:str
+    let components:str[]
+    let detail:str
+}
+
+public func validate(path:Path) Result<void, Error> {
+    let parsed = parse(path, Semantics.windows())
+    if !parsed.succeeded { return Result<void, Error>.failure(path_error("path.validate", path, parsed.detail)) }
+    return Result<void, Error>.success()
+}
+
+public func normalize(path:Path) Result<Path, Error> {
+    let parsed = parse(path, Semantics.windows())
+    if !parsed.succeeded { return Result<Path, Error>.failure(path_error("path.normalize", path, parsed.detail)) }
+    return Result<Path, Error>.success(render(parsed))
+}
+
+public func join(base:Path, child:Path) Result<Path, Error> {
+    let windows = Semantics.windows()
+    let parsed_base = parse(base, windows)
+    if !parsed_base.succeeded {
+        return Result<Path, Error>.failure(path_error("path.join", base, "invalid base: " + parsed_base.detail))
+    }
+    let parsed_child = parse(child, windows)
+    if !parsed_child.succeeded {
+        return Result<Path, Error>.failure(path_error("path.join", child, "invalid child: " + parsed_child.detail))
+    }
+    if parsed_child.absolute { return Result<Path, Error>.success(render(parsed_child)) }
+    return normalize(render(parsed_base) + "/" + child)
+}
+
+public func parent(path:Path) Result<Path?, Error> {
+    let parsed = parse(path, Semantics.windows())
+    if !parsed.succeeded { return Result<Path?, Error>.failure(path_error("path.parent", path, parsed.detail)) }
+    if parsed.components.count() == 0 { return Result<Path?, Error>.success(null) }
+    var components = parsed.components
+    components.take_last()
+    if !parsed.absolute && components.count() == 0 { return Result<Path?, Error>.success(".") }
+    return Result<Path?, Error>.success(render(Parsed(
+        succeeded:true, absolute:parsed.absolute, root:parsed.root,
+        components:components, detail:""
+    )))
+}
+
+public func name(path:Path) Result<str?, Error> {
+    let parsed = parse(path, Semantics.windows())
+    if !parsed.succeeded { return Result<str?, Error>.failure(path_error("path.name", path, parsed.detail)) }
+    if parsed.components.count() == 0 { return Result<str?, Error>.success(null) }
+    return Result<str?, Error>.success(parsed.components[parsed.components.count() - 1])
+}
+
+public func stem(path:Path) Result<str?, Error> {
+    let parsed = parse(path, Semantics.windows())
+    if !parsed.succeeded { return Result<str?, Error>.failure(path_error("path.stem", path, parsed.detail)) }
+    if parsed.components.count() == 0 { return Result<str?, Error>.success(null) }
+    let value = parsed.components[parsed.components.count() - 1]
+    let bytes = utf8_bytes(value)
+    let dot = last_dot(bytes)
+    if dot <= 0 || dot + 1 == bytes.count() { return Result<str?, Error>.success(value) }
+    return Result<str?, Error>.success(byte_slice(bytes, 0, dot))
+}
+
+public func extension(path:Path) Result<str?, Error> {
+    let parsed = parse(path, Semantics.windows())
+    if !parsed.succeeded { return Result<str?, Error>.failure(path_error("path.extension", path, parsed.detail)) }
+    if parsed.components.count() == 0 { return Result<str?, Error>.success(null) }
+    let value = parsed.components[parsed.components.count() - 1]
+    let bytes = utf8_bytes(value)
+    let dot = last_dot(bytes)
+    if dot <= 0 || dot + 1 == bytes.count() { return Result<str?, Error>.success(null) }
+    return Result<str?, Error>.success(byte_slice(bytes, dot + 1, bytes.count()))
+}
+
+public func is_absolute(path:Path) Result<bool, Error> {
+    let parsed = parse(path, Semantics.windows())
+    if !parsed.succeeded { return Result<bool, Error>.failure(path_error("path.is_absolute", path, parsed.detail)) }
+    return Result<bool, Error>.success(parsed.absolute)
+}
+
+func parse(path:Path, windows:bool) Parsed {
+    let bytes = utf8_bytes(path)
+    for byte in bytes {
+        if byte == 0 { return failed("path contains a null byte") }
+    }
+    var absolute = false
+    var root = ""
+    var components:str[] = []
+    var cursor = 0
+    if !windows {
+        if bytes.count() > 0 && bytes[0] == 47 {
+            absolute = true
+            root = "/"
+            while cursor < bytes.count() && bytes[cursor] == 47 { cursor++ }
+        }
+    } elif bytes.count() >= 2 && separator(bytes[0], true) && separator(bytes[1], true) {
+        if bytes.count() >= 3 && separator(bytes[2], true) {
+            return failed("Windows UNC root has too many leading separators")
+        }
+        cursor = 2
+        let server_start = cursor
+        while cursor < bytes.count() && !separator(bytes[cursor], true) { cursor++ }
+        if cursor == server_start || cursor == bytes.count() {
+            return failed("Windows UNC root requires a server and share")
+        }
+        let server = byte_slice(bytes, server_start, cursor)
+        if server == "?" || server == "." { return failed("internal Win32 device prefixes are not portable paths") }
+        while cursor < bytes.count() && separator(bytes[cursor], true) { cursor++ }
+        let share_start = cursor
+        while cursor < bytes.count() && !separator(bytes[cursor], true) { cursor++ }
+        if cursor == share_start { return failed("Windows UNC root requires a non-empty share") }
+        root = "//" + server + "/" + byte_slice(bytes, share_start, cursor) + "/"
+        absolute = true
+        while cursor < bytes.count() && separator(bytes[cursor], true) { cursor++ }
+    } elif bytes.count() >= 2 && bytes[1] == 58 {
+        if !ascii_letter(bytes[0]) || bytes.count() < 3 || !separator(bytes[2], true) {
+            return failed("Windows drive root must have the form C:/")
+        }
+        root = byte_slice(bytes, 0, 1) + ":/"
+        absolute = true
+        cursor = 3
+        while cursor < bytes.count() && separator(bytes[cursor], true) { cursor++ }
+    } elif bytes.count() > 0 && separator(bytes[0], true) {
+        return failed("Windows absolute path requires a drive or UNC root")
+    }
+
+    while cursor < bytes.count() {
+        while cursor < bytes.count() && separator(bytes[cursor], windows) { cursor++ }
+        if cursor == bytes.count() { break }
+        let start = cursor
+        while cursor < bytes.count() && !separator(bytes[cursor], windows) { cursor++ }
+        let component = byte_slice(bytes, start, cursor)
+        if component == "." { continue }
+        if component == ".." {
+            if components.count() > 0 && components[components.count() - 1] != ".." {
+                components.take_last()
+            } elif !absolute {
+                components.append(component)
+            }
+        } else {
+            components.append(component)
+        }
+    }
+    return Parsed(succeeded:true, absolute:absolute, root:root, components:components, detail:"")
+}
+
+func render(parsed:Parsed) str {
+    var result = parsed.root
+    for component in parsed.components {
+        if result != "" && !ends_with_separator(result) { result = result + "/" }
+        result = result + component
+    }
+    if result == "" { return "." }
+    return result
+}
+
+func byte_slice(values:uint8[], start:int, end:int) str {
+    let view = @values[start:end]
+    return C.string(view)
+}
+
+func last_dot(values:uint8[]) int {
+    var index = values.count()
+    while index > 0 {
+        index--
+        if values[index] == 46 { return index }
+    }
+    return -1
+}
+
+func ends_with_separator(value:str) bool {
+    let bytes = utf8_bytes(value)
+    return bytes.count() > 0 && bytes[bytes.count() - 1] == 47
+}
+
+func separator(value:uint8, windows:bool) bool { return value == 47 || (windows && value == 92) }
+func ascii_letter(value:uint8) bool { return (value >= 65 && value <= 90) || (value >= 97 && value <= 122) }
+
+func failed(detail:str) Parsed {
+    return Parsed(succeeded:false, absolute:false, root:"", components:[], detail:detail)
+}
+
+func path_error(operation:str, subject:Path, detail:str) Error {
+    return Error(kind:ErrorKind.invalid_input(), operation:operation, subject:subject, detail:detail)
+}

@@ -1,0 +1,124 @@
+use Interop.C
+use STD.Text.Data
+use STD.Text.UTF8
+
+public func boundaries(text:str) int[] {
+    let scalars = UTF8.scalars(text)
+    var result:int[] = [0]
+    if scalars.count() == 0 { return result }
+    var byte_offset = scalar_length(scalars[0])
+    var index = 1
+    while index < scalars.count() {
+        if breaks(scalars, index) { result.append(byte_offset) }
+        byte_offset += scalar_length(scalars[index])
+        index++
+    }
+    result.append(byte_offset)
+    return result
+}
+public func count(text:str) int {
+    let values = boundaries(text)
+    return values.count() - 1
+}
+public func split(text:str) str[] {
+    let bytes = UTF8.bytes(text)
+    let offsets = boundaries(text)
+    var result:str[] = []
+    var index = 0
+    while index + 1 < offsets.count() {
+        let view = @bytes[offsets[index]:offsets[index + 1]]
+        result.append(C.string(view))
+        index++
+    }
+    return result
+}
+
+func breaks(values:uint32[], index:int) bool {
+    let previous = property(values[index - 1])
+    let current = property(values[index])
+    if previous == 1 && current == 2 { return false }
+    if previous == 1 || previous == 2 || previous == 3 { return true }
+    if current == 1 || current == 2 || current == 3 { return true }
+    if previous == 9 && (current == 9 || current == 10 || current == 12 || current == 13) { return false }
+    if (previous == 12 || previous == 10) && (current == 10 || current == 11) { return false }
+    if (previous == 13 || previous == 11) && current == 11 { return false }
+    if current == 4 || current == 5 || current == 8 { return false }
+    if previous == 7 { return false }
+    if indic_conjunct(values, index) { return false }
+    if emoji_zwj(values, index) { return false }
+    if previous == 6 && current == 6 && regional_count(values, index) % 2 == 1 { return false }
+    return true
+}
+
+func indic_conjunct(values:uint32[], index:int) bool {
+    if range_property(Data.incb_ranges(), values[index]) != 1 { return false }
+    var cursor = index - 1
+    var linker = false
+    while cursor >= 0 {
+        let value = range_property(Data.incb_ranges(), values[cursor])
+        if value == 2 {
+            linker = true
+            cursor--
+            continue
+        }
+        if value == 3 {
+            cursor--
+            continue
+        }
+        return value == 1 && linker
+    }
+    return false
+}
+
+func emoji_zwj(values:uint32[], index:int) bool {
+    if !in_plain_ranges(Data.extended_pictographic_ranges(), values[index]) || property(values[index - 1]) != 5 { return false }
+    var cursor = index - 2
+    while cursor >= 0 && property(values[cursor]) == 4 { cursor-- }
+    return cursor >= 0 && in_plain_ranges(Data.extended_pictographic_ranges(), values[cursor])
+}
+func regional_count(values:uint32[], index:int) int {
+    var count = 0
+    var cursor = index - 1
+    while cursor >= 0 && property(values[cursor]) == 6 {
+        count++
+        cursor--
+    }
+    return count
+}
+func property(scalar:uint32) int { return range_property(Data.grapheme_ranges(), scalar) }
+func range_property(data:str, scalar:uint32) int {
+    var first = 0
+    var last = (C.byte_count(data) / 9) as int
+    while first < last {
+        let middle = first + (last - first) / 2
+        if read_u21(data, middle * 9 + 4) < scalar { first = middle + 1 } else { last = middle }
+    }
+    if first * 9 >= C.byte_count(data) as int || read_u21(data, first * 9) > scalar { return 0 }
+    return read_digit(data, first * 9 + 8) as int
+}
+func in_plain_ranges(data:str, scalar:uint32) bool {
+    var first = 0
+    var last = (C.byte_count(data) / 8) as int
+    while first < last {
+        let middle = first + (last - first) / 2
+        if read_u21(data, middle * 8 + 4) < scalar { first = middle + 1 } else { last = middle }
+    }
+    return first * 8 < C.byte_count(data) as int && read_u21(data, first * 8) <= scalar
+}
+func scalar_length(scalar:uint32) int {
+    if scalar <= 0x7F { return 1 }
+    if scalar <= 0x7FF { return 2 }
+    if scalar <= 0xFFFF { return 3 }
+    return 4
+}
+func read_u21(data:str, offset:int) uint32 {
+    return (read_digit(data, offset) << 18) + (read_digit(data, offset + 1) << 12) + (read_digit(data, offset + 2) << 6) + read_digit(data, offset + 3)
+}
+func read_digit(data:str, offset:int) uint32 {
+    let byte = C.byte_at(data, offset as uint)
+    if byte >= 65 && byte <= 90 { return (byte - 65) as uint32 }
+    if byte >= 97 && byte <= 122 { return (byte - 97 + 26) as uint32 }
+    if byte >= 48 && byte <= 57 { return (byte - 48 + 52) as uint32 }
+    if byte == 43 { return 62 }
+    return 63
+}

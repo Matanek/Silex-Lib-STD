@@ -1,0 +1,55 @@
+use STD.Network
+use STD.Network.TCP
+use STD.Network.UDP
+use STD.System.Error
+use STD.Text.UTF8
+
+func main() {
+    match run() {
+        success => {}
+        failure(error) => { panic(error.operation + ": " + error.detail) }
+    }
+}
+
+func run() Result<void, Error> {
+    let address = try Network.parse_ip("127.0.0.1")
+    let ephemeral = Network.Endpoint(address:address, port:0, scope_id:0)
+
+    var listener = try TCP.listen(ephemeral, 8)
+    let listening = try TCP.local_endpoint(listener)
+    var client = try TCP.connect(listening, TCP.ConnectOptions(
+        connect_timeout_milliseconds:null,
+        stream:TCP.StreamOptions(read_timeout_milliseconds:null, write_timeout_milliseconds:null)
+    ))
+    var accepted = try TCP.accept(
+        listener,
+        null,
+        TCP.StreamOptions(read_timeout_milliseconds:null, write_timeout_milliseconds:null)
+    )
+    let payload = UTF8.bytes("tcp")
+    let payload_view = @payload[0:payload.count()]
+    let written = try client.write(payload_view)
+    assert(written == 3, "TCP write count")
+    var tcp_buffer:uint8[3]
+    var tcp_view = &tcp_buffer[0:3]
+    let read = try accepted.stream.read(tcp_view)
+    assert(read == 3 && tcp_view[0] == 116 && tcp_view[2] == 112, "TCP loopback payload")
+    try TCP.close(client)
+    try TCP.close(accepted.stream)
+    try TCP.close(listener)
+
+    var receiver = try UDP.bind(ephemeral, UDP.Options(read_timeout_milliseconds:null, write_timeout_milliseconds:null))
+    let destination = try UDP.local_endpoint(receiver)
+    var sender = try UDP.open(Network.Family.ipv4(), UDP.Options(read_timeout_milliseconds:null, write_timeout_milliseconds:null))
+    let datagram = UTF8.bytes("udp")
+    let datagram_view = @datagram[0:datagram.count()]
+    try UDP.send_to(sender, datagram_view, destination)
+    var udp_buffer:uint8[8]
+    var udp_view = &udp_buffer[0:8]
+    let received = try UDP.receive_from(receiver, udp_view)
+    assert(received.count == 3 && !received.truncated, "UDP receive metadata")
+    assert(udp_view[0] == 117 && udp_view[2] == 112, "UDP loopback payload")
+    try UDP.close(sender)
+    try UDP.close(receiver)
+    return Result<void, Error>.success()
+}

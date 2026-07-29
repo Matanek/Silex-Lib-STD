@@ -1,0 +1,35 @@
+use STD.File
+use STD.System.ErrorKind
+
+func main() {
+    let path = "/private/tmp/silex-std-file-test.txt"
+    match File.write_all(path, "Silex file IO\n") {
+        failure(error) => { panic(error.detail) }
+        success => {}
+    }
+    match File.read_text(path, 1024) {
+        failure(error) => { panic(error.detail) }
+        success(content) => { assert(content == "Silex file IO\n", "text file round trip") }
+    }
+
+    let binary:uint8[3] = [0, 255, 10]
+    match File.write_all(path, @binary[0:3]) {
+        failure(error) => { panic(error.detail) }
+        success => {}
+    }
+    match File.read_all(path, 3) {
+        failure(error) => { panic(error.detail) }
+        success(bytes) => {
+            assert(bytes.count() == 3, "binary file size")
+            assert(bytes[0] == 0 && bytes[1] == 255 && bytes[2] == 10, "binary file contents")
+        }
+    }
+    match File.read_text(path, 3) {
+        failure(error) => { assert(is_invalid_data(error.kind), "invalid UTF-8 file error") }
+        success(content) => { panic("invalid UTF-8 file was accepted as text") }
+    }
+}
+
+func is_invalid_data(kind:ErrorKind) bool {
+    return match kind { invalid_data => true; else => false }
+}

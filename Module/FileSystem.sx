@@ -1,0 +1,100 @@
+use STD.FileSystem.Platform
+use STD.Path as Paths
+use STD.Path.Path as Path
+use STD.System.Error
+use STD.System.ErrorKind
+
+public enum Kind { file; directory; symbolic_link; other }
+
+public struct Metadata {
+    let kind:Kind
+    let size:int
+    let readonly:bool
+}
+
+public struct Entry {
+    let name:Path
+    let kind:Kind
+}
+
+public func metadata(path:Path) Result<Metadata, Error> { return metadata_impl(path, true, "filesystem.metadata") }
+public func symbolic_link_metadata(path:Path) Result<Metadata, Error> { return metadata_impl(path, false, "filesystem.symbolic_link_metadata") }
+
+public func canonicalize(path:Path) Result<Path, Error> {
+    if result = Platform.canonicalize(path) { return Result<Path, Error>.success(result) }
+    return Result<Path, Error>.failure(filesystem_error("filesystem.canonicalize", path, "system canonicalization failed"))
+}
+
+public func list(path:Path) Result<Entry[], Error> {
+    if raw_entries = Platform.entries(path) {
+        var result:Entry[] = []
+        for raw in raw_entries { result.append(Entry(name:Platform.entry_name(raw), kind:kind_from_code(Platform.entry_kind(raw)))) }
+        return Result<Entry[], Error>.success(result)
+    }
+    return Result<Entry[], Error>.failure(filesystem_error("filesystem.list", path, "system directory traversal failed"))
+}
+
+public func create_directory(path:Path) Result<void, Error> {
+    if Platform.create_directory(path) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(filesystem_error("filesystem.create_directory", path, "system directory creation failed"))
+}
+
+public func create_directories(path:Path) Result<void, Error> { return create_tree(path) }
+
+public func remove_file(path:Path) Result<void, Error> {
+    if Platform.remove_file(path) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(filesystem_error("filesystem.remove_file", path, "system file removal failed"))
+}
+
+public func remove_directory(path:Path) Result<void, Error> {
+    if Platform.remove_directory(path) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(filesystem_error("filesystem.remove_directory", path, "system directory removal failed"))
+}
+
+public func rename(source:Path, destination:Path) Result<void, Error> {
+    if Platform.rename(source, destination) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(filesystem_error("filesystem.rename", source, "system rename failed"))
+}
+
+public func copy_file(source:Path, destination:Path, replace:bool) Result<void, Error> {
+    if Platform.copy_file(source, destination, replace) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(filesystem_error("filesystem.copy_file", source, "system file copy failed"))
+}
+
+public func set_readonly(path:Path, readonly:bool) Result<void, Error> {
+    if Platform.set_readonly(path, readonly) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(filesystem_error("filesystem.set_readonly", path, "system permission update failed"))
+}
+
+func metadata_impl(path:Path, follow:bool, operation:str) Result<Metadata, Error> {
+    if raw = Platform.metadata(path, follow) {
+        return Result<Metadata, Error>.success(Metadata(
+            kind:kind_from_code(Platform.metadata_kind(raw)),
+            size:Platform.metadata_size(raw),
+            readonly:Platform.metadata_readonly(raw)
+        ))
+    }
+    return Result<Metadata, Error>.failure(filesystem_error(operation, path, "system metadata query failed"))
+}
+
+func create_tree(path:Path) Result<void, Error> {
+    if raw = Platform.metadata(path, true) {
+        if Platform.metadata_kind(raw) == 2 { return Result<void, Error>.success() }
+        return Result<void, Error>.failure(filesystem_error("filesystem.create_directories", path, "path exists and is not a directory"))
+    }
+    let parent = try Paths.parent(path)
+    if value = parent { try create_tree(value) }
+    if Platform.create_directory(path) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(filesystem_error("filesystem.create_directories", path, "system directory creation failed"))
+}
+
+func kind_from_code(kind:int) Kind {
+    if kind == 1 { return Kind.file() }
+    if kind == 2 { return Kind.directory() }
+    if kind == 3 { return Kind.symbolic_link() }
+    return Kind.other()
+}
+
+func filesystem_error(operation:str, subject:Path, detail:str) Error {
+    return Error(kind:ErrorKind.other(), operation:operation, subject:subject, detail:detail)
+}

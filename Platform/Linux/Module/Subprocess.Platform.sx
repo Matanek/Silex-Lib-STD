@@ -1,0 +1,163 @@
+use Interop.C
+use Interop.Linux
+
+internal struct RawOutput { let status:int; let signaled:bool; let stdout:uint8[]; let stderr:uint8[]; let limited:bool; let error:int }
+struct Pipe { let read:int32; let write:int32 }
+func output_status(value:RawOutput) int { return value.status }
+func output_signaled(value:RawOutput) bool { return value.signaled }
+func output_stdout(value:RawOutput) uint8[] { return value.stdout }
+func output_stderr(value:RawOutput) uint8[] { return value.stderr }
+func output_limited(value:RawOutput) bool { return value.limited }
+func output_error(value:RawOutput) int { return value.error }
+
+let system_pipe = C.function<func(C.MutablePointer<int>) int32>(library:Linux.kernel, name:"pipe")
+let system_fork = C.function<func() int32>(library:Linux.kernel, name:"fork")
+let system_dup2 = C.function<func(int32, int32) int32>(library:Linux.kernel, name:"dup2")
+let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
+let system_chdir = C.function<func(C.Pointer<uint8>) C.SignedSize>(library:Linux.kernel, name:"chdir")
+let system_execve = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Linux.kernel, name:"execve")
+let system_exit = C.function<func(int32) C.SignedSize>(library:Linux.kernel, name:"exit")
+let system_waitpid = C.function<func(int32, C.MutablePointer<int>, int32, C.Pointer<uint8>) int32>(library:Linux.kernel, name:"wait4")
+let system_kill = C.function<func(int32, int32) int32>(library:Linux.kernel, name:"kill")
+let system_poll = C.function<func(C.MutablePointer<int>, C.Size, int32) int32>(library:Linux.kernel, name:"poll")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
+
+func run(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], input:@uint8[..], maximum:int) RawOutput? {
+    if arguments.count() + 2 > 128 || environment.count() + 1 > 128 { return RawOutput(status:0, signaled:false, stdout:[], stderr:[], limited:true, error:0) }
+    var argv:uint[128]
+    argv[0] = C.address_bits(C.terminated_pointer(executable))
+    var index = 0
+    while index < arguments.count() {
+        argv[index + 1] = C.address_bits(C.terminated_pointer(arguments[index]))
+        index++
+    }
+    argv[index + 1] = 0
+    var envp:uint[128]
+    index = 0
+    while index < environment.count() {
+        envp[index] = C.address_bits(C.terminated_pointer(environment[index]))
+        index++
+    }
+    envp[index] = 0
+    let stdin_pipe = make_pipe()
+    let stdout_pipe = make_pipe()
+    let stderr_pipe = make_pipe()
+    let exec_pipe = make_pipe()
+    if !stdin_pipe.valid || !stdout_pipe.valid || !stderr_pipe.valid || !exec_pipe.valid { return null }
+    let child = system_fork()
+    if child < 0 { return null }
+    if child == 0 {
+        close_descriptor(stdin_pipe.write)
+        close_descriptor(stdout_pipe.read)
+        close_descriptor(stderr_pipe.read)
+        close_descriptor(exec_pipe.read)
+        if system_dup2(stdin_pipe.read, 0) < 0 || system_dup2(stdout_pipe.write, 1) < 0 || system_dup2(stderr_pipe.write, 2) < 0 ||
+            (has_directory && system_chdir(C.terminated_pointer(directory)) != 0)
+        {
+            write_exec_error(exec_pipe.write)
+            let ignored_exit = system_exit(127)
+        }
+        close_descriptor(stdin_pipe.read)
+        close_descriptor(stdout_pipe.write)
+        close_descriptor(stderr_pipe.write)
+        let ignored = system_execve(C.terminated_pointer(executable), C.mutable_pointer(argv), C.mutable_pointer(envp))
+        write_exec_error(exec_pipe.write)
+        let ignored_exit = system_exit(127)
+    }
+    close_descriptor(stdin_pipe.read)
+    close_descriptor(stdout_pipe.write)
+    close_descriptor(stderr_pipe.write)
+    close_descriptor(exec_pipe.write)
+    var standard_output:uint8[] = []
+    var standard_error:uint8[] = []
+    var input_offset = 0
+    var input_open = true
+    var output_open = true
+    var error_open = true
+    if input.count() == 0 {
+        close_descriptor(stdin_pipe.write)
+        input_open = false
+    }
+    var limited = false
+    while input_open || output_open || error_open {
+        var polls:int[3]
+        write_poll(polls, 0, stdin_pipe.write, input_open, 4)
+        write_poll(polls, 1, stdout_pipe.read, output_open, 1)
+        write_poll(polls, 2, stderr_pipe.read, error_open, 1)
+        if system_poll(C.mutable_pointer(polls), 3 as C.Size, -1) < 0 { break }
+        if input_open && poll_ready(polls, 0, 4) {
+            if !write_byte(stdin_pipe.write, input[input_offset]) {
+                close_descriptor(stdin_pipe.write)
+                input_open = false
+            } else {
+                input_offset++
+                if input_offset == input.count() {
+                    close_descriptor(stdin_pipe.write)
+                    input_open = false
+                }
+            }
+        }
+        if output_open && poll_ready(polls, 1, 25) {
+            output_open = collect_byte(stdout_pipe.read, standard_output)
+            if !output_open { close_descriptor(stdout_pipe.read) }
+        }
+        if error_open && poll_ready(polls, 2, 25) {
+            error_open = collect_byte(stderr_pipe.read, standard_error)
+            if !error_open { close_descriptor(stderr_pipe.read) }
+        }
+        if standard_output.count() + standard_error.count() > maximum {
+            let ignored_kill = system_kill(child, 9)
+            limited = true
+            input_open = false
+            close_descriptor(stdin_pipe.write)
+        }
+    }
+    var status:int = 0
+    let waited = system_waitpid(child, C.mutable_pointer(status), 0, C.pointer_bits(0 as uint))
+    var exec_error:uint32 = 0
+    let exec_count = system_read(exec_pipe.read, C.mutable_pointer(exec_error), 4 as C.Size)
+    close_descriptor(exec_pipe.read)
+    if waited < 0 { return null }
+    if exec_count == 4 { return RawOutput(status:0, signaled:false, stdout:standard_output, stderr:standard_error, limited:false, error:exec_error as int) }
+    let signal = status % 128
+    if signal == 0 { return RawOutput(status:(status / 256) % 256, signaled:false, stdout:standard_output, stderr:standard_error, limited:limited, error:0) }
+    return RawOutput(status:signal, signaled:true, stdout:standard_output, stderr:standard_error, limited:limited, error:0)
+}
+
+func make_pipe() PipeResult {
+    var storage:int[1]
+    if system_pipe(C.mutable_pointer(storage)) != 0 { return PipeResult(valid:false, read:-1, write:-1) }
+    let address = C.address_bits(C.mutable_pointer(storage))
+    return PipeResult(valid:true, read:C.load<int32>(address, 0 as uint), write:C.load<int32>(address, 4 as uint))
+}
+struct PipeResult { let valid:bool; let read:int32; let write:int32 }
+func close_descriptor(value:int32) { if value >= 0 { let ignored = system_close(value) } }
+func write_exec_error(descriptor:int32) {
+    var code:uint32 = 1
+    let ignored = system_write(descriptor, C.mutable_pointer(code), 4 as C.Size)
+}
+func write_byte(descriptor:int32, byte:uint8) bool {
+    var value:uint32 = byte as uint32
+    return system_write(descriptor, C.mutable_pointer(value), 1 as C.Size) == 1
+}
+func collect_byte(descriptor:int32, target:&uint8[]) bool {
+    var value:uint32 = 0
+    let count = system_read(descriptor, C.mutable_pointer(value), 1 as C.Size)
+    if count == 1 {
+        target.append((value & 255) as uint8)
+        return true
+    }
+    return false
+}
+func write_poll(storage:&int[3], index:int, descriptor:int32, enabled:bool, events:uint16) {
+    let address = C.address_bits(C.mutable_pointer(storage)) + (index * 8) as uint
+    var value = descriptor
+    if !enabled { value = -1 }
+    let ignored_fd = C.store<int32>(address, 0 as uint, value)
+    let ignored_events = C.store<uint16>(address, 4 as uint, events)
+}
+func poll_ready(storage:&int[3], index:int, events:uint16) bool {
+    let address = C.address_bits(C.mutable_pointer(storage)) + (index * 8) as uint
+    return (C.load<uint16>(address, 6 as uint) & events) != 0
+}

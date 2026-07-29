@@ -1,0 +1,80 @@
+use Interop.C
+use Interop.Windows
+use STD.Text.Encoding
+
+let system_argc = C.function<func() C.Pointer<uint8> >(library:Windows.ucrtbase, name:"__p___argc")
+let system_wargv = C.function<func() C.Pointer<uint8> >(library:Windows.ucrtbase, name:"__p___wargv")
+let system_get_current_directory = C.function<func(uint32, C.MutablePointer<int>) uint32>(library:Windows.kernel32, name:"GetCurrentDirectoryW")
+let system_set_current_directory = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"SetCurrentDirectoryW")
+let system_get_module_file_name = C.function<func(uint, C.MutablePointer<int>, uint32) uint32>(library:Windows.kernel32, name:"GetModuleFileNameW")
+let system_get_process_id = C.function<func() uint32>(library:Windows.kernel32, name:"GetCurrentProcessId")
+
+func arguments() str[]? {
+    var result:str[] = []
+    let count_root = C.address_bits(system_argc())
+    let arguments_root = C.address_bits(system_wargv())
+    if count_root == 0 || arguments_root == 0 { return null }
+    let count = C.load<int32>(count_root, 0 as uint)
+    let arguments = C.address_at(arguments_root, 0 as uint)
+    var index = 0
+    while index < count {
+        let argument = C.address_at(arguments, (index as uint) * 8)
+        if argument == 0 { return null }
+        result.append(wide_text(argument, wide_length(argument)))
+        index++
+    }
+    return result
+}
+
+func current_directory() str? {
+    var buffer:int[512]
+    let count = system_get_current_directory(2048, C.mutable_pointer(buffer))
+    if count == 0 || count >= 2048 { return null }
+    return wide_text(C.address_bits(C.mutable_pointer(buffer)), count as int)
+}
+
+func set_current_directory(path:str) bool {
+    let encoded = wide_string(path)
+    return system_set_current_directory(C.pointer(encoded)) != 0
+}
+
+func executable_path() str? {
+    var buffer:int[512]
+    let count = system_get_module_file_name(0 as uint, C.mutable_pointer(buffer), 2048)
+    if count == 0 || count >= 2048 { return null }
+    return wide_text(C.address_bits(C.mutable_pointer(buffer)), count as int)
+}
+
+func id() uint { return system_get_process_id() as uint }
+
+func wide_length(address:uint) int {
+    var count = 0
+    while count < 0x8000 {
+        if C.load<uint16>(address, (count as uint) * 2) == 0 { return count }
+        count++
+    }
+    panic("Windows process text exceeds 32768 UTF-16 code units")
+}
+
+func wide_text(address:uint, count:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < count {
+        let unit = C.load<uint16>(address, (index as uint) * 2)
+        bytes.append((unit & 255) as uint8)
+        bytes.append((unit >> 8) as uint8)
+        index++
+    }
+    let view = @bytes[0:bytes.count()]
+    match Encoding.decode(view, Encoding.Kind.utf16_little_endian()) {
+        success(text) => { return text }
+        failure(error) => { panic("Windows process text contains invalid UTF-16") }
+    }
+}
+
+func wide_string(text:str) str {
+    var bytes = Encoding.encode(text, Encoding.Kind.utf16_little_endian())
+    bytes.append(0 as uint8)
+    let view = @bytes[0:bytes.count()]
+    return C.string(view)
+}

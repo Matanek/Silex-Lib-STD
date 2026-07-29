@@ -1,0 +1,139 @@
+use STD.Subprocess.Platform
+use STD.Subprocess.Environment.Platform as EnvironmentPlatform
+use STD.Path.Path as Path
+use STD.System.Error
+use STD.System.ErrorKind
+use STD.Text.UTF8
+
+public enum EnvironmentChange { set(str, str); remove(str) }
+public enum ExitStatus { exited(int); signaled(int) }
+
+public struct Command {
+    let executable:Path
+    let arguments:str[]
+    let current_directory:Path?
+    let inherit_environment:bool
+    let environment:EnvironmentChange[]
+    let standard_input:uint8[]
+    let maximum_output_bytes:int
+}
+
+public struct Output { let status:ExitStatus; let standard_output:uint8[]; let standard_error:uint8[] }
+
+public func run(command:Command) Result<Output, Error> {
+    if command.maximum_output_bytes < 0 { return failed(command.executable, ErrorKind.invalid_input(), "maximum_output_bytes must be non-negative") }
+    if !valid_text(command.executable, false) { return failed(command.executable, ErrorKind.invalid_input(), "executable must be non-empty and contain no null byte") }
+    var directory = ""
+    var has_directory = false
+    if value = command.current_directory {
+        if !valid_text(value, false) { return failed(command.executable, ErrorKind.invalid_input(), "current_directory must be non-empty and contain no null byte") }
+        directory = value
+        has_directory = true
+    }
+    for argument in command.arguments {
+        if !valid_text(argument, true) { return failed(command.executable, ErrorKind.invalid_input(), "an argument contains a null byte") }
+    }
+    var environment:str[] = []
+    if command.inherit_environment {
+        environment = inherited_environment()
+    }
+    for change in command.environment {
+        match change {
+            set(name, value) => {
+                if !valid_name(name) || !valid_text(value, true) { return failed(command.executable, ErrorKind.invalid_input(), "invalid environment assignment") }
+                environment = without_environment(environment, name)
+                environment.append(name + "=" + value)
+            }
+            remove(name) => {
+                if !valid_name(name) { return failed(command.executable, ErrorKind.invalid_input(), "invalid environment variable name") }
+                environment = without_environment(environment, name)
+            }
+        }
+    }
+    let argument_view = @command.arguments[0:command.arguments.count()]
+    let environment_view = @environment[0:environment.count()]
+    let input_view = @command.standard_input[0:command.standard_input.count()]
+    if raw = Platform.run(command.executable, argument_view, has_directory, directory, environment_view, input_view, command.maximum_output_bytes) {
+        if Platform.output_limited(raw) { return failed(command.executable, ErrorKind.limit_exceeded(), "captured output exceeds maximum_output_bytes") }
+        if Platform.output_error(raw) != 0 { return failed(command.executable, ErrorKind.other(), "system process creation failed with code " + decimal(Platform.output_error(raw))) }
+        var status = ExitStatus.exited(Platform.output_status(raw))
+        if Platform.output_signaled(raw) { status = ExitStatus.signaled(Platform.output_status(raw)) }
+        return Result<Output, Error>.success(Output(status:status, standard_output:Platform.output_stdout(raw), standard_error:Platform.output_stderr(raw)))
+    }
+    return failed(command.executable, ErrorKind.other(), "system process execution failed")
+}
+
+func inherited_environment() str[] {
+    var result:str[] = []
+    for entry in EnvironmentPlatform.entries() {
+        let bytes = UTF8.bytes(entry)
+        var separator = -1
+        var index = 0
+        while index < bytes.count() && separator < 0 {
+            if bytes[index] == 61 { separator = index }
+            index++
+        }
+        if separator > 0 { result.append(entry) }
+    }
+    return result
+}
+
+func without_environment(values:str[], name:str) str[] {
+    var result:str[] = []
+    for value in values {
+        let bytes = UTF8.bytes(value)
+        let name_bytes = UTF8.bytes(name)
+        var matches = false
+        if bytes.count() > name_bytes.count() && bytes[name_bytes.count()] == 61 {
+            var equal = true
+            var cursor = 0
+            while cursor < name_bytes.count() {
+                if bytes[cursor] != name_bytes[cursor] { equal = false }
+                cursor++
+            }
+            matches = equal
+        }
+        if !matches { result.append(value) }
+    }
+    return result
+}
+func valid_name(value:str) bool {
+    if !valid_text(value, false) { return false }
+    for byte in UTF8.bytes(value) { if byte == 61 { return false } }
+    return true
+}
+func valid_text(value:str, empty:bool) bool {
+    let bytes = UTF8.bytes(value)
+    if !empty && bytes.count() == 0 { return false }
+    for byte in bytes { if byte == 0 { return false } }
+    return true
+}
+func failed(subject:str, kind:ErrorKind, detail:str) Result<Output, Error> {
+    return Result<Output, Error>.failure(Error(kind:kind, operation:"subprocess.run", subject:subject, detail:detail))
+}
+func decimal(value:int) str {
+    if value == 0 { return "0" }
+    var remaining = value
+    var prefix = ""
+    if remaining < 0 {
+        prefix = "-"
+        remaining = -remaining
+    }
+    var reversed:uint8[] = []
+    while remaining > 0 {
+        reversed.append((48 + remaining % 10) as uint8)
+        remaining = remaining / 10
+    }
+    var bytes:uint8[] = []
+    for byte in UTF8.bytes(prefix) { bytes.append(byte) }
+    var index = reversed.count()
+    while index > 0 {
+        index--
+        bytes.append(reversed[index])
+    }
+    let view = @bytes[0:bytes.count()]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("decimal encoding failed") }
+    }
+}

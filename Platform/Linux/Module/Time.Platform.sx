@@ -1,0 +1,15 @@
+use Interop.C
+use Interop.Linux
+
+let clock_gettime = C.function<func(int32, C.MutablePointer<int>) int32>(
+    library:Linux.kernel,
+    name:"clock_gettime"
+)
+
+func monotonic_microseconds() int {
+    var time:int[2] = [0, 0]
+    let clock_monotonic:int32 = 1
+    let result = clock_gettime(clock_monotonic, C.mutable_pointer(time))
+    if result != 0 { panic("Linux clock_gettime(CLOCK_MONOTONIC) failed") }
+    return time[0] * 1_000_000 + time[1] / 1_000
+}

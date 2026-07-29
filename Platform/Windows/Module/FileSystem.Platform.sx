@@ -1,0 +1,132 @@
+use Interop.C
+use Interop.Windows
+use STD.Text.Encoding
+
+internal struct RawMetadata { public let kind:int; public let size:int; public let readonly:bool }
+internal struct RawEntry { public let name:str; public let kind:int }
+
+func metadata_kind(value:RawMetadata) int { return value.kind }
+func metadata_size(value:RawMetadata) int { return value.size }
+func metadata_readonly(value:RawMetadata) bool { return value.readonly }
+func entry_name(value:RawEntry) str { return value.name }
+func entry_kind(value:RawEntry) int { return value.kind }
+
+let system_attributes = C.function<func(C.Pointer<uint8>, int32, C.MutablePointer<int>) int32>(library:Windows.kernel32, name:"GetFileAttributesExW")
+let system_find_first = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) uint>(library:Windows.kernel32, name:"FindFirstFileW")
+let system_find_next = C.function<func(uint, C.MutablePointer<int>) int32>(library:Windows.kernel32, name:"FindNextFileW")
+let system_find_close = C.function<func(uint) int32>(library:Windows.kernel32, name:"FindClose")
+let system_create_directory = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"CreateDirectoryW")
+let system_delete_file = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"DeleteFileW")
+let system_remove_directory = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"RemoveDirectoryW")
+let system_move = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, uint32) int32>(library:Windows.kernel32, name:"MoveFileExW")
+let system_copy = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Windows.kernel32, name:"CopyFileW")
+let system_set_attributes = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Windows.kernel32, name:"SetFileAttributesW")
+let system_full_path = C.function<func(C.Pointer<uint8>, uint32, C.MutablePointer<int>, C.MutablePointer<int>) uint32>(library:Windows.kernel32, name:"GetFullPathNameW")
+
+func metadata(path:str, follow:bool) RawMetadata? {
+    var data:int[5]
+    if system_attributes(C.pointer(wide_string(path)), 0, C.mutable_pointer(data)) == 0 { return null }
+    let address = C.address_bits(C.mutable_pointer(data))
+    let attributes = C.load<uint32>(address, 0)
+    let high = C.load<uint32>(address, 28 as uint) as uint
+    let low = C.load<uint32>(address, 32 as uint) as uint
+    return RawMetadata(
+        kind:kind_from_attributes(attributes),
+        size:((high << 32) + low) as int,
+        readonly:(attributes & 1) != 0
+    )
+}
+
+func canonicalize(path:str) str? {
+    if value = metadata(path, true) {} else { return null }
+    let wide = wide_string(path)
+    var buffer:int[512]
+    var file_part:int = 0
+    let count = system_full_path(C.pointer(wide), 2048, C.mutable_pointer(buffer), C.mutable_pointer(file_part))
+    if count == 0 || count >= 2048 { return null }
+    return wide_text(C.address_bits(C.mutable_pointer(buffer)), count as int)
+}
+
+func entries(path:str) RawEntry[]? {
+    let pattern = wide_string(path + "/*")
+    var data:int[74]
+    let handle = system_find_first(C.pointer(pattern), C.mutable_pointer(data))
+    if handle == 0xFFFF_FFFF_FFFF_FFFF { return null }
+    var result:RawEntry[] = []
+    while true {
+        let address = C.address_bits(C.mutable_pointer(data))
+        let name = wide_text(address + 44, wide_length(address + 44, 260))
+        if name != "." && name != ".." {
+            result.append(RawEntry(name:name, kind:kind_from_attributes(C.load<uint32>(address, 0))))
+        }
+        if system_find_next(handle, C.mutable_pointer(data)) == 0 {
+            let ignored = system_find_close(handle)
+            return result
+        }
+    }
+    panic("directory traversal terminated unexpectedly")
+}
+
+func create_directory(path:str) bool {
+    return system_create_directory(C.pointer(wide_string(path)), C.pointer_bits(0 as uint)) != 0
+}
+
+func remove_file(path:str) bool { return system_delete_file(C.pointer(wide_string(path))) != 0 }
+func remove_directory(path:str) bool { return system_remove_directory(C.pointer(wide_string(path))) != 0 }
+func rename(source:str, destination:str) bool {
+    return system_move(C.pointer(wide_string(source)), C.pointer(wide_string(destination)), 1) != 0
+}
+func copy_file(source:str, destination:str, replace:bool) bool {
+    var fail_if_exists:int32 = 1
+    if replace { fail_if_exists = 0 }
+    return system_copy(C.pointer(wide_string(source)), C.pointer(wide_string(destination)), fail_if_exists) != 0
+}
+
+func set_readonly(path:str, readonly:bool) bool {
+    var data:int[5]
+    let wide = wide_string(path)
+    if system_attributes(C.pointer(wide), 0, C.mutable_pointer(data)) == 0 { return false }
+    var attributes = C.load<uint32>(C.address_bits(C.mutable_pointer(data)), 0)
+    if readonly && (attributes & 1) == 0 { attributes += 1 }
+    else { attributes = attributes & 0xFFFF_FFFE }
+    return system_set_attributes(C.pointer(wide), attributes) != 0
+}
+
+func kind_from_attributes(attributes:uint32) int {
+    if (attributes & 0x400) != 0 { return 3 }
+    if (attributes & 0x10) != 0 { return 2 }
+    if (attributes & 0x80) != 0 { return 1 }
+    return 4
+}
+
+func wide_length(address:uint, maximum:int) int {
+    var count = 0
+    while count < maximum {
+        if C.load<uint16>(address, (count as uint) * 2) == 0 { return count }
+        count++
+    }
+    return maximum
+}
+
+func wide_text(address:uint, count:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < count {
+        let unit = C.load<uint16>(address, (index as uint) * 2)
+        bytes.append((unit & 255) as uint8)
+        bytes.append((unit >> 8) as uint8)
+        index++
+    }
+    let view = @bytes[0:bytes.count()]
+    match Encoding.decode(view, Encoding.Kind.utf16_little_endian()) {
+        success(text) => { return text }
+        failure(error) => { panic("Windows filesystem text contains invalid UTF-16") }
+    }
+}
+
+func wide_string(text:str) str {
+    var bytes = Encoding.encode(text, Encoding.Kind.utf16_little_endian())
+    bytes.append(0 as uint8)
+    let view = @bytes[0:bytes.count()]
+    return C.string(view)
+}

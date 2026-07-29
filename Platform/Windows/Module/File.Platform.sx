@@ -1,0 +1,49 @@
+use Interop.C
+use Interop.Windows
+use STD.Text.Encoding
+
+// `_wopen` receives UTF-16LE code units. C.Pointer<uint8> describes the
+// address-sized ABI value here; the pointed storage is deliberately encoded
+// below and terminated by two zero bytes.
+let system_open = C.function<func(C.Pointer<uint8>, int32, int32) int32>(library:Windows.ucrtbase, name:"_wopen")
+let system_close = C.function<func(int32) int32>(library:Windows.ucrtbase, name:"_close")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(library:Windows.ucrtbase, name:"_read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Windows.ucrtbase, name:"_write")
+let system_flush = C.function<func(int32) int32>(library:Windows.ucrtbase, name:"_commit")
+let system_seek = C.function<func(int32, int, int32) int>(library:Windows.ucrtbase, name:"_lseeki64")
+let system_set_length = C.function<func(int32, int) int32>(library:Windows.ucrtbase, name:"_chsize_s")
+
+func open(path:str, access:int, creation:int, append:bool) int {
+    var flags = access - 1
+    if creation == 2 { flags += 0x500 }
+    if creation == 3 { flags += 0x100 }
+    if creation == 4 { flags += 0x200 }
+    if creation == 5 { flags += 0x300 }
+    if append { flags += 8 }
+    flags += 0x8000
+
+    var path_bytes = Encoding.encode(path, Encoding.Kind.utf16_little_endian())
+    path_bytes.append(0 as uint8)
+    let path_view = @path_bytes[0:path_bytes.count()]
+    let wide_path = C.string(path_view)
+    return system_open(C.pointer(wide_path), flags as int32, 0x180) as int
+}
+
+func close(descriptor:int) bool { return system_close(descriptor as int32) == 0 }
+
+func read_byte(descriptor:int) int {
+    var value:uint32 = 0
+    let count = system_read(descriptor as int32, C.mutable_pointer(value), 1)
+    if count == 0 { return -1 }
+    if count != 1 { return -2 }
+    return (value & 255) as int
+}
+
+func write_byte(descriptor:int, byte:uint8) bool {
+    var value:uint32 = byte as uint32
+    return system_write(descriptor as int32, C.mutable_pointer(value), 1) == 1
+}
+
+func flush(descriptor:int) bool { return system_flush(descriptor as int32) == 0 }
+func seek(descriptor:int, offset:int, from:int) int { return system_seek(descriptor as int32, offset, from as int32) }
+func set_length(descriptor:int, length:int) bool { return system_set_length(descriptor as int32, length) == 0 }

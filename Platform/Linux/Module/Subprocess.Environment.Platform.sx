@@ -1,0 +1,31 @@
+use STD.File
+use STD.Text.UTF8
+
+func entries() str[] {
+    var result:str[] = []
+    match File.read_all("/proc/self/environ", 0x10_0000) {
+        failure(error) => { return result }
+        success(bytes) => {
+            var start = 0
+            var index = 0
+            while index <= bytes.count() {
+                if index == bytes.count() || bytes[index] == 0 {
+                    if index > start {
+                        let view = @bytes[start:index]
+                        result.append(decoded(view))
+                    }
+                    start = index + 1
+                }
+                index++
+            }
+        }
+    }
+    return result
+}
+
+func decoded(bytes:@uint8[..]) str {
+    match UTF8.decode(bytes) {
+        success(text) => { return text }
+        failure(error) => { panic("Linux environment contains invalid UTF-8") }
+    }
+}

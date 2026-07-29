@@ -1,0 +1,26 @@
+use STD.System
+
+func main() {
+    let current_platform = System.platform()
+    let current_target = System.target()
+    assert(System.platform_name(current_target.platform) == System.platform_name(current_platform), "target platform differs from selected platform")
+    let selected_architecture = architecture_name(current_target.architecture)
+
+    match current_platform {
+        macos => { assert(selected_architecture == "arm64", "macOS target must be ARM64") }
+        linux => { assert(selected_architecture == "x64", "Linux target must be X64") }
+        windows => {
+            assert(selected_architecture == "x64" || selected_architecture == "arm64", "Windows target architecture is unknown")
+        }
+    }
+
+    let name = System.target_name(current_target)
+    assert(name == System.platform_name(current_platform) + "-" + architecture_name(current_target.architecture), "target name is inconsistent")
+}
+
+func architecture_name(value:System.Architecture) str {
+    return match value {
+        arm64 => "arm64"
+        x64 => "x64"
+    }
+}

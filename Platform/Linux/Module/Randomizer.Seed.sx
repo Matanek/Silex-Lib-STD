@@ -1,0 +1,18 @@
+use Interop.C
+use Interop.Linux
+
+let getrandom = C.function<
+    func(C.MutablePointer<uint32>, C.Size, uint32) C.SignedSize
+>(
+    library:Linux.kernel,
+    name:"getrandom"
+)
+
+func generate() int {
+    var seed:uint32 = 0
+    let written = getrandom(C.mutable_pointer(seed), 4 as C.Size, 0)
+    if written != 4 as C.SignedSize {
+        panic("Linux getrandom could not produce a complete seed")
+    }
+    return seed as int
+}

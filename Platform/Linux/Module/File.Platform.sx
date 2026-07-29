@@ -1,0 +1,35 @@
+use Interop.C
+use Interop.Linux
+
+let system_openat = C.function<func(int32, C.Pointer<uint8>, int32, uint32) int32>(library:Linux.kernel, name:"openat")
+let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
+let system_fsync = C.function<func(int32) int32>(library:Linux.kernel, name:"fsync")
+let system_lseek = C.function<func(int32, int, int32) int>(library:Linux.kernel, name:"lseek")
+let system_ftruncate = C.function<func(int32, int) int32>(library:Linux.kernel, name:"ftruncate")
+
+func open(path:str, access:int, creation:int, append:bool) int {
+    var flags = access - 1
+    if creation == 2 { flags += 192 }
+    if creation == 3 { flags += 64 }
+    if creation == 4 { flags += 512 }
+    if creation == 5 { flags += 576 }
+    if append { flags += 1024 }
+    return system_openat(-100, C.terminated_pointer(path), flags as int32, 438) as int
+}
+func close(descriptor:int) bool { return system_close(descriptor as int32) == 0 }
+func read_byte(descriptor:int) int {
+    var value:uint32 = 0
+    let count = system_read(descriptor as int32, C.mutable_pointer(value), 1 as C.Size)
+    if count == 0 { return -1 }
+    if count != 1 { return -2 }
+    return (value & 255) as int
+}
+func write_byte(descriptor:int, byte:uint8) bool {
+    var value:uint32 = byte as uint32
+    return system_write(descriptor as int32, C.mutable_pointer(value), 1 as C.Size) == 1
+}
+func flush(descriptor:int) bool { return system_fsync(descriptor as int32) == 0 }
+func seek(descriptor:int, offset:int, from:int) int { return system_lseek(descriptor as int32, offset, from as int32) }
+func set_length(descriptor:int, length:int) bool { return system_ftruncate(descriptor as int32, length) == 0 }

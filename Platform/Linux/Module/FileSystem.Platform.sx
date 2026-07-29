@@ -1,0 +1,185 @@
+use Interop.C
+use Interop.Linux
+use STD.Text.UTF8
+
+internal struct RawMetadata { public let kind:int; public let size:int; public let readonly:bool }
+internal struct RawEntry { public let name:str; public let kind:int }
+
+func metadata_kind(value:RawMetadata) int { return value.kind }
+func metadata_size(value:RawMetadata) int { return value.size }
+func metadata_readonly(value:RawMetadata) bool { return value.readonly }
+func entry_name(value:RawEntry) str { return value.name }
+func entry_kind(value:RawEntry) int { return value.kind }
+
+let system_openat = C.function<func(int32, C.Pointer<uint8>, int32, uint32) int32>(library:Linux.kernel, name:"openat")
+let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
+let system_read = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
+let system_newfstatat = C.function<func(int32, C.Pointer<uint8>, C.MutablePointer<int>, int32) int32>(library:Linux.kernel, name:"newfstatat")
+let system_getdents = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"getdents64")
+let system_mkdir = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"mkdir")
+let system_unlink = C.function<func(C.Pointer<uint8>) int32>(library:Linux.kernel, name:"unlink")
+let system_rmdir = C.function<func(C.Pointer<uint8>) int32>(library:Linux.kernel, name:"rmdir")
+let system_rename = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Linux.kernel, name:"rename")
+let system_chmod = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"chmod")
+let system_readlink = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"readlink")
+
+func metadata(path:str, follow:bool) RawMetadata? {
+    var status:int[18]
+    var flags:int32 = 256
+    if follow { flags = 0 }
+    if system_newfstatat(-100, C.terminated_pointer(path), C.mutable_pointer(status), flags) != 0 { return null }
+    let address = C.address_bits(C.mutable_pointer(status))
+    let mode = C.load<uint32>(address, 24 as uint)
+    return RawMetadata(kind:kind_from_mode(mode), size:C.load<int>(address, 48 as uint), readonly:(mode & 146) == 0)
+}
+
+func canonicalize(path:str) str? {
+    let descriptor = system_openat(-100, C.terminated_pointer(path), 0x28_0000, 0)
+    if descriptor < 0 { return null }
+    let link = "/proc/self/fd/" + decimal(descriptor)
+    var buffer:int[512]
+    let count = system_readlink(C.terminated_pointer(link), C.mutable_pointer(buffer), 4096 as C.Size)
+    let ignored = system_close(descriptor)
+    if count <= 0 { return null }
+    return text_at(C.address_bits(C.mutable_pointer(buffer)), count)
+}
+
+func entries(path:str) RawEntry[]? {
+    let descriptor = system_openat(-100, C.terminated_pointer(path), 0x9_0000, 0)
+    if descriptor < 0 { return null }
+    var result:RawEntry[] = []
+    var buffer:int[512]
+    while true {
+        let count = system_getdents(descriptor, C.mutable_pointer(buffer), 4096 as C.Size)
+        if count < 0 {
+            let ignored = system_close(descriptor)
+            return null
+        }
+        if count == 0 {
+            let ignored = system_close(descriptor)
+            return result
+        }
+        let address = C.address_bits(C.mutable_pointer(buffer))
+        var offset = 0
+        while offset < count {
+            let record = address + offset as uint
+            let length = C.load<uint16>(record, 16 as uint) as int
+            if length < 20 || offset + length > count {
+                let ignored = system_close(descriptor)
+                return null
+            }
+            let name = terminated_text(record + 19, length - 19)
+            if name != "." && name != ".." {
+                result.append(RawEntry(name:name, kind:kind_from_directory_type(C.load<uint8>(record, 18 as uint))))
+            }
+            offset += length
+        }
+    }
+    panic("directory traversal terminated unexpectedly")
+}
+
+func create_directory(path:str) bool { return system_mkdir(C.terminated_pointer(path), 493) == 0 }
+func remove_file(path:str) bool { return system_unlink(C.terminated_pointer(path)) == 0 }
+func remove_directory(path:str) bool { return system_rmdir(C.terminated_pointer(path)) == 0 }
+func rename(source:str, destination:str) bool { return system_rename(C.terminated_pointer(source), C.terminated_pointer(destination)) == 0 }
+
+func copy_file(source:str, destination:str, replace:bool) bool {
+    let input = system_openat(-100, C.terminated_pointer(source), 0, 0)
+    if input < 0 { return false }
+    var flags = 577
+    if !replace { flags += 128 }
+    let output = system_openat(-100, C.terminated_pointer(destination), flags as int32, 438)
+    if output < 0 {
+        let ignored = system_close(input)
+        return false
+    }
+    var buffer:int[512]
+    while true {
+        let count = system_read(input, C.mutable_pointer(buffer), 4096 as C.Size)
+        if count < 0 { return close_copy(input, output, false) }
+        if count == 0 { return close_copy(input, output, true) }
+        var written = 0
+        while written < count {
+            let address = C.address_bits(C.mutable_pointer(buffer)) + written as uint
+            let amount = system_write(output, C.pointer_bits(address), (count - written) as C.Size)
+            if amount <= 0 { return close_copy(input, output, false) }
+            written += amount
+        }
+    }
+    panic("file copy terminated unexpectedly")
+}
+
+func set_readonly(path:str, readonly:bool) bool {
+    var status:int[18]
+    if system_newfstatat(-100, C.terminated_pointer(path), C.mutable_pointer(status), 0) != 0 { return false }
+    let address = C.address_bits(C.mutable_pointer(status))
+    var mode = C.load<uint32>(address, 24 as uint)
+    if readonly { mode = mode & 0xFF6D }
+    elif (mode & 128) == 0 { mode += 128 }
+    return system_chmod(C.terminated_pointer(path), mode) == 0
+}
+
+func close_copy(input:int32, output:int32, succeeded:bool) bool {
+    let output_closed = system_close(output) == 0
+    let input_closed = system_close(input) == 0
+    return succeeded && output_closed && input_closed
+}
+
+func kind_from_mode(mode:uint32) int {
+    let file_type = mode & 0xF000
+    if file_type == 0x8000 { return 1 }
+    if file_type == 0x4000 { return 2 }
+    if file_type == 0xA000 { return 3 }
+    return 4
+}
+
+func kind_from_directory_type(kind:uint8) int {
+    if kind == 8 { return 1 }
+    if kind == 4 { return 2 }
+    if kind == 10 { return 3 }
+    return 4
+}
+
+func terminated_text(address:uint, maximum:int) str {
+    var count = 0
+    while count < maximum {
+        if C.load<uint8>(address, count as uint) == 0 { return text_at(address, count) }
+        count++
+    }
+    return text_at(address, maximum)
+}
+
+func text_at(address:uint, count:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < count {
+        bytes.append(C.load<uint8>(address, index as uint))
+        index++
+    }
+    let view = @bytes[0:bytes.count()]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("system filesystem text contains invalid UTF-8") }
+    }
+}
+
+func decimal(number:int32) str {
+    var bytes:uint8[24]
+    var index = 24
+    var value = number
+    if value == 0 {
+        index--
+        bytes[index] = 48
+    }
+    while value > 0 {
+        index--
+        bytes[index] = (48 + value % 10) as uint8
+        value /= 10
+    }
+    let view = @bytes[index:24]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("descriptor formatting failed") }
+    }
+}

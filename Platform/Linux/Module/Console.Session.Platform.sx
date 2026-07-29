@@ -1,0 +1,40 @@
+use Interop.C
+use Interop.Linux
+
+let ioctl = C.function<func(int32, uint, C.MutablePointer<int>) int32>(library:Linux.kernel, name:"ioctl")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
+let poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(library:Linux.kernel, name:"poll")
+
+func activate() int[9]? {
+    var original:int[9] = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    if ioctl(0, 0x5401 as uint, C.mutable_pointer(original)) != 0 { return null }
+    var raw = original
+    let low:uint = 0xFFFF_FFFF
+    let iflag = (raw[0] as uint) & low
+    let oflag = (raw[0] as uint) >> 32
+    let cflag = (raw[1] as uint) & low
+    let lflag = (raw[1] as uint) >> 32
+    let raw_iflag = iflag & (low ^ 7659)
+    let raw_cflag = (cflag & (low ^ 0x130)) + 0x30
+    let raw_lflag = lflag & (low ^ 32843)
+    raw[0] = (raw_iflag + (oflag << 32)) as int
+    raw[1] = (raw_cflag + (raw_lflag << 32)) as int
+    if ioctl(0, 0x5402 as uint, C.mutable_pointer(raw)) != 0 { return null }
+    return original
+}
+
+func restore(original:int[9]) bool {
+    var state = original
+    return ioctl(0, 0x5402 as uint, C.mutable_pointer(state)) == 0
+}
+
+func poll_byte(timeout_milliseconds:int) int {
+    var descriptor:uint = 0x1_0000_0000
+    let ready = poll(C.mutable_pointer(descriptor), 1 as C.Size, timeout_milliseconds as int32)
+    if ready == 0 { return -1 }
+    if ready < 0 { return -2 }
+    var byte:uint32 = 0
+    let count = system_read(0, C.mutable_pointer(byte), 1 as C.Size)
+    if count != 1 { return -2 }
+    return (byte & 255) as int
+}

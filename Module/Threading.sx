@@ -1,0 +1,99 @@
+use Interop.C
+use STD.Threading.Platform
+
+public protocol Task { func execute() }
+
+public static class TaskManager {
+    public static func submit<T:Task>(task:T) TaskHandle<T> {
+        var handle = TaskHandle<T>(task)
+        handle.start()
+        return handle
+    }
+    public static func submit<T:Task>(task:T, callback:func(T)) TaskWaitHandle<T> {
+        var handle = TaskWaitHandle<T>(task, callback)
+        handle.start()
+        return handle
+    }
+}
+
+public class TaskHandle<T:Task> {
+    internal var task:T
+    internal var thread:uint
+    public init(task:T) {
+        self.task = task
+        self.thread = 0
+    }
+    internal func start() {
+        let value = Platform.spawn(C.function_address<T>(run_task), C.object_address(self))
+        if value != 0 { self.thread = value; return }
+        panic("system thread creation failed")
+    }
+    public func complete() T {
+        if self.thread != 0 {
+            if !Platform.join(self.thread) { panic("system thread join failed") }
+            self.thread = 0
+        }
+        return self.task
+    }
+    public func complete(callback:func(T)) {
+        if self.thread != 0 {
+            if !Platform.join(self.thread) { panic("system thread join failed") }
+            self.thread = 0
+        }
+        callback(self.task)
+    }
+    drop {
+        if self.thread != 0 {
+            if !Platform.join(self.thread) { panic("system thread join failed") }
+            self.thread = 0
+        }
+    }
+}
+
+public class TaskWaitHandle<T:Task> {
+    internal var task:T
+    internal let callback:func(T)
+    internal var thread:uint
+    public init(task:T, callback:func(T)) {
+        self.task = task
+        self.callback = callback
+        self.thread = 0
+    }
+    internal func start() {
+        let value = Platform.spawn(C.function_address<T>(run_wait_task), C.object_address(self))
+        if value != 0 { self.thread = value; return }
+        panic("system thread creation failed")
+    }
+    public func complete() {
+        if self.thread != 0 {
+            if !Platform.join(self.thread) { panic("system thread join failed") }
+            self.thread = 0
+        }
+    }
+    drop {
+        if self.thread != 0 {
+            if !Platform.join(self.thread) { panic("system thread join failed") }
+            self.thread = 0
+        }
+    }
+    internal func completion() func(T) { return self.callback }
+}
+
+func run_task<T:Task>(context:uint) uint {
+    var handle = C.object_from_address<TaskHandle<T>>(context)
+    var running = handle.task
+    running.execute()
+    handle.task = running
+    return 0
+}
+
+func run_wait_task<T:Task>(context:uint) uint {
+    var handle = C.object_from_address<TaskWaitHandle<T>>(context)
+    var running = handle.task
+    running.execute()
+    handle.task = running
+    invoke_callback<T>(handle.completion(), running)
+    return 0
+}
+
+func invoke_callback<T>(callback:func(T), value:T) { callback(value) }

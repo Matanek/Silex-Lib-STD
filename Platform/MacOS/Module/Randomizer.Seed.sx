@@ -1,0 +1,11 @@
+use Interop.C
+use Interop.MacOS
+
+let system_random = C.function<func() uint32>(
+    library:MacOS.lib_system,
+    name:"arc4random"
+)
+
+func generate() int {
+    return system_random() as int
+}

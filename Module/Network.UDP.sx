@@ -1,0 +1,138 @@
+use STD.Network
+use STD.Network.UDP.Platform
+use STD.System.Error
+use STD.System.ErrorKind
+
+public struct Options {
+    let read_timeout_milliseconds:int?
+    let write_timeout_milliseconds:int?
+}
+
+public struct Receive {
+    let count:int
+    let sender:Network.Endpoint
+    let truncated:bool
+}
+
+public class Socket {
+    private var descriptor:int
+    private var closed:bool
+
+    internal init(descriptor:int) {
+        self.descriptor = descriptor
+        self.closed = false
+    }
+
+    internal func handle() int { return self.descriptor }
+    internal func is_closed() bool { return self.closed }
+    internal func close_handle() bool {
+        if self.closed { return false }
+        self.closed = true
+        return Platform.close(self.descriptor)
+    }
+}
+
+public func bind(endpoint:Network.Endpoint, options:Options) Result<Socket, Error> {
+    let read = try timeout(options.read_timeout_milliseconds, "udp.bind")
+    let write = try timeout(options.write_timeout_milliseconds, "udp.bind")
+    let descriptor = match endpoint.address {
+        ipv4(bytes) => bind4(bytes, endpoint, read, write)
+        ipv6(bytes) => bind6(bytes, endpoint, read, write)
+    }
+    if descriptor < 0 { return Result<Socket, Error>.failure(failure("udp.bind", "system bind failed")) }
+    return Result<Socket, Error>.success(Socket(descriptor))
+}
+
+public func open(family:Network.Family, options:Options) Result<Socket, Error> {
+    let read = try timeout(options.read_timeout_milliseconds, "udp.open")
+    let write = try timeout(options.write_timeout_milliseconds, "udp.open")
+    let code = match family { any => 0; ipv4 => 4; ipv6 => 6 }
+    if code == 0 { return Result<Socket, Error>.failure(invalid("udp.open", "a concrete address family is required")) }
+    let descriptor = Platform.open(code, read, write)
+    if descriptor < 0 { return Result<Socket, Error>.failure(failure("udp.open", "system socket creation failed")) }
+    return Result<Socket, Error>.success(Socket(descriptor))
+}
+
+public func send_to(socket:&Socket, bytes:@uint8[..], endpoint:Network.Endpoint) Result<void, Error> {
+    if socket.is_closed() { return Result<void, Error>.failure(failure("udp.send_to", "socket is closed")) }
+    let sent = match endpoint.address {
+        ipv4(address) => send4(socket, bytes, address, endpoint)
+        ipv6(address) => send6(socket, bytes, address, endpoint)
+    }
+    if sent { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(failure("udp.send_to", "system send failed"))
+}
+
+public func receive_from(socket:&Socket, buffer:&uint8[..]) Result<Receive, Error> {
+    if socket.is_closed() { return Result<Receive, Error>.failure(failure("udp.receive_from", "socket is closed")) }
+    if raw = Platform.receive_from(socket.handle(), buffer) {
+        let source = Platform.receive_endpoint(raw)
+        return Result<Receive, Error>.success(Receive(
+            count:Platform.receive_count(raw),
+            sender:endpoint_from_parts(
+                Platform.endpoint_bytes(source), Platform.endpoint_family(source), Platform.endpoint_port(source), Platform.endpoint_scope(source)
+            ),
+            truncated:Platform.receive_truncated(raw)
+        ))
+    }
+    return Result<Receive, Error>.failure(failure("udp.receive_from", "system receive failed"))
+}
+
+public func local_endpoint(socket:@Socket) Result<Network.Endpoint, Error> {
+    if socket.is_closed() { return Result<Network.Endpoint, Error>.failure(failure("udp.local_endpoint", "socket is closed")) }
+    if raw = Platform.local_endpoint(socket.handle()) {
+        return Result<Network.Endpoint, Error>.success(endpoint_from_parts(
+            Platform.endpoint_bytes(raw), Platform.endpoint_family(raw), Platform.endpoint_port(raw), Platform.endpoint_scope(raw)
+        ))
+    }
+    return Result<Network.Endpoint, Error>.failure(failure("udp.local_endpoint", "system endpoint query failed"))
+}
+
+public func close(socket:Socket) Result<void, Error> {
+    if socket.close_handle() { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(failure("udp.close", "system close failed or socket is already closed"))
+}
+
+func bind4(bytes:uint8[4], value:Network.Endpoint, read:int, write:int) int {
+    if value.scope_id != 0 { return -1 }
+    let address = @bytes[0:4]
+    return Platform.bind(4, address, value.port, 0, read, write)
+}
+
+func bind6(bytes:uint8[16], value:Network.Endpoint, read:int, write:int) int {
+    let address = @bytes[0:16]
+    return Platform.bind(6, address, value.port, value.scope_id, read, write)
+}
+
+func send4(socket:&Socket, bytes:@uint8[..], address:uint8[4], value:Network.Endpoint) bool {
+    if value.scope_id != 0 { return false }
+    let address_view = @address[0:4]
+    return Platform.send_to(socket.handle(), bytes, 4, address_view, value.port, 0)
+}
+
+func send6(socket:&Socket, bytes:@uint8[..], address:uint8[16], value:Network.Endpoint) bool {
+    let address_view = @address[0:16]
+    return Platform.send_to(socket.handle(), bytes, 6, address_view, value.port, value.scope_id)
+}
+
+func endpoint_from_parts(bytes:uint8[16], family:int, port:uint16, scope:uint32) Network.Endpoint {
+    var address = Network.IpAddress.ipv6(bytes)
+    if family == 4 { address = Network.IpAddress.ipv4([bytes[0], bytes[1], bytes[2], bytes[3]]) }
+    return Network.Endpoint(address:address, port:port, scope_id:scope)
+}
+
+func timeout(value:int?, operation:str) Result<int, Error> {
+    if present = value {
+        if present < 0 { return Result<int, Error>.failure(invalid(operation, "timeout must be non-negative")) }
+        return Result<int, Error>.success(present)
+    }
+    return Result<int, Error>.success(-1)
+}
+
+func invalid(operation:str, detail:str) Error {
+    return Error(kind:ErrorKind.invalid_input(), operation:operation, subject:null, detail:detail)
+}
+
+func failure(operation:str, detail:str) Error {
+    return Error(kind:ErrorKind.other(), operation:operation, subject:null, detail:detail)
+}

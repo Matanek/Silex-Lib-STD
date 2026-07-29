@@ -1,0 +1,42 @@
+use Interop.C
+use Interop.Linux
+
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(
+    library:Linux.kernel,
+    name:"write"
+)
+
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(
+    library:Linux.kernel,
+    name:"read"
+)
+
+let ioctl = C.function<func(int32, uint, C.MutablePointer<uint32>) int32>(
+    library:Linux.kernel,
+    name:"ioctl"
+)
+
+func write_descriptor(descriptor:int, text:str) {
+    let count = C.byte_count(text)
+    let written = system_write(descriptor as int32, C.pointer(text), count)
+    if written != count as C.SignedSize { panic("console write failed") }
+}
+
+func read_byte() int {
+    var byte:uint32 = 0
+    let count = system_read(0, C.mutable_pointer(byte), 1 as C.Size)
+    if count == 0 { return -1 }
+    if count != 1 { panic("console read failed") }
+    return (byte & 255) as int
+}
+
+func interactive() bool {
+    var packed:uint32 = 0
+    return ioctl(1, 0x5413 as uint, C.mutable_pointer(packed)) == 0
+}
+
+func dimensions() int {
+    var packed:uint32 = 0
+    if ioctl(1, 0x5413 as uint, C.mutable_pointer(packed)) != 0 { return -1 }
+    return packed as int
+}

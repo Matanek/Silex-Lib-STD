@@ -1,0 +1,96 @@
+use STD.Crypto.MD5.digest as md5_digest
+use STD.Crypto.SHA1.digest as sha1_digest
+use STD.Crypto.SHA256.digest as sha256_digest
+use STD.Text.UTF8.bytes as utf8_bytes
+use STD.Text.UTF8.decode as utf8_decode
+
+public func random_bytes(count:int) uint8[] {
+    if count < 0 {
+        panic("crypto.random_bytes requires a non-negative count")
+    }
+    var result:uint8[] = []
+    while result.count() < count {
+        var word = Platform.random_word()
+        var offset = 0
+        while offset < 4 && result.count() < count {
+            result.append((word & 255) as uint8)
+            word = word >> 8
+            offset++
+        }
+    }
+    return result
+}
+
+public func md5_bytes(value:@uint8[..]) uint8[16] {
+    return md5_digest(value)
+}
+
+public func md5_bytes(value:str) uint8[16] {
+    let encoded = utf8_bytes(value)
+    return md5_digest(@encoded[0:encoded.count()])
+}
+
+public func sha1_bytes(value:@uint8[..]) uint8[20] {
+    return sha1_digest(value)
+}
+
+public func sha1_bytes(value:str) uint8[20] {
+    let encoded = utf8_bytes(value)
+    return sha1_digest(@encoded[0:encoded.count()])
+}
+
+public func sha256_bytes(value:@uint8[..]) uint8[32] {
+    return sha256_digest(value)
+}
+
+public func sha256_bytes(value:str) uint8[32] {
+    let encoded = utf8_bytes(value)
+    return sha256_digest(@encoded[0:encoded.count()])
+}
+
+public func md5(value:@uint8[..]) str {
+    let digest = md5_bytes(value)
+    return hexadecimal(@digest[0:16])
+}
+
+public func md5(value:str) str {
+    let digest = md5_bytes(value)
+    return hexadecimal(@digest[0:16])
+}
+
+public func sha1(value:@uint8[..]) str {
+    let digest = sha1_bytes(value)
+    return hexadecimal(@digest[0:20])
+}
+
+public func sha1(value:str) str {
+    let digest = sha1_bytes(value)
+    return hexadecimal(@digest[0:20])
+}
+
+public func sha256(value:@uint8[..]) str {
+    let digest = sha256_bytes(value)
+    return hexadecimal(@digest[0:32])
+}
+
+public func sha256(value:str) str {
+    let digest = sha256_bytes(value)
+    return hexadecimal(@digest[0:32])
+}
+
+func hexadecimal(bytes:@uint8[..]) str {
+    var encoded:uint8[] = []
+    for byte in bytes {
+        encoded.append(hex_digit(byte >> 4))
+        encoded.append(hex_digit(byte & 15))
+    }
+    match utf8_decode(@encoded[0:encoded.count()]) {
+        success(text) => { return text }
+        failure(error) => { panic("crypto hexadecimal encoding failed") }
+    }
+}
+
+func hex_digit(value:uint8) uint8 {
+    if value < 10 { return value + 48 }
+    return value - 10 + 97
+}

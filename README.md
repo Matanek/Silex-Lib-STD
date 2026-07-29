@@ -72,6 +72,46 @@ let content = try File.read_text(path, 1024)
 `File.read_all` and the byte-view overload of `File.write_all` remain available
 for binary data.
 
+Cryptographic hashes and system entropy are available through `STD.Crypto`:
+
+```sx
+use STD.Crypto
+
+let checksum = Crypto.sha256("Silex")
+let binary_digest:uint8[16] = Crypto.md5_bytes("Silex")
+let token:uint8[] = Crypto.random_bytes(32)
+```
+
+`md5`, `sha1`, and `sha256` accept either a `str` or a borrowed byte view and
+return lowercase hexadecimal text without a prefix. Their `_bytes`
+counterparts return fixed-size binary digests. A string is hashed as its exact
+UTF-8 byte sequence. MD5 and SHA-1 remain useful for compatible formats and
+non-adversarial fingerprints, but their collision resistance is not suitable
+when an attacker controls the input. None of these hashes is a
+password-storage function.
+
+`Crypto.random_bytes` reads system entropy directly. It never derives secrets
+from the deterministic `STD.Randomizer` sequence.
+
+UUID values use the same entropy source for their random portion:
+
+```sx
+use STD.UUID
+
+let identifier = UUID()
+print(identifier.to_str())
+```
+
+`UUID()` constructs a version 4 value by default.
+`UUID(UUID.Version.v4())` and `UUID(UUID.Version.v7())` support a dynamic
+version choice, while `UUID.v4()` and `UUID.v7()` are concise explicit
+factories. Choose version 4 when the creation time must not be encoded. Version
+7 embeds the current Unix timestamp in milliseconds before its random portion,
+making identifiers time-sortable.
+`UUID(bytes:uint8[16])` reconstructs an exact binary value, `to_bytes()`
+returns a copy, and `to_str()` renders canonical lowercase text. UUID values
+are identifiers, not authentication tokens.
+
 Fallible filesystem, network, process and I/O capabilities share the
 `STD.Error` contract. Its categories remain scoped under the error type:
 

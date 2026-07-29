@@ -1,0 +1,81 @@
+use STD.Crypto
+use STD.Process
+use STD.Subprocess
+use STD.Text.UTF8
+
+func main() {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            if arguments.count() > 1 && arguments[1] == "--negative-random-count" {
+                let ignored = Crypto.random_bytes(-1)
+                return
+            }
+        }
+    }
+
+    let empty_random = Crypto.random_bytes(0)
+    let single_random = Crypto.random_bytes(1)
+    let partial_random = Crypto.random_bytes(7)
+    assert(empty_random.count() == 0, "empty crypto entropy")
+    assert(single_random.count() == 1, "single crypto byte")
+    assert(partial_random.count() == 7, "partial crypto word")
+    verify_negative_random_count()
+}
+
+func verify_negative_random_count() {
+    match Process.executable_path() {
+        failure(error) => { panic(error.detail) }
+        success(executable) => { run_negative_child(executable) }
+    }
+}
+
+func run_negative_child(executable:str) {
+    let command = Subprocess.Command(
+        executable:executable,
+        arguments:["--negative-random-count"],
+        current_directory:null,
+        inherit_environment:true,
+        environment:[],
+        standard_input:[],
+        maximum_output_bytes:1024
+    )
+    match Subprocess.run(command) {
+        failure(error) => { panic(error.detail) }
+        success(output) => { verify_negative_output(output) }
+    }
+}
+
+func verify_negative_output(output:Subprocess.Output) {
+    match output.status {
+        exited(code) => { assert(code != 0, "negative crypto byte count fails") }
+        signaled(signal) => { panic("negative crypto byte count was signaled") }
+    }
+    match UTF8.decode(@output.standard_error[0:output.standard_error.count()]) {
+        failure(error) => { panic("crypto failure diagnostic is not UTF-8") }
+        success(text) => {
+            assert(
+                contains(text, "crypto.random_bytes requires a non-negative count"),
+                "negative crypto byte count diagnostic"
+            )
+        }
+    }
+}
+
+func contains(text:str, expected:str) bool {
+    let bytes = UTF8.bytes(text)
+    let needle = UTF8.bytes(expected)
+    if needle.count() > bytes.count() { return false }
+    var start = 0
+    while start + needle.count() <= bytes.count() {
+        var matches = true
+        var index = 0
+        while index < needle.count() {
+            if bytes[start + index] != needle[index] { matches = false }
+            index++
+        }
+        if matches { return true }
+        start++
+    }
+    return false
+}

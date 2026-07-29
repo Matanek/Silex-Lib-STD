@@ -1,0 +1,78 @@
+use STD.Crypto
+use STD.Text.UTF8.decode as utf8_decode
+
+public enum Version {
+    v4 // Use v4 when the creation time must not be encoded.
+    v7 // Use v7 for time-sortable identifiers.
+}
+
+public struct UUID {
+    let storage:uint8[16]
+
+    public init(version:Version = Version.v4()) {
+        self.storage = generate(version)
+    }
+
+    public init(bytes:uint8[16]) {
+        self.storage = bytes
+    }
+
+    public static func v4() UUID {
+        return UUID(Version.v4())
+    }
+
+    public static func v7() UUID {
+        return UUID(Version.v7())
+    }
+
+    public func to_bytes() uint8[16] {
+        return self.storage
+    }
+
+    public func to_str() str {
+        var encoded:uint8[] = []
+        var index = 0
+        while index < 16 {
+            if index == 4 || index == 6 || index == 8 || index == 10 {
+                encoded.append(45 as uint8)
+            }
+            let byte = self.storage[index]
+            encoded.append(hex_digit(byte >> 4))
+            encoded.append(hex_digit(byte & 15))
+            index++
+        }
+        match utf8_decode(@encoded[0:encoded.count()]) {
+            success(text) => { return text }
+            failure(error) => { panic("UUID hexadecimal encoding failed") }
+        }
+    }
+}
+
+func generate(version:Version) uint8[16] {
+    let entropy = Crypto.random_bytes(16)
+    var bytes:uint8[16]
+    var index = 0
+    while index < 16 {
+        bytes[index] = entropy[index]
+        index++
+    }
+    if version == Version.v7() {
+        let milliseconds = Platform.unix_milliseconds()
+        bytes[0] = ((milliseconds / 1_099_511_627_776) % 256) as uint8
+        bytes[1] = ((milliseconds / 4_294_967_296) % 256) as uint8
+        bytes[2] = ((milliseconds / 16_777_216) % 256) as uint8
+        bytes[3] = ((milliseconds / 65_536) % 256) as uint8
+        bytes[4] = ((milliseconds / 256) % 256) as uint8
+        bytes[5] = (milliseconds % 256) as uint8
+        bytes[6] = (bytes[6] & 15) ^ 112
+    } else {
+        bytes[6] = (bytes[6] & 15) ^ 64
+    }
+    bytes[8] = (bytes[8] & 63) ^ 128
+    return bytes
+}
+
+func hex_digit(value:uint8) uint8 {
+    if value < 10 { return value + 48 }
+    return value - 10 + 97
+}

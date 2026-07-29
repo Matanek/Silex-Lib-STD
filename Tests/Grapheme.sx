@@ -1,6 +1,8 @@
 use STD.Text.Grapheme
 
-func main() {
+test "Unicode grapheme clusters" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+
     check(Grapheme.count("") == 0, "empty text")
     check(Grapheme.count("e\u{301}") == 1, "combining mark")
     check(Grapheme.count("👩‍🚀") == 1, "emoji ZWJ sequence")
@@ -9,4 +11,3 @@ func main() {
     let parts = Grapheme.split("a👩‍🚀b")
     check(parts.count() == 3 && parts[1] == "👩‍🚀", "grapheme split")
 }
-func check(condition:bool, detail:str) { if !condition { panic(detail) } }

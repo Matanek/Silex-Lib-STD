@@ -1,6 +1,9 @@
 use STD.Crypto
+use STD.Process
+use STD.Subprocess
+use STD.Text.UTF8
 
-func main() {
+test "MD5 vectors" {
     assert(Crypto.md5("") == "d41d8cd98f00b204e9800998ecf8427e", "MD5 empty vector")
     assert(Crypto.md5("abc") == "900150983cd24fb0d6963f7d28e17f72", "MD5 abc vector")
     assert(Crypto.md5("message digest") == "f96b697d7cb7938d525a2f31aaf161d0", "MD5 text vector")
@@ -9,7 +12,9 @@ func main() {
             "d174ab98d277d9f5a5611c2c9f419d9f",
         "MD5 multi-block vector"
     )
+}
 
+test "SHA-1 vectors" {
     assert(Crypto.sha1("") == "da39a3ee5e6b4b0d3255bfef95601890afd80709", "SHA-1 empty vector")
     assert(Crypto.sha1("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d", "SHA-1 abc vector")
     assert(
@@ -17,7 +22,9 @@ func main() {
             "84983e441c3bd26ebaae4aa1f95129e5e54670f1",
         "SHA-1 multi-block vector"
     )
+}
 
+test "SHA-256 vectors" {
     assert(Crypto.sha256("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "SHA-256 empty vector")
     assert(Crypto.sha256("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "SHA-256 abc vector")
     assert(
@@ -25,7 +32,9 @@ func main() {
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
         "SHA-256 multi-block vector"
     )
+}
 
+test "binary inputs and byte digests" {
     let binary:uint8[3] = [0, 255, 16]
     let binary_view = @binary[0:3]
     assert(Crypto.md5(binary_view) == "481e4551ec039aada760901cf52b1917", "MD5 binary vector")
@@ -43,4 +52,83 @@ func main() {
     assert(md5_bytes[0] == 0x90 && md5_bytes[15] == 0x72, "MD5 byte digest")
     assert(sha1_bytes[0] == 0xa9 && sha1_bytes[19] == 0x9d, "SHA-1 byte digest")
     assert(sha256_bytes[0] == 0xba && sha256_bytes[31] == 0xad, "SHA-256 byte digest")
+}
+
+test "random byte counts" {
+    let empty_random = Crypto.random_bytes(0)
+    let single_random = Crypto.random_bytes(1)
+    let partial_random = Crypto.random_bytes(7)
+    assert(empty_random.count() == 0, "empty crypto entropy")
+    assert(single_random.count() == 1, "single crypto byte")
+    assert(partial_random.count() == 7, "partial crypto word")
+}
+
+test "negative random byte count fails" {
+    func contains(text:str, expected:str) bool {
+        let bytes = UTF8.bytes(text)
+        let needle = UTF8.bytes(expected)
+        if needle.count() > bytes.count() { return false }
+        var start = 0
+        while start + needle.count() <= bytes.count() {
+            var matches = true
+            var index = 0
+            while index < needle.count() {
+                if bytes[start + index] != needle[index] { matches = false }
+                index++
+            }
+            if matches { return true }
+            start++
+        }
+        return false
+    }
+
+    func verify_negative_output(output:Subprocess.Output) {
+        match output.status {
+            exited(code) => { assert(code != 0, "negative crypto byte count fails") }
+            signaled(signal) => { panic("negative crypto byte count was signaled") }
+        }
+        match UTF8.decode(@output.standard_error[0:output.standard_error.count()]) {
+            failure(error) => { panic("crypto failure diagnostic is not UTF-8") }
+            success(text) => {
+                assert(
+                    contains(text, "crypto.random_bytes requires a non-negative count"),
+                    "negative crypto byte count diagnostic"
+                )
+            }
+        }
+    }
+
+    func run_negative_child(executable:str) {
+        let command = Subprocess.Command(
+            executable:executable,
+            arguments:["--negative-random-count"],
+            current_directory:null,
+            inherit_environment:true,
+            environment:[],
+            standard_input:[],
+            maximum_output_bytes:1024
+        )
+        match Subprocess.run(command) {
+            failure(error) => { panic(error.detail) }
+            success(output) => { verify_negative_output(output) }
+        }
+    }
+
+    func verify_negative_random_count() {
+        match Process.executable_path() {
+            failure(error) => { panic(error.detail) }
+            success(executable) => { run_negative_child(executable) }
+        }
+    }
+
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            if arguments.count() > 1 && arguments[1] == "--negative-random-count" {
+                let ignored = Crypto.random_bytes(-1)
+                return
+            }
+        }
+    }
+    verify_negative_random_count()
 }

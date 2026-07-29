@@ -1,6 +1,14 @@
 use STD.Process
 
-func main() {
+test "process information" {
+    func verify_directory(directory:str) {
+        assert(directory.count() > 0, "current directory")
+        match Process.set_current_directory(directory) {
+            failure(error) => { panic(error.detail) }
+            success => {}
+        }
+    }
+
     assert(Process.id() > 0, "process id")
     match Process.arguments() {
         failure(error) => { panic(error.detail) }
@@ -13,13 +21,5 @@ func main() {
     match Process.executable_path() {
         failure(error) => { panic(error.detail) }
         success(path) => { assert(path.count() > 0, "executable path") }
-    }
-}
-
-func verify_directory(directory:str) {
-    assert(directory.count() > 0, "current directory")
-    match Process.set_current_directory(directory) {
-        failure(error) => { panic(error.detail) }
-        success => {}
     }
 }

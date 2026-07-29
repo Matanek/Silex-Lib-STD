@@ -1,40 +1,40 @@
 use STD.Network
 use STD.Error
 
-func main() {
+test "IP addresses and resolution" {
+    func run() Result<void, Error> {
+        let loopback4 = try Network.parse_ip("127.0.0.1")
+        assert(Network.format_ip(loopback4) == "127.0.0.1", "IPv4 round trip")
+        let loopback6 = try Network.parse_ip("::1")
+        assert(Network.format_ip(loopback6) == "::1", "IPv6 compressed round trip")
+        let documented = try Network.parse_ip("2001:0db8:0:0:0:0:0:1")
+        assert(Network.format_ip(documented) == "2001:db8::1", "IPv6 canonical formatting")
+        let mapped = try Network.parse_ip("::ffff:192.0.2.128")
+        assert(Network.format_ip(mapped) == "::ffff:c000:280", "IPv4 tail parsing")
+        let endpoint = Network.Endpoint(address:loopback6, port:443, scope_id:0)
+        assert(Network.format_endpoint(endpoint) == "[::1]:443", "IPv6 endpoint formatting")
+        let numeric = try Network.resolve(
+            "127.0.0.1",
+            8080,
+            Network.ResolveOptions(family:Network.Family.ipv4(), transport:Network.Transport.stream())
+        )
+        assert(numeric.count() == 1, "numeric address resolution")
+        assert(Network.format_endpoint(numeric[0]) == "127.0.0.1:8080", "numeric endpoint resolution")
+        let local = try Network.resolve(
+            "localhost",
+            80,
+            Network.ResolveOptions(family:Network.Family.any(), transport:Network.Transport.stream())
+        )
+        assert(local.count() > 0, "platform name resolution")
+        match Network.parse_ip("999.1.1.1") {
+            success(value) => { panic("invalid IPv4 address accepted") }
+            failure(error) => {}
+        }
+        return Result<void, Error>.success()
+    }
+
     match run() {
         success => {}
         failure(error) => { panic(error.operation + ": " + error.detail) }
     }
-}
-
-func run() Result<void, Error> {
-    let loopback4 = try Network.parse_ip("127.0.0.1")
-    assert(Network.format_ip(loopback4) == "127.0.0.1", "IPv4 round trip")
-    let loopback6 = try Network.parse_ip("::1")
-    assert(Network.format_ip(loopback6) == "::1", "IPv6 compressed round trip")
-    let documented = try Network.parse_ip("2001:0db8:0:0:0:0:0:1")
-    assert(Network.format_ip(documented) == "2001:db8::1", "IPv6 canonical formatting")
-    let mapped = try Network.parse_ip("::ffff:192.0.2.128")
-    assert(Network.format_ip(mapped) == "::ffff:c000:280", "IPv4 tail parsing")
-    let endpoint = Network.Endpoint(address:loopback6, port:443, scope_id:0)
-    assert(Network.format_endpoint(endpoint) == "[::1]:443", "IPv6 endpoint formatting")
-    let numeric = try Network.resolve(
-        "127.0.0.1",
-        8080,
-        Network.ResolveOptions(family:Network.Family.ipv4(), transport:Network.Transport.stream())
-    )
-    assert(numeric.count() == 1, "numeric address resolution")
-    assert(Network.format_endpoint(numeric[0]) == "127.0.0.1:8080", "numeric endpoint resolution")
-    let local = try Network.resolve(
-        "localhost",
-        80,
-        Network.ResolveOptions(family:Network.Family.any(), transport:Network.Transport.stream())
-    )
-    assert(local.count() > 0, "platform name resolution")
-    match Network.parse_ip("999.1.1.1") {
-        success(value) => { panic("invalid IPv4 address accepted") }
-        failure(error) => {}
-    }
-    return Result<void, Error>.success()
 }

@@ -19,23 +19,26 @@ class ContendedCounter:Threading.Task {
     }
 }
 
-func record(counter:SharedCounter) { counter.value += 10 }
+test "value tasks and completion callbacks" {
+    func record_completed(counter:Counter) {
+        if counter.value != 42 { panic("completion callback did not receive the completed task") }
+    }
 
-func record_completed(counter:Counter) {
-    if counter.value != 42 { panic("completion callback did not receive the completed task") }
-}
-
-func submit_and_release(counter:SharedCounter) {
-    var waiting = Threading.TaskManager.submit(counter, record)
-}
-
-func main() {
     var handle = Threading.TaskManager.submit(Counter(value:41))
     let completed = handle.complete()
     if completed.value != 42 { panic("thread did not execute task") }
 
     var callback_handle = Threading.TaskManager.submit(Counter(value:41))
     callback_handle.complete(record_completed)
+}
+
+test "shared tasks and released handles" {
+    func record(counter:SharedCounter) { counter.value += 10 }
+
+    func submit_and_release(counter:SharedCounter) {
+        let callback:func(SharedCounter) = record
+        var waiting = Threading.TaskManager.submit(counter, callback)
+    }
 
     var shared = SharedCounter(value:9)
     let callback:func(SharedCounter) = record
@@ -46,7 +49,9 @@ func main() {
     var released = SharedCounter(value:4)
     submit_and_release(released)
     if released.value != 15 { panic("dropping a task handle did not await its callback") }
+}
 
+test "mutex serializes contended tasks" {
     var contended = ContendedCounter(value:0)
     var first = Threading.TaskManager.submit(contended)
     var second = Threading.TaskManager.submit(contended)

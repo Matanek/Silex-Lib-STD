@@ -1,6 +1,6 @@
 use STD.Path
 
-func main() {
+test "path operations" {
     match Path.normalize("/usr//local/../bin/") {
         success(value) => { assert(value == "/usr/bin", "normalize POSIX path") }
         failure(error) => { panic("valid path rejected") }

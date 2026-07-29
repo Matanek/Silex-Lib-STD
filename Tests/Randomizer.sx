@@ -1,15 +1,21 @@
 use STD.Randomizer
 
-func main() {
-    var deterministic = Randomizer(42)
-    assert(deterministic.get_int() == 45454805674, "deterministic seed")
+test "deterministic seed" {
+    var randomizer = Randomizer(42)
+    assert(randomizer.get_int() == 45454805674)
+}
 
-    let ranged = deterministic.get_int(-10, 10)
-    assert(ranged >= -10 && ranged < 10, "integer range")
+test "generated values stay in their ranges" {
+    var randomizer = Randomizer(42)
 
-    let fractional = deterministic.get_float()
-    assert(fractional >= 0.0 && fractional < 1.0, "unit float range")
+    let integer = randomizer.get_int(-10, 10)
+    assert(integer >= -10 && integer < 10)
 
-    var automatic = Randomizer()
-    assert(automatic.get_int() > 0, "system seed")
+    let fractional = randomizer.get_float()
+    assert(fractional >= 0.0 && fractional < 1.0)
+}
+
+test "system seed" {
+    var randomizer = Randomizer()
+    assert(randomizer.get_int() > 0)
 }

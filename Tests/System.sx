@@ -1,6 +1,13 @@
 use STD.System
 
-func main() {
+test "selected platform and target" {
+    func architecture_name(value:System.Architecture) str {
+        return match value {
+            arm64 => "arm64"
+            x64 => "x64"
+        }
+    }
+
     let current_platform:System.OperatingSystem = System.platform()
     let current_target:System.CompilationTarget = System.target()
     assert(System.platform_name(current_target.platform) == System.platform_name(current_platform), "target platform differs from selected platform")
@@ -16,11 +23,4 @@ func main() {
 
     let name = System.target_name(current_target)
     assert(name == System.platform_name(current_platform) + "-" + architecture_name(current_target.architecture), "target name is inconsistent")
-}
-
-func architecture_name(value:System.Architecture) str {
-    return match value {
-        arm64 => "arm64"
-        x64 => "x64"
-    }
 }

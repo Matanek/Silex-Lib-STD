@@ -1,0 +1,46 @@
+use STD.Crypto
+
+func main() {
+    assert(Crypto.md5("") == "d41d8cd98f00b204e9800998ecf8427e", "MD5 empty vector")
+    assert(Crypto.md5("abc") == "900150983cd24fb0d6963f7d28e17f72", "MD5 abc vector")
+    assert(Crypto.md5("message digest") == "f96b697d7cb7938d525a2f31aaf161d0", "MD5 text vector")
+    assert(
+        Crypto.md5("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") ==
+            "d174ab98d277d9f5a5611c2c9f419d9f",
+        "MD5 multi-block vector"
+    )
+
+    assert(Crypto.sha1("") == "da39a3ee5e6b4b0d3255bfef95601890afd80709", "SHA-1 empty vector")
+    assert(Crypto.sha1("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d", "SHA-1 abc vector")
+    assert(
+        Crypto.sha1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq") ==
+            "84983e441c3bd26ebaae4aa1f95129e5e54670f1",
+        "SHA-1 multi-block vector"
+    )
+
+    assert(Crypto.sha256("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "SHA-256 empty vector")
+    assert(Crypto.sha256("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "SHA-256 abc vector")
+    assert(
+        Crypto.sha256("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq") ==
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+        "SHA-256 multi-block vector"
+    )
+
+    let binary:uint8[3] = [0, 255, 16]
+    let binary_view = @binary[0:3]
+    assert(Crypto.md5(binary_view) == "481e4551ec039aada760901cf52b1917", "MD5 binary vector")
+    assert(Crypto.sha1(binary_view) == "a14c2fba17201c1ead45b6c4af4409fbfc16ba8a", "SHA-1 binary vector")
+    assert(Crypto.sha256(binary_view) == "2da45f2cd1f9c8e69a67abf7a6b26c282533d0a7686787a9533265418680d4d2", "SHA-256 binary vector")
+
+    let abc:uint8[3] = [97, 98, 99]
+    assert(Crypto.md5(@abc[0:3]) == Crypto.md5("abc"), "MD5 UTF-8 bytes")
+    assert(Crypto.sha1(@abc[0:3]) == Crypto.sha1("abc"), "SHA-1 UTF-8 bytes")
+    assert(Crypto.sha256(@abc[0:3]) == Crypto.sha256("abc"), "SHA-256 UTF-8 bytes")
+
+    let md5_bytes:uint8[16] = Crypto.md5_bytes("abc")
+    let sha1_bytes:uint8[20] = Crypto.sha1_bytes("abc")
+    let sha256_bytes:uint8[32] = Crypto.sha256_bytes("abc")
+    assert(md5_bytes[0] == 0x90 && md5_bytes[15] == 0x72, "MD5 byte digest")
+    assert(sha1_bytes[0] == 0xa9 && sha1_bytes[19] == 0x9d, "SHA-1 byte digest")
+    assert(sha256_bytes[0] == 0xba && sha256_bytes[31] == 0xad, "SHA-256 byte digest")
+}

@@ -1,0 +1,41 @@
+use STD.UUID
+
+func main() {
+    let bytes:uint8[16] = [
+        0x91, 0x91, 0x08, 0xf7,
+        0x52, 0xd1, 0x43, 0x20,
+        0x9b, 0xac, 0xf8, 0x47,
+        0xdb, 0x41, 0x48, 0xa8
+    ]
+    let identifier = UUID(bytes)
+    assert(identifier.to_str() == "919108f7-52d1-4320-9bac-f847db4148a8", "canonical UUID text")
+    assert(identifier.to_bytes() == bytes, "UUID byte copy")
+
+    let default_identifier = UUID()
+    let configured_v4 = UUID(UUID.Version.v4())
+    let explicit_v4 = UUID.v4()
+    let default_bytes = default_identifier.to_bytes()
+    let configured_bytes = configured_v4.to_bytes()
+    let explicit_bytes = explicit_v4.to_bytes()
+    assert((default_bytes[6] >> 4) == 4, "default UUID version 4")
+    assert((configured_bytes[6] >> 4) == 4, "configured UUID version 4")
+    assert((explicit_bytes[6] >> 4) == 4, "explicit UUID version 4")
+    assert((default_bytes[8] >> 6) == 2, "default UUID IETF variant")
+    assert(default_identifier.to_str().count() == 36, "UUID canonical text length")
+
+    let configured_v7 = UUID(UUID.Version.v7())
+    let explicit_v7 = UUID.v7()
+    let configured_v7_bytes = configured_v7.to_bytes()
+    let explicit_v7_bytes = explicit_v7.to_bytes()
+    assert((configured_v7_bytes[6] >> 4) == 7, "configured UUID version 7")
+    assert((explicit_v7_bytes[6] >> 4) == 7, "explicit UUID version 7")
+    assert((explicit_v7_bytes[8] >> 6) == 2, "UUIDv7 IETF variant")
+    let timestamp =
+        (explicit_v7_bytes[0] as int) * 1_099_511_627_776 +
+        (explicit_v7_bytes[1] as int) * 4_294_967_296 +
+        (explicit_v7_bytes[2] as int) * 16_777_216 +
+        (explicit_v7_bytes[3] as int) * 65_536 +
+        (explicit_v7_bytes[4] as int) * 256 +
+        explicit_v7_bytes[5] as int
+    assert(timestamp > 1_600_000_000_000, "UUIDv7 Unix millisecond prefix")
+}

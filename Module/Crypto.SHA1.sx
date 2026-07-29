@@ -1,0 +1,117 @@
+public func digest(input:@uint8[..]) uint8[20] {
+    let message = padded(input)
+    var state0:uint32 = 0x67452301
+    var state1:uint32 = 0xefcdab89
+    var state2:uint32 = 0x98badcfe
+    var state3:uint32 = 0x10325476
+    var state4:uint32 = 0xc3d2e1f0
+    var block = 0
+    while block < message.count() {
+        var words:uint32[80]
+        var index = 0
+        while index < 16 {
+            let offset = block + index * 4
+            words[index] = ((message[offset] as uint32) << 24) ^
+                ((message[offset + 1] as uint32) << 16) ^
+                ((message[offset + 2] as uint32) << 8) ^
+                (message[offset + 3] as uint32)
+            index++
+        }
+        while index < 80 {
+            words[index] = rotate_left(
+                words[index - 3] ^ words[index - 8] ^ words[index - 14] ^ words[index - 16],
+                1
+            )
+            index++
+        }
+
+        var a = state0
+        var b = state1
+        var c = state2
+        var d = state3
+        var e = state4
+        index = 0
+        while index < 80 {
+            var mixed:uint32 = 0
+            var constant:uint32 = 0
+            if index < 20 {
+                mixed = (b & c) ^ (not32(b) & d)
+                constant = 0x5a827999
+            } elif index < 40 {
+                mixed = b ^ c ^ d
+                constant = 0x6ed9eba1
+            } elif index < 60 {
+                mixed = (b & c) ^ (b & d) ^ (c & d)
+                constant = 0x8f1bbcdc
+            } else {
+                mixed = b ^ c ^ d
+                constant = 0xca62c1d6
+            }
+            let temporary = add32(
+                add32(rotate_left(a, 5), mixed),
+                add32(add32(e, constant), words[index])
+            )
+            e = d
+            d = c
+            c = rotate_left(b, 30)
+            b = a
+            a = temporary
+            index++
+        }
+        state0 = add32(state0, a)
+        state1 = add32(state1, b)
+        state2 = add32(state2, c)
+        state3 = add32(state3, d)
+        state4 = add32(state4, e)
+        block += 64
+    }
+
+    let states:uint32[5] = [state0, state1, state2, state3, state4]
+    var result:uint8[20]
+    var state_index = 0
+    while state_index < 5 {
+        let value = states[state_index]
+        result[state_index * 4] = ((value >> 24) & 255) as uint8
+        result[state_index * 4 + 1] = ((value >> 16) & 255) as uint8
+        result[state_index * 4 + 2] = ((value >> 8) & 255) as uint8
+        result[state_index * 4 + 3] = (value & 255) as uint8
+        state_index++
+    }
+    return result
+}
+
+func padded(input:@uint8[..]) uint8[] {
+    var result:uint8[] = []
+    for byte in input { result.append(byte) }
+    result.append(128 as uint8)
+    while result.count() % 64 != 56 { result.append(0 as uint8) }
+    var length_bytes:uint8[8]
+    var bit_count = (input.count() as uint) * 8
+    var index = 7
+    while index >= 0 {
+        length_bytes[index] = (bit_count & 255) as uint8
+        bit_count = bit_count >> 8
+        index--
+    }
+    for byte in length_bytes { result.append(byte) }
+    return result
+}
+
+func add32(left:uint32, right:uint32) uint32 {
+    var result = left
+    var carry = right
+    while carry != 0 {
+        let next = (result & carry) << 1
+        result = result ^ carry
+        carry = next
+    }
+    return result
+}
+
+func rotate_left(value:uint32, count:int) uint32 {
+    return (value << count) ^ (value >> (32 - count))
+}
+
+func not32(value:uint32) uint32 {
+    return value ^ 0xffff_ffff
+}

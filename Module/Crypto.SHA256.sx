@@ -1,0 +1,146 @@
+public func digest(input:@uint8[..]) uint8[32] {
+    let constants:uint32[64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+        0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+        0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+        0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+        0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+        0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+        0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+        0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ]
+    let message = padded(input)
+    var state0:uint32 = 0x6a09e667
+    var state1:uint32 = 0xbb67ae85
+    var state2:uint32 = 0x3c6ef372
+    var state3:uint32 = 0xa54ff53a
+    var state4:uint32 = 0x510e527f
+    var state5:uint32 = 0x9b05688c
+    var state6:uint32 = 0x1f83d9ab
+    var state7:uint32 = 0x5be0cd19
+    var block = 0
+    while block < message.count() {
+        var words:uint32[64]
+        var index = 0
+        while index < 16 {
+            let offset = block + index * 4
+            words[index] = ((message[offset] as uint32) << 24) ^
+                ((message[offset + 1] as uint32) << 16) ^
+                ((message[offset + 2] as uint32) << 8) ^
+                (message[offset + 3] as uint32)
+            index++
+        }
+        while index < 64 {
+            let lower = rotate_right(words[index - 15], 7) ^
+                rotate_right(words[index - 15], 18) ^
+                (words[index - 15] >> 3)
+            let upper = rotate_right(words[index - 2], 17) ^
+                rotate_right(words[index - 2], 19) ^
+                (words[index - 2] >> 10)
+            words[index] = add32(
+                add32(words[index - 16], lower),
+                add32(words[index - 7], upper)
+            )
+            index++
+        }
+
+        var a = state0
+        var b = state1
+        var c = state2
+        var d = state3
+        var e = state4
+        var f = state5
+        var g = state6
+        var h = state7
+        index = 0
+        while index < 64 {
+            let sigma1 = rotate_right(e, 6) ^ rotate_right(e, 11) ^ rotate_right(e, 25)
+            let choice = (e & f) ^ (not32(e) & g)
+            let temporary1 = add32(
+                add32(h, sigma1),
+                add32(choice, add32(constants[index], words[index]))
+            )
+            let sigma0 = rotate_right(a, 2) ^ rotate_right(a, 13) ^ rotate_right(a, 22)
+            let majority = (a & b) ^ (a & c) ^ (b & c)
+            let temporary2 = add32(sigma0, majority)
+            h = g
+            g = f
+            f = e
+            e = add32(d, temporary1)
+            d = c
+            c = b
+            b = a
+            a = add32(temporary1, temporary2)
+            index++
+        }
+        state0 = add32(state0, a)
+        state1 = add32(state1, b)
+        state2 = add32(state2, c)
+        state3 = add32(state3, d)
+        state4 = add32(state4, e)
+        state5 = add32(state5, f)
+        state6 = add32(state6, g)
+        state7 = add32(state7, h)
+        block += 64
+    }
+
+    let states:uint32[8] = [
+        state0, state1, state2, state3,
+        state4, state5, state6, state7
+    ]
+    var result:uint8[32]
+    var state_index = 0
+    while state_index < 8 {
+        let value = states[state_index]
+        result[state_index * 4] = ((value >> 24) & 255) as uint8
+        result[state_index * 4 + 1] = ((value >> 16) & 255) as uint8
+        result[state_index * 4 + 2] = ((value >> 8) & 255) as uint8
+        result[state_index * 4 + 3] = (value & 255) as uint8
+        state_index++
+    }
+    return result
+}
+
+func padded(input:@uint8[..]) uint8[] {
+    var result:uint8[] = []
+    for byte in input { result.append(byte) }
+    result.append(128 as uint8)
+    while result.count() % 64 != 56 { result.append(0 as uint8) }
+    var length_bytes:uint8[8]
+    var bit_count = (input.count() as uint) * 8
+    var index = 7
+    while index >= 0 {
+        length_bytes[index] = (bit_count & 255) as uint8
+        bit_count = bit_count >> 8
+        index--
+    }
+    for byte in length_bytes { result.append(byte) }
+    return result
+}
+
+func add32(left:uint32, right:uint32) uint32 {
+    var result = left
+    var carry = right
+    while carry != 0 {
+        let next = (result & carry) << 1
+        result = result ^ carry
+        carry = next
+    }
+    return result
+}
+
+func rotate_right(value:uint32, count:int) uint32 {
+    return (value >> count) ^ (value << (32 - count))
+}
+
+func not32(value:uint32) uint32 {
+    return value ^ 0xffff_ffff
+}

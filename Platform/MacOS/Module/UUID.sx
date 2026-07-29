@@ -1,0 +1,12 @@
+use Interop.C
+use Interop.MacOS
+
+let clock_gettime_nsec_np = C.function<func(uint32) uint>(
+    library:MacOS.lib_system,
+    name:"clock_gettime_nsec_np"
+)
+
+func unix_milliseconds() int {
+    let clock_realtime:uint32 = 0
+    return (clock_gettime_nsec_np(clock_realtime) / 1_000_000) as int
+}

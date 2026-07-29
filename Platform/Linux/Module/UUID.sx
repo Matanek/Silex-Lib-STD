@@ -1,0 +1,15 @@
+use Interop.C
+use Interop.Linux
+
+let clock_gettime = C.function<func(int32, C.MutablePointer<int>) int32>(
+    library:Linux.kernel,
+    name:"clock_gettime"
+)
+
+func unix_milliseconds() int {
+    var time:int[2] = [0, 0]
+    let clock_realtime:int32 = 0
+    let result = clock_gettime(clock_realtime, C.mutable_pointer(time))
+    if result != 0 { panic("Linux clock_gettime(CLOCK_REALTIME) failed") }
+    return time[0] * 1_000 + time[1] / 1_000_000
+}

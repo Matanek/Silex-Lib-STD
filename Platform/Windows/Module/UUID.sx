@@ -1,0 +1,13 @@
+use Interop.C
+use Interop.Windows
+
+let get_system_time_as_file_time = C.function<func(C.MutablePointer<int>) void>(
+    library:Windows.kernel32,
+    name:"GetSystemTimeAsFileTime"
+)
+
+func unix_milliseconds() int {
+    var intervals_since_1601:int = 0
+    get_system_time_as_file_time(C.mutable_pointer(intervals_since_1601))
+    return intervals_since_1601 / 10_000 - 11_644_473_600_000
+}

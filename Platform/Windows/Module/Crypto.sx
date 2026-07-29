@@ -1,0 +1,17 @@
+use Interop.C
+use Interop.Windows
+
+let process_random = C.function<
+    func(C.MutablePointer<uint32>, C.Size) int32
+>(
+    library:Windows.bcrypt_primitives,
+    name:"ProcessPrng"
+)
+
+func random_word() uint32 {
+    var value:uint32 = 0
+    if process_random(C.mutable_pointer(value), 4 as C.Size) == 0 {
+        panic("Windows ProcessPrng could not produce crypto entropy")
+    }
+    return value
+}

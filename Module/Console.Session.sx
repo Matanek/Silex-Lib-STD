@@ -1,6 +1,5 @@
 use Interop.C
 use STD.Console
-use STD.Console.Session.Platform
 use STD.Collections.Queue.Queue as Queue
 use STD.Text.UTF8
 

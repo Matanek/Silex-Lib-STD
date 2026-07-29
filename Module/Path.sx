@@ -1,8 +1,6 @@
 use Interop.C
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 use STD.Text.UTF8.bytes as utf8_bytes
-use STD.Path.Semantics
 
 public use str as Path
 
@@ -15,19 +13,19 @@ struct Parsed {
 }
 
 public func validate(path:Path) Result<void, Error> {
-    let parsed = parse(path, Semantics.windows())
+    let parsed = parse(path, Platform.windows())
     if !parsed.succeeded { return Result<void, Error>.failure(path_error("path.validate", path, parsed.detail)) }
     return Result<void, Error>.success()
 }
 
 public func normalize(path:Path) Result<Path, Error> {
-    let parsed = parse(path, Semantics.windows())
+    let parsed = parse(path, Platform.windows())
     if !parsed.succeeded { return Result<Path, Error>.failure(path_error("path.normalize", path, parsed.detail)) }
     return Result<Path, Error>.success(render(parsed))
 }
 
 public func join(base:Path, child:Path) Result<Path, Error> {
-    let windows = Semantics.windows()
+    let windows = Platform.windows()
     let parsed_base = parse(base, windows)
     if !parsed_base.succeeded {
         return Result<Path, Error>.failure(path_error("path.join", base, "invalid base: " + parsed_base.detail))
@@ -41,7 +39,7 @@ public func join(base:Path, child:Path) Result<Path, Error> {
 }
 
 public func parent(path:Path) Result<Path?, Error> {
-    let parsed = parse(path, Semantics.windows())
+    let parsed = parse(path, Platform.windows())
     if !parsed.succeeded { return Result<Path?, Error>.failure(path_error("path.parent", path, parsed.detail)) }
     if parsed.components.count() == 0 { return Result<Path?, Error>.success(null) }
     var components = parsed.components
@@ -54,14 +52,14 @@ public func parent(path:Path) Result<Path?, Error> {
 }
 
 public func name(path:Path) Result<str?, Error> {
-    let parsed = parse(path, Semantics.windows())
+    let parsed = parse(path, Platform.windows())
     if !parsed.succeeded { return Result<str?, Error>.failure(path_error("path.name", path, parsed.detail)) }
     if parsed.components.count() == 0 { return Result<str?, Error>.success(null) }
     return Result<str?, Error>.success(parsed.components[parsed.components.count() - 1])
 }
 
 public func stem(path:Path) Result<str?, Error> {
-    let parsed = parse(path, Semantics.windows())
+    let parsed = parse(path, Platform.windows())
     if !parsed.succeeded { return Result<str?, Error>.failure(path_error("path.stem", path, parsed.detail)) }
     if parsed.components.count() == 0 { return Result<str?, Error>.success(null) }
     let value = parsed.components[parsed.components.count() - 1]
@@ -72,7 +70,7 @@ public func stem(path:Path) Result<str?, Error> {
 }
 
 public func extension(path:Path) Result<str?, Error> {
-    let parsed = parse(path, Semantics.windows())
+    let parsed = parse(path, Platform.windows())
     if !parsed.succeeded { return Result<str?, Error>.failure(path_error("path.extension", path, parsed.detail)) }
     if parsed.components.count() == 0 { return Result<str?, Error>.success(null) }
     let value = parsed.components[parsed.components.count() - 1]
@@ -83,7 +81,7 @@ public func extension(path:Path) Result<str?, Error> {
 }
 
 public func is_absolute(path:Path) Result<bool, Error> {
-    let parsed = parse(path, Semantics.windows())
+    let parsed = parse(path, Platform.windows())
     if !parsed.succeeded { return Result<bool, Error>.failure(path_error("path.is_absolute", path, parsed.detail)) }
     return Result<bool, Error>.success(parsed.absolute)
 }
@@ -191,5 +189,5 @@ func failed(detail:str) Parsed {
 }
 
 func path_error(operation:str, subject:Path, detail:str) Error {
-    return Error(kind:ErrorKind.invalid_input(), operation:operation, subject:subject, detail:detail)
+    return Error(kind:Error.Kind.invalid_input(), operation:operation, subject:subject, detail:detail)
 }

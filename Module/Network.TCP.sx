@@ -1,8 +1,6 @@
 use STD.IO
 use STD.Network
-use STD.Network.TCP.Platform
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 use STD.Text.UTF8
 
 public struct StreamOptions {
@@ -94,7 +92,7 @@ public func connect(endpoint:Network.Endpoint, options:ConnectOptions) Result<St
     let write_timeout = try timeout(options.stream.write_timeout_milliseconds, "tcp.connect")
     if connect_timeout >= 0 {
         return Result<Stream, Error>.failure(Error(
-            kind:ErrorKind.unsupported(), operation:"tcp.connect", subject:null,
+            kind:Error.Kind.unsupported(), operation:"tcp.connect", subject:null,
             detail:"connect timeouts are not implemented by the bootstrap socket backend yet"
         ))
     }
@@ -115,7 +113,7 @@ public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream
     }
     if error = last { return Result<Stream, Error>.failure(error) }
     return Result<Stream, Error>.failure(Error(
-        kind:ErrorKind.not_found(), operation:"tcp.connect", subject:host, detail:"no endpoint"
+        kind:Error.Kind.not_found(), operation:"tcp.connect", subject:host, detail:"no endpoint"
     ))
 }
 
@@ -229,11 +227,11 @@ func timeout(value:int?, operation:str) Result<int, Error> {
 }
 
 func invalid(operation:str, detail:str) Error {
-    return Error(kind:ErrorKind.invalid_input(), operation:operation, subject:null, detail:detail)
+    return Error(kind:Error.Kind.invalid_input(), operation:operation, subject:null, detail:detail)
 }
 
 func failure(operation:str, detail:str) Error {
-    return Error(kind:ErrorKind.other(), operation:operation, subject:null, detail:detail)
+    return Error(kind:Error.Kind.other(), operation:operation, subject:null, detail:detail)
 }
 
 func decimal(value:int) str {

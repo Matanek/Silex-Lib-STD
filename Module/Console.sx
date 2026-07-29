@@ -1,5 +1,4 @@
 use Interop.C
-use STD.Console.Platform
 use STD.Text.UTF8.decode
 
 public struct Dimensions {

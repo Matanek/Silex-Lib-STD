@@ -1,6 +1,6 @@
 use STD.File
 use STD.FileSystem
-use STD.System.Error
+use STD.Error
 
 func main() {
     match run() {

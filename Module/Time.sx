@@ -1,5 +1,3 @@
-use STD.Time.Platform
-
 func monotonic_microseconds() int {
     return Platform.monotonic_microseconds()
 }

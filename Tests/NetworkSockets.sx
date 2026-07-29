@@ -1,7 +1,7 @@
 use STD.Network
 use STD.Network.TCP
 use STD.Network.UDP
-use STD.System.Error
+use STD.Error
 use STD.Text.UTF8
 
 func main() {

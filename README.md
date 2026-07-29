@@ -23,6 +23,14 @@ Module/Network.TCP.sx                     -> use STD.Network.TCP
 Platform/MacOS/Module/Network.TCP.Platform.sx
 ```
 
+When portable and selected platform sources are genuinely parts of one logical
+module, they may use the same name. For example,
+`Module/Randomizer.sx` and `Platform/MacOS/Module/Randomizer.sx` compose
+`STD.Randomizer`; portable code reaches the specialized helper explicitly as
+`Platform.system_seed()`. `Platform` and `Target` require no import and map to
+the homonymous active fragment. Explicit helper modules such as
+`*.Platform.sx` remain valid when that boundary is useful.
+
 The structural package directories (`Module`, `Platform`, platform names,
 `Target`, target names, `Tests`, and `Tools`) remain hierarchical. This dotted
 source layout is a convention of STD only; other Silex packages may represent

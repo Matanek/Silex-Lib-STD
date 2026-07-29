@@ -1,5 +1,4 @@
 use Interop.C
-use STD.Threading.Platform
 
 public protocol Task { func execute() }
 

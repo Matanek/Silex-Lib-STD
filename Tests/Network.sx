@@ -1,5 +1,5 @@
 use STD.Network
-use STD.System.Error
+use STD.Error
 
 func main() {
     match run() {

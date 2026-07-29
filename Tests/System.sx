@@ -1,8 +1,8 @@
 use STD.System
 
 func main() {
-    let current_platform = System.platform()
-    let current_target = System.target()
+    let current_platform:System.OperatingSystem = System.platform()
+    let current_target:System.CompilationTarget = System.target()
     assert(System.platform_name(current_target.platform) == System.platform_name(current_platform), "target platform differs from selected platform")
     let selected_architecture = architecture_name(current_target.architecture)
 

@@ -1,7 +1,5 @@
-use STD.Process.Platform
 use STD.Path.Path as Path
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 
 public func arguments() Result<str[], Error> {
     if values = Platform.arguments() { return Result<str[], Error>.success(values) }
@@ -26,5 +24,5 @@ public func executable_path() Result<Path, Error> {
 public func id() uint { return Platform.id() }
 
 func process_error(operation:str, subject:str?, detail:str) Error {
-    return Error(kind:ErrorKind.other(), operation:operation, subject:subject, detail:detail)
+    return Error(kind:Error.Kind.other(), operation:operation, subject:subject, detail:detail)
 }

@@ -1,7 +1,5 @@
 use STD.Network
-use STD.Network.UDP.Platform
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 
 public struct Options {
     let read_timeout_milliseconds:int?
@@ -130,9 +128,9 @@ func timeout(value:int?, operation:str) Result<int, Error> {
 }
 
 func invalid(operation:str, detail:str) Error {
-    return Error(kind:ErrorKind.invalid_input(), operation:operation, subject:null, detail:detail)
+    return Error(kind:Error.Kind.invalid_input(), operation:operation, subject:null, detail:detail)
 }
 
 func failure(operation:str, detail:str) Error {
-    return Error(kind:ErrorKind.other(), operation:operation, subject:null, detail:detail)
+    return Error(kind:Error.Kind.other(), operation:operation, subject:null, detail:detail)
 }

@@ -1,8 +1,6 @@
-use STD.Subprocess.Platform
-use STD.Subprocess.Environment.Platform as EnvironmentPlatform
+use STD.Subprocess.Environment
 use STD.Path.Path as Path
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 use STD.Text.UTF8
 
 public enum EnvironmentChange { set(str, str); remove(str) }
@@ -21,17 +19,17 @@ public struct Command {
 public struct Output { let status:ExitStatus; let standard_output:uint8[]; let standard_error:uint8[] }
 
 public func run(command:Command) Result<Output, Error> {
-    if command.maximum_output_bytes < 0 { return failed(command.executable, ErrorKind.invalid_input(), "maximum_output_bytes must be non-negative") }
-    if !valid_text(command.executable, false) { return failed(command.executable, ErrorKind.invalid_input(), "executable must be non-empty and contain no null byte") }
+    if command.maximum_output_bytes < 0 { return failed(command.executable, Error.Kind.invalid_input(), "maximum_output_bytes must be non-negative") }
+    if !valid_text(command.executable, false) { return failed(command.executable, Error.Kind.invalid_input(), "executable must be non-empty and contain no null byte") }
     var directory = ""
     var has_directory = false
     if value = command.current_directory {
-        if !valid_text(value, false) { return failed(command.executable, ErrorKind.invalid_input(), "current_directory must be non-empty and contain no null byte") }
+        if !valid_text(value, false) { return failed(command.executable, Error.Kind.invalid_input(), "current_directory must be non-empty and contain no null byte") }
         directory = value
         has_directory = true
     }
     for argument in command.arguments {
-        if !valid_text(argument, true) { return failed(command.executable, ErrorKind.invalid_input(), "an argument contains a null byte") }
+        if !valid_text(argument, true) { return failed(command.executable, Error.Kind.invalid_input(), "an argument contains a null byte") }
     }
     var environment:str[] = []
     if command.inherit_environment {
@@ -40,12 +38,12 @@ public func run(command:Command) Result<Output, Error> {
     for change in command.environment {
         match change {
             set(name, value) => {
-                if !valid_name(name) || !valid_text(value, true) { return failed(command.executable, ErrorKind.invalid_input(), "invalid environment assignment") }
+                if !valid_name(name) || !valid_text(value, true) { return failed(command.executable, Error.Kind.invalid_input(), "invalid environment assignment") }
                 environment = without_environment(environment, name)
                 environment.append(name + "=" + value)
             }
             remove(name) => {
-                if !valid_name(name) { return failed(command.executable, ErrorKind.invalid_input(), "invalid environment variable name") }
+                if !valid_name(name) { return failed(command.executable, Error.Kind.invalid_input(), "invalid environment variable name") }
                 environment = without_environment(environment, name)
             }
         }
@@ -54,18 +52,18 @@ public func run(command:Command) Result<Output, Error> {
     let environment_view = @environment[0:environment.count()]
     let input_view = @command.standard_input[0:command.standard_input.count()]
     if raw = Platform.run(command.executable, argument_view, has_directory, directory, environment_view, input_view, command.maximum_output_bytes) {
-        if Platform.output_limited(raw) { return failed(command.executable, ErrorKind.limit_exceeded(), "captured output exceeds maximum_output_bytes") }
-        if Platform.output_error(raw) != 0 { return failed(command.executable, ErrorKind.other(), "system process creation failed with code " + decimal(Platform.output_error(raw))) }
+        if Platform.output_limited(raw) { return failed(command.executable, Error.Kind.limit_exceeded(), "captured output exceeds maximum_output_bytes") }
+        if Platform.output_error(raw) != 0 { return failed(command.executable, Error.Kind.other(), "system process creation failed with code " + decimal(Platform.output_error(raw))) }
         var status = ExitStatus.exited(Platform.output_status(raw))
         if Platform.output_signaled(raw) { status = ExitStatus.signaled(Platform.output_status(raw)) }
         return Result<Output, Error>.success(Output(status:status, standard_output:Platform.output_stdout(raw), standard_error:Platform.output_stderr(raw)))
     }
-    return failed(command.executable, ErrorKind.other(), "system process execution failed")
+    return failed(command.executable, Error.Kind.other(), "system process execution failed")
 }
 
 func inherited_environment() str[] {
     var result:str[] = []
-    for entry in EnvironmentPlatform.entries() {
+    for entry in Environment.entries() {
         let bytes = UTF8.bytes(entry)
         var separator = -1
         var index = 0
@@ -108,7 +106,7 @@ func valid_text(value:str, empty:bool) bool {
     for byte in bytes { if byte == 0 { return false } }
     return true
 }
-func failed(subject:str, kind:ErrorKind, detail:str) Result<Output, Error> {
+func failed(subject:str, kind:Error.Kind, detail:str) Result<Output, Error> {
     return Result<Output, Error>.failure(Error(kind:kind, operation:"subprocess.run", subject:subject, detail:detail))
 }
 func decimal(value:int) str {

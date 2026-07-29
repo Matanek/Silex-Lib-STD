@@ -1,5 +1,4 @@
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 
 public protocol Reader {
     func read(buffer:&uint8[..]) Result<int, Error>
@@ -23,7 +22,7 @@ public func read_exact<T:Reader>(reader:&T, buffer:&uint8[..]) Result<void, Erro
         }
         if count == 0 {
             return Result<void, Error>.failure(Error(
-                kind:ErrorKind.unexpected_end(),
+                kind:Error.Kind.unexpected_end(),
                 operation:"io.read_exact",
                 subject:null,
                 detail:"stream ended before the buffer was filled"
@@ -139,7 +138,7 @@ func read_prefix<T:Reader>(reader:&T, buffer:&uint8[], count:int) Result<int, Er
 
 func invalid_limit(operation:str) Error {
     return Error(
-        kind:ErrorKind.invalid_input(),
+        kind:Error.Kind.invalid_input(),
         operation:operation,
         subject:null,
         detail:"maximum_bytes must be non-negative"
@@ -148,7 +147,7 @@ func invalid_limit(operation:str) Error {
 
 func limit_error(operation:str) Error {
     return Error(
-        kind:ErrorKind.limit_exceeded(),
+        kind:Error.Kind.limit_exceeded(),
         operation:operation,
         subject:null,
         detail:"stream exceeds the configured maximum byte count"
@@ -157,7 +156,7 @@ func limit_error(operation:str) Error {
 
 func contract_error(operation:str, detail:str) Error {
     return Error(
-        kind:ErrorKind.invalid_data(),
+        kind:Error.Kind.invalid_data(),
         operation:operation,
         subject:null,
         detail:detail

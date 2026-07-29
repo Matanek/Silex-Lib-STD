@@ -1,0 +1,3 @@
+func entries() str[] {
+    return Platform.entries()
+}

@@ -1,8 +1,6 @@
-use STD.FileSystem.Platform
 use STD.Path as Paths
 use STD.Path.Path as Path
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 
 public enum Kind { file; directory; symbolic_link; other }
 
@@ -96,5 +94,5 @@ func kind_from_code(kind:int) Kind {
 }
 
 func filesystem_error(operation:str, subject:Path, detail:str) Error {
-    return Error(kind:ErrorKind.other(), operation:operation, subject:subject, detail:detail)
+    return Error(kind:Error.Kind.other(), operation:operation, subject:subject, detail:detail)
 }

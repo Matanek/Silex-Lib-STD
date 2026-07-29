@@ -1,5 +1,5 @@
-use STD.Time.Internal.monotonic_microseconds
-use STD.Time.Internal.seconds_between
+use STD.Time.monotonic_microseconds
+use STD.Time.seconds_between
 
 public struct Stopwatch {
     var last_microseconds:int

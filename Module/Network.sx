@@ -1,7 +1,5 @@
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 use STD.Text.UTF8
-use STD.Network.Platform
 
 public enum Family { any; ipv4; ipv6 }
 public enum Transport { stream; datagram }
@@ -73,7 +71,7 @@ public func resolve(host:str, port:uint16, options:ResolveOptions) Result<Endpoi
         return Result<Endpoint[], Error>.success(result)
     }
     return Result<Endpoint[], Error>.failure(Error(
-        kind:ErrorKind.not_found(),
+        kind:Error.Kind.not_found(),
         operation:"network.resolve",
         subject:host,
         detail:"name resolution failed"
@@ -300,7 +298,7 @@ func hex_digit(byte:uint8) int {
 
 func invalid_address(subject:str) Result<IpAddress, Error> {
     return Result<IpAddress, Error>.failure(Error(
-        kind:ErrorKind.invalid_input(),
+        kind:Error.Kind.invalid_input(),
         operation:"network.parse_ip",
         subject:subject,
         detail:"invalid IPv4 or IPv6 address"

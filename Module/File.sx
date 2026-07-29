@@ -1,9 +1,7 @@
 use STD.Path.Path as Path
-use STD.System.Error
-use STD.System.ErrorKind
+use STD.Error
 use STD.IO
 use STD.Text.UTF8
-use STD.File.Platform
 
 public class File {
     private var descriptor:int
@@ -136,7 +134,7 @@ public func read_text(path:Path, maximum_bytes:int) Result<str, Error> {
         success(text) => { return Result<str, Error>.success(text) }
         failure(error) => {
             return Result<str, Error>.failure(Error(
-                kind:ErrorKind.invalid_data(),
+                kind:Error.Kind.invalid_data(),
                 operation:"file.read_text",
                 subject:path,
                 detail:"file contents are not valid UTF-8"
@@ -174,5 +172,5 @@ func creation_code(value:Creation) int {
 func seek_code(value:SeekFrom) int { return match value { start => 0; current => 1; end => 2 } }
 
 func file_error(operation:str, subject:str?, detail:str) Error {
-    return Error(kind:ErrorKind.other(), operation:operation, subject:subject, detail:detail)
+    return Error(kind:Error.Kind.other(), operation:operation, subject:subject, detail:detail)
 }

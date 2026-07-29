@@ -20,16 +20,15 @@ Within every `Module/` root, STD writes the complete logical module path in the
 ```text
 Module/Console.Session.sx                 -> use STD.Console.Session
 Module/Network.TCP.sx                     -> use STD.Network.TCP
-Platform/MacOS/Module/Network.TCP.Platform.sx
+Platform/MacOS/Module/Network.TCP.sx
 ```
 
-When portable and selected platform sources are genuinely parts of one logical
-module, they may use the same name. For example,
-`Module/Randomizer.sx` and `Platform/MacOS/Module/Randomizer.sx` compose
-`STD.Randomizer`; portable code reaches the specialized helper explicitly as
-`Platform.system_seed()`. `Platform` and `Target` require no import and map to
-the homonymous active fragment. Explicit helper modules such as
-`*.Platform.sx` remain valid when that boundary is useful.
+Portable sources and their selected platform or target implementations use the
+same logical module name. For example, `Module/Randomizer.sx` and
+`Platform/MacOS/Module/Randomizer.sx` compose `STD.Randomizer`; portable code
+reaches the specialized helper explicitly as `Platform.system_seed()`.
+`Platform` and `Target` require no import and map to the homonymous active
+fragment.
 
 The structural package directories (`Module`, `Platform`, platform names,
 `Target`, target names, `Tests`, and `Tools`) remain hierarchical. This dotted
@@ -72,6 +71,22 @@ let content = try File.read_text(path, 1024)
 
 `File.read_all` and the byte-view overload of `File.write_all` remain available
 for binary data.
+
+Fallible filesystem, network, process and I/O capabilities share the
+`STD.Error` contract. Its categories remain scoped under the error type:
+
+```sx
+use STD.Error
+
+func retryable(kind:Error.Kind) bool {
+    return match kind {
+        interrupted => true
+        would_block => true
+        timed_out => true
+        else => false
+    }
+}
+```
 
 `Tests/` groups each capability in one focused program. The workspace helper
 rebuilds the compiler and runs every test natively without reusing compilation

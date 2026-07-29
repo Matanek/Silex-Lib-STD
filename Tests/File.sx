@@ -1,5 +1,5 @@
 use STD.File
-use STD.System.ErrorKind
+use STD.Error
 
 func main() {
     let path = "/private/tmp/silex-std-file-test.txt"
@@ -30,6 +30,6 @@ func main() {
     }
 }
 
-func is_invalid_data(kind:ErrorKind) bool {
+func is_invalid_data(kind:Error.Kind) bool {
     return match kind { invalid_data => true; else => false }
 }

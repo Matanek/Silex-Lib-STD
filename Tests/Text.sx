@@ -1,6 +1,8 @@
 use STD.Text
 
-func main() {
+test "Unicode text operations" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+
     check(Text.normalize("e\u{301}", Text.Normalization.nfc()) == "é", "NFC composition")
     check(Text.normalize("é", Text.Normalization.nfd()) == "e\u{301}", "NFD decomposition")
     check(Text.normalize("①", Text.Normalization.nfkc()) == "1", "NFKC compatibility")
@@ -9,5 +11,3 @@ func main() {
     check(Text.case_fold("Straße") == "strasse", "full case folding")
     check(Text.unicode_version() == "17.0.0", "Unicode version")
 }
-
-func check(condition:bool, detail:str) { if !condition { panic(detail) } }

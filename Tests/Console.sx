@@ -1,7 +1,7 @@
 use STD.Console
 use STD.Console.Session.Key
 
-func main() {
+test "console operations" {
     Console.write("")
     Console.write_error("")
     Console.flush()

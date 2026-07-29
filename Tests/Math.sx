@@ -1,6 +1,6 @@
 use STD.Math
 
-func main() {
+test "scalar math" {
     assert(Math.nearly_equal(Math.pi(), 3.1415927), "pi")
     assert(Math.nearly_equal(Math.half_pi(), Math.pi() * 0.5), "half pi")
     assert(Math.nearly_equal(Math.two_pi(), Math.pi() * 2.0), "two pi")
@@ -42,15 +42,9 @@ func main() {
     assert(Math.nearly_equal(Math.sin(Math.two_pi() * 1024.0 + Math.half_pi()), 1.0, 0.001), "large angle reduction")
     let invalid_asin = Math.asin(2.0)
     assert(invalid_asin != invalid_asin, "arc sine domain")
-    test_vec2()
-    test_vec3()
-    test_vec4()
-    test_quat()
-    test_mat3()
-    test_mat4()
 }
 
-func test_vec2() {
+test "Vec2" {
     let vector = Math.Vec2(3.0, 4.0)
     assert(vector.length_squared() == 25.0, "Vec2 squared length")
     assert(vector.length() == 5.0, "Vec2 length")
@@ -60,7 +54,7 @@ func test_vec2() {
     assert(Math.Vec2.right().to_str() == "{ 1.0 0.0 }", "Vec2 extensions")
 }
 
-func test_vec3() {
+test "Vec3" {
     let right = Math.Vec3.right()
     let up = Math.Vec3.up()
     let back = Math.Vec3.back()
@@ -71,7 +65,7 @@ func test_vec3() {
     assert(right.to_str() == "{ 1.0 0.0 0.0 }", "Vec3 extensions")
 }
 
-func test_vec4() {
+test "Vec4" {
     let vector = Math.Vec4(Math.Vec3(1.0, 2.0, 3.0), 4.0)
     assert(vector.xyz().nearly_equal(Math.Vec3(1.0, 2.0, 3.0)), "Vec4 xyz")
     assert(vector.multiply(2.0).nearly_equal(Math.Vec4(2.0, 4.0, 6.0, 8.0)), "Vec4 scalar multiply")
@@ -79,7 +73,7 @@ func test_vec4() {
     assert(Math.Vec4.zero().normalized().nearly_equal(Math.Vec4.zero()), "Vec4 zero normalized")
 }
 
-func test_quat() {
+test "Quat" {
     let rotation = Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back())
     let rotated = rotation.rotate(Math.Vec3.right())
     assert(rotated.nearly_equal(Math.Vec3.up(), 0.00001), "Quat rotation")
@@ -88,7 +82,7 @@ func test_quat() {
     assert(Math.Quat().length_squared() == 1.0, "Quat identity")
 }
 
-func test_mat3() {
+test "Mat3" {
     let diagonal = Math.Mat3(
         Math.Vec3(2.0, 0.0, 0.0),
         Math.Vec3(0.0, 3.0, 0.0),
@@ -102,7 +96,7 @@ func test_mat3() {
     assert(Math.Mat3.zero().add(diagonal).x.nearly_equal(diagonal.x), "Mat3 extensions")
 }
 
-func test_mat4() {
+test "Mat4" {
     let point = Math.Vec4(Math.Vec3(1.0, 2.0, 3.0), 1.0)
     let translation = Math.Mat4.translation(Math.Vec3(5.0, -2.0, 1.0))
     let translated = translation.multiply(point)

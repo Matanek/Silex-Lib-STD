@@ -4,103 +4,104 @@ use STD.Subprocess
 use STD.System
 use STD.Text.UTF8
 
-func main() {
+test "capture child input and output" {
+    func validate(output:Subprocess.Output) {
+        match output.status {
+            exited(code) => { if code != 0 { panic("wrong exit status") } }
+            signaled(signal) => { panic("unexpected signal") }
+        }
+        if output.standard_output.count() != 6 || output.standard_error.count() != 3 { panic("wrong captured output") }
+    }
+
+    func run_parent(executable:str) {
+        let command = Subprocess.Command(
+            executable:executable,
+            arguments:["--subprocess-child"],
+            current_directory:null,
+            inherit_environment:true,
+            environment:[],
+            standard_input:[111 as uint8, 107 as uint8, 10 as uint8],
+            maximum_output_bytes:1024
+        )
+        match Subprocess.run(command) {
+            failure(error) => { panic(error.detail) }
+            success(output) => { validate(output) }
+        }
+    }
+
+    func dispatch(arguments:str[]) {
+        if arguments.count() > 1 && arguments[1] == "--subprocess-child" {
+            let input = Console.read_line()
+            if value = input { Console.write("out:" + value) }
+            Console.write_error("err")
+            return
+        }
+        match Process.executable_path() {
+            failure(error) => { panic(error.detail) }
+            success(executable) => { run_parent(executable) }
+        }
+    }
+
     match Process.arguments() {
         failure(error) => { panic(error.detail) }
         success(arguments) => { dispatch(arguments) }
     }
 }
 
-func dispatch(arguments:str[]) {
-    if arguments.count() > 1 && arguments[1] == "--subprocess-child" {
-        let input = Console.read_line()
-        if value = input { Console.write("out:" + value) }
-        Console.write_error("err")
-        return
-    }
-    match Process.executable_path() {
-        failure(error) => { panic(error.detail) }
-        success(executable) => { run_parent(executable) }
-    }
-}
-
-func run_parent(executable:str) {
-    let command = Subprocess.Command(
-        executable:executable,
-        arguments:["--subprocess-child"],
-        current_directory:null,
-        inherit_environment:true,
-        environment:[],
-        standard_input:[111 as uint8, 107 as uint8, 10 as uint8],
-        maximum_output_bytes:1024
-    )
-    match Subprocess.run(command) {
-        failure(error) => { panic(error.detail) }
-        success(output) => {
-            validate(output)
-            validate_environment_changes()
+test "environment changes stay in the child" {
+    func validate_environment_output(output:Subprocess.Output, expected:str) {
+        match output.status {
+            exited(code) => { if code != 0 { panic("environment probe failed") } }
+            signaled(signal) => { panic("environment probe was signaled") }
+        }
+        let view = @output.standard_output[0:output.standard_output.count()]
+        match UTF8.decode(view) {
+            failure(error) => { panic("environment probe returned invalid UTF-8") }
+            success(text) => { assert(text == expected, "subprocess environment is scoped to the child") }
         }
     }
-}
 
-func validate_environment_changes() {
-    match System.platform() {
-        windows => {}
-        macos => { run_environment_probes() }
-        linux => { run_environment_probes() }
+    func expect_environment_output(command:Subprocess.Command, expected:str) {
+        match Subprocess.run(command) {
+            failure(error) => { panic(error.detail) }
+            success(output) => { validate_environment_output(output, expected) }
+        }
     }
-}
 
-func run_environment_probes() {
-    let assigned = Subprocess.Command(
-        executable:"/usr/bin/env",
-        arguments:[],
-        current_directory:null,
-        inherit_environment:false,
-        environment:[Subprocess.EnvironmentChange.set("SILEX_SUBPROCESS_SCOPE", "child")],
-        standard_input:[],
-        maximum_output_bytes:1024
-    )
-    expect_environment_output(assigned, "SILEX_SUBPROCESS_SCOPE=child\n")
+    func run_environment_probes() {
+        let assigned = Subprocess.Command(
+            executable:"/usr/bin/env",
+            arguments:[],
+            current_directory:null,
+            inherit_environment:false,
+            environment:[Subprocess.EnvironmentChange.set("SILEX_SUBPROCESS_SCOPE", "child")],
+            standard_input:[],
+            maximum_output_bytes:1024
+        )
+        expect_environment_output(assigned, "SILEX_SUBPROCESS_SCOPE=child\n")
 
-    let removed = Subprocess.Command(
-        executable:"/usr/bin/env",
-        arguments:[],
-        current_directory:null,
-        inherit_environment:false,
-        environment:[
-            Subprocess.EnvironmentChange.set("SILEX_SUBPROCESS_SCOPE", "child"),
-            Subprocess.EnvironmentChange.remove("SILEX_SUBPROCESS_SCOPE"),
-        ],
-        standard_input:[],
-        maximum_output_bytes:1024
-    )
-    expect_environment_output(removed, "")
-}
-
-func expect_environment_output(command:Subprocess.Command, expected:str) {
-    match Subprocess.run(command) {
-        failure(error) => { panic(error.detail) }
-        success(output) => { validate_environment_output(output, expected) }
+        let removed = Subprocess.Command(
+            executable:"/usr/bin/env",
+            arguments:[],
+            current_directory:null,
+            inherit_environment:false,
+            environment:[
+                Subprocess.EnvironmentChange.set("SILEX_SUBPROCESS_SCOPE", "child"),
+                Subprocess.EnvironmentChange.remove("SILEX_SUBPROCESS_SCOPE"),
+            ],
+            standard_input:[],
+            maximum_output_bytes:1024
+        )
+        expect_environment_output(removed, "")
     }
-}
 
-func validate_environment_output(output:Subprocess.Output, expected:str) {
-    match output.status {
-        exited(code) => { if code != 0 { panic("environment probe failed") } }
-        signaled(signal) => { panic("environment probe was signaled") }
+    func validate_environment_changes() {
+        match System.platform() {
+            windows => {}
+            macos => { run_environment_probes() }
+            linux => { run_environment_probes() }
+        }
     }
-    let view = @output.standard_output[0:output.standard_output.count()]
-    match UTF8.decode(view) {
-        failure(error) => { panic("environment probe returned invalid UTF-8") }
-        success(text) => { assert(text == expected, "subprocess environment is scoped to the child") }
-    }
-}
 
-func validate(output:Subprocess.Output) {
-    match output.status {
-        exited(code) => { if code != 0 { panic("wrong exit status") } }
-        signaled(signal) => { panic("unexpected signal") }
-    }
-    if output.standard_output.count() != 6 || output.standard_error.count() != 3 { panic("wrong captured output") }
+    validate_environment_changes()
 }

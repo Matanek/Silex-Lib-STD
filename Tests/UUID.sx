@@ -1,6 +1,6 @@
 use STD.UUID
 
-func main() {
+test "byte and text round trip" {
     let bytes:uint8[16] = [
         0x91, 0x91, 0x08, 0xf7,
         0x52, 0xd1, 0x43, 0x20,
@@ -10,7 +10,9 @@ func main() {
     let identifier = UUID(bytes)
     assert(identifier.to_str() == "919108f7-52d1-4320-9bac-f847db4148a8", "canonical UUID text")
     assert(identifier.to_bytes() == bytes, "UUID byte copy")
+}
 
+test "version 4 constructors" {
     let default_identifier = UUID()
     let configured_v4 = UUID(UUID.Version.v4)
     let explicit_v4 = UUID.v4()
@@ -22,7 +24,9 @@ func main() {
     assert((explicit_bytes[6] >> 4) == 4, "explicit UUID version 4")
     assert((default_bytes[8] >> 6) == 2, "default UUID IETF variant")
     assert(default_identifier.to_str().count() == 36, "UUID canonical text length")
+}
 
+test "version 7 constructors and timestamp" {
     let configured_v7 = UUID(UUID.Version.v7)
     let explicit_v7 = UUID.v7()
     let configured_v7_bytes = configured_v7.to_bytes()

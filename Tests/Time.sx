@@ -1,7 +1,7 @@
 use STD.Time.Clock
 use STD.Time.Stopwatch
 
-func main() {
+test "stopwatch state and monotonic time" {
     var stopwatch = Stopwatch()
     assert(!stopwatch.is_running(), "new stopwatch is stopped")
     stopwatch.start()
@@ -11,7 +11,9 @@ func main() {
     assert(first >= 0.0 && second >= first, "stopwatch is monotonic")
     stopwatch.stop()
     assert(!stopwatch.is_running(), "stopped stopwatch is stopped")
+}
 
+test "clock state and time scale" {
     var clock = Clock()
     assert(clock.tick() == 0.0, "first clock tick initializes")
     clock.set_time_scale(2.0)

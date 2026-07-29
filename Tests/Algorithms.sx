@@ -4,29 +4,21 @@ use STD.Algorithms.Sort
 use STD.Iterator
 use STD.Randomizer
 
-func before(left:@int, right:@int) bool {
-    return left < right
-}
+test "sorting" {
+    func before(left:@int, right:@int) bool { return left < right }
 
-func positive(value:@int) bool {
-    return value > 0
-}
-
-func same(left:@int, right:@int) bool {
-    return left == right
-}
-
-func doubled(value:@int) int {
-    return value * 2
-}
-
-func main() {
     var values = [3, 1, 4, 2]
     Sort.sort<int>(&values[0:values.count()], before)
     assert(values[0] == 1, "first sorted value")
     assert(values[1] == 2, "second sorted value")
     assert(values[2] == 3, "third sorted value")
     assert(values[3] == 4, "last sorted value")
+}
+
+test "iteration algorithms" {
+    func positive(value:@int) bool { return value > 0 }
+    func same(left:@int, right:@int) bool { return left == right }
+    func doubled(value:@int) int { return value * 2 }
 
     let source:int[] = [-1, 2, 3]
     var any_values = Iterator.iterate<int>(source)
@@ -57,7 +49,12 @@ func main() {
     } else {
         assert(false, "filter callback result")
     }
+}
 
+test "random choice and shuffle" {
+    func before(left:@int, right:@int) bool { return left < right }
+
+    var values = [3, 1, 4, 2]
     var randomizer = Randomizer(42)
     if true {
         let selected = Random.choose<int>(randomizer, @values[0:values.count()])

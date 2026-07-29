@@ -1,0 +1,30 @@
+use STD.Process.Platform
+use STD.Path.Path as Path
+use STD.System.Error
+use STD.System.ErrorKind
+
+public func arguments() Result<str[], Error> {
+    if values = Platform.arguments() { return Result<str[], Error>.success(values) }
+    return Result<str[], Error>.failure(process_error("process.arguments", null, "system argument query failed"))
+}
+
+public func current_directory() Result<Path, Error> {
+    if path = Platform.current_directory() { return Result<Path, Error>.success(path) }
+    return Result<Path, Error>.failure(process_error("process.current_directory", null, "system current-directory query failed"))
+}
+
+public func set_current_directory(path:Path) Result<void, Error> {
+    if Platform.set_current_directory(path) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(process_error("process.set_current_directory", path, "system current-directory update failed"))
+}
+
+public func executable_path() Result<Path, Error> {
+    if path = Platform.executable_path() { return Result<Path, Error>.success(path) }
+    return Result<Path, Error>.failure(process_error("process.executable_path", null, "system executable-path query failed"))
+}
+
+public func id() uint { return Platform.id() }
+
+func process_error(operation:str, subject:str?, detail:str) Error {
+    return Error(kind:ErrorKind.other(), operation:operation, subject:subject, detail:detail)
+}

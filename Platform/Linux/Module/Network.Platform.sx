@@ -1,0 +1,274 @@
+use Interop.C
+use Interop.Linux
+use STD.File
+use STD.Text.UTF8
+
+internal struct RawEndpoint {
+    let family:int
+    let port:uint16
+    let scope:uint32
+    let bytes:uint8[16]
+}
+
+func endpoint_family(value:RawEndpoint) int { return value.family }
+func endpoint_port(value:RawEndpoint) uint16 { return value.port }
+func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
+func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
+
+let system_socket = C.function<func(int32, int32, int32) int32>(library:Linux.kernel, name:"socket")
+let system_connect = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"connect")
+let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
+let system_read = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
+let system_poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(library:Linux.kernel, name:"poll")
+
+func resolve(host:str, service:str, family:int, transport:int) RawEndpoint[]? {
+    let port = parse_port(service)
+    if port < 0 { return null }
+    let server = resolver_address()
+    if let nameserver = server {
+        var result:RawEndpoint[] = []
+        if family == 0 || family == 4 {
+            if values = dns_query(host, nameserver, 1, port as uint16) {
+                for value in values { result.append(value) }
+            } else { return null }
+        }
+        if family == 0 || family == 6 {
+            if values = dns_query(host, nameserver, 28, port as uint16) {
+                for value in values { result.append(value) }
+            } else { return null }
+        }
+        return result
+    }
+    return null
+}
+
+func dns_query(host:str, server:uint8[4], query_type:int, port:uint16) RawEndpoint[]? {
+    let descriptor = system_socket(2, 0x8_0002, 0)
+    if descriptor < 0 { return null }
+    var socket_address:int[2]
+    let socket_bits = C.address_bits(C.mutable_pointer(socket_address))
+    let family = C.store<uint16>(socket_bits, 0 as uint, 2 as uint16)
+    let dns_port = C.store<uint16>(socket_bits, 2 as uint, 0x3500 as uint16)
+    var address_index = 0
+    while address_index < 4 {
+        let stored = C.store<uint8>(socket_bits, (4 + address_index) as uint, server[address_index])
+        address_index++
+    }
+    if system_connect(descriptor, C.mutable_pointer(socket_address), 16) != 0 {
+        let ignored = system_close(descriptor)
+        return null
+    }
+
+    var packet:int[64]
+    let packet_bits = C.address_bits(C.mutable_pointer(packet))
+    let id_high = C.store<uint8>(packet_bits, 0 as uint, 0x53 as uint8)
+    let id_low = C.store<uint8>(packet_bits, 1 as uint, 0x49 as uint8)
+    let recursion = C.store<uint8>(packet_bits, 2 as uint, 1 as uint8)
+    let one_question = C.store<uint8>(packet_bits, 5 as uint, 1 as uint8)
+    let encoded = encode_name(packet_bits, host)
+    if encoded < 0 {
+        let ignored = system_close(descriptor)
+        return null
+    }
+    var length = encoded
+    let type_high = C.store<uint8>(packet_bits, length as uint, (((query_type as uint) >> 8) & 255) as uint8)
+    length++
+    let type_low = C.store<uint8>(packet_bits, length as uint, ((query_type as uint) & 255) as uint8)
+    length++
+    let class_high = C.store<uint8>(packet_bits, length as uint, 0 as uint8)
+    length++
+    let class_low = C.store<uint8>(packet_bits, length as uint, 1 as uint8)
+    length++
+    if system_write(descriptor, C.mutable_pointer(packet), length as C.Size) != length {
+        let ignored = system_close(descriptor)
+        return null
+    }
+    var poll_descriptor:uint = descriptor as uint
+    poll_descriptor += 0x1_0000_0000
+    if system_poll(C.mutable_pointer(poll_descriptor), 1 as C.Size, 3000) != 1 {
+        let ignored = system_close(descriptor)
+        return null
+    }
+    var response:int[64]
+    let count = system_read(descriptor, C.mutable_pointer(response), 512 as C.Size)
+    let ignored = system_close(descriptor)
+    if count < 12 { return null }
+    return parse_response(C.address_bits(C.mutable_pointer(response)), count, query_type, port)
+}
+
+func encode_name(address:uint, host:str) int {
+    let bytes = UTF8.bytes(host)
+    if bytes.count() == 0 || bytes.count() > 253 { return -1 }
+    var output = 12
+    var start = 0
+    var index = 0
+    while index <= bytes.count() {
+        if index == bytes.count() || bytes[index] == 46 {
+            let length = index - start
+            if length <= 0 || length > 63 { return -1 }
+            let stored_length = C.store<uint8>(address, output as uint, length as uint8)
+            output++
+            var byte_index = start
+            while byte_index < index {
+                let byte = bytes[byte_index]
+                if byte > 127 { return -1 }
+                let stored = C.store<uint8>(address, output as uint, byte)
+                output++
+                byte_index++
+            }
+            start = index + 1
+        }
+        index++
+    }
+    let terminator = C.store<uint8>(address, output as uint, 0 as uint8)
+    return output + 1
+}
+
+func parse_response(address:uint, count:int, query_type:int, port:uint16) RawEndpoint[]? {
+    if C.load<uint8>(address, 0 as uint) != 0x53 || C.load<uint8>(address, 1 as uint) != 0x49 { return null }
+    let flags = network_u16(address, 2)
+    if (flags & 0x8000) == 0 || (flags & 15) != 0 { return null }
+    let questions = network_u16(address, 4) as int
+    let answers = network_u16(address, 6) as int
+    var offset = 12
+    var question = 0
+    while question < questions {
+        offset = skip_name(address, count, offset)
+        if offset < 0 || offset + 4 > count { return null }
+        offset += 4
+        question++
+    }
+    var result:RawEndpoint[] = []
+    var answer = 0
+    while answer < answers {
+        offset = skip_name(address, count, offset)
+        if offset < 0 || offset + 10 > count { return null }
+        let record_type = network_u16(address, offset)
+        let record_class = network_u16(address, offset + 2)
+        let data_length = network_u16(address, offset + 8) as int
+        offset += 10
+        if offset + data_length > count { return null }
+        if record_class == 1 && record_type == query_type as uint16 {
+            if record_type == 1 && data_length == 4 { result.append(ipv4_result(address, offset, port)) }
+            elif record_type == 28 && data_length == 16 { result.append(ipv6_result(address, offset, port)) }
+        }
+        offset += data_length
+        answer++
+    }
+    return result
+}
+
+func skip_name(address:uint, count:int, start:int) int {
+    var offset = start
+    var labels = 0
+    while offset < count && labels < 128 {
+        let length = C.load<uint8>(address, offset as uint) as int
+        if length == 0 { return offset + 1 }
+        if ((length as uint) & 0xC0) == 0xC0 {
+            if offset + 2 > count { return -1 }
+            return offset + 2
+        }
+        if length > 63 || offset + 1 + length > count { return -1 }
+        offset += 1 + length
+        labels++
+    }
+    return -1
+}
+
+func ipv4_result(address:uint, offset:int, port:uint16) RawEndpoint {
+    var storage:uint8[16]
+    var index = 0
+    while index < 4 {
+        storage[index] = C.load<uint8>(address, (offset + index) as uint)
+        index++
+    }
+    return RawEndpoint(family:4, port:port, scope:0, bytes:storage)
+}
+
+func ipv6_result(address:uint, offset:int, port:uint16) RawEndpoint {
+    var storage:uint8[16]
+    var index = 0
+    while index < 16 {
+        storage[index] = C.load<uint8>(address, (offset + index) as uint)
+        index++
+    }
+    return RawEndpoint(family:6, port:port, scope:0, bytes:storage)
+}
+
+func network_u16(address:uint, offset:int) uint16 {
+    return ((C.load<uint8>(address, offset as uint) as uint16) << 8) +
+        C.load<uint8>(address, (offset + 1) as uint) as uint16
+}
+
+func resolver_address() uint8[4]? {
+    match File.read_all("/etc/resolv.conf", 0x10_0000) {
+        failure(error) => { return null }
+        success(bytes) => {
+            var index = 0
+            while index < bytes.count() {
+                while index < bytes.count() && whitespace(bytes[index]) { index++ }
+                let keyword = index
+                while index < bytes.count() && !whitespace(bytes[index]) { index++ }
+                if token_equals(bytes, keyword, index, "nameserver") {
+                    while index < bytes.count() && (bytes[index] == 32 || bytes[index] == 9) { index++ }
+                    let start = index
+                    while index < bytes.count() && !whitespace(bytes[index]) { index++ }
+                    return parse_ipv4(bytes, start, index)
+                }
+                while index < bytes.count() && bytes[index] != 10 { index++ }
+            }
+            return null
+        }
+    }
+}
+
+func parse_ipv4(bytes:uint8[], start:int, end:int) uint8[4]? {
+    var result:uint8[4]
+    var part = 0
+    var index = start
+    while part < 4 {
+        if index >= end { return null }
+        var value = 0
+        let first = index
+        while index < end && bytes[index] != 46 {
+            if bytes[index] < 48 || bytes[index] > 57 { return null }
+            value = value * 10 + (bytes[index] - 48) as int
+            if value > 255 { return null }
+            index++
+        }
+        if index == first { return null }
+        result[part] = value as uint8
+        part++
+        if part < 4 {
+            if index >= end || bytes[index] != 46 { return null }
+            index++
+        } elif index != end { return null }
+    }
+    return result
+}
+
+func parse_port(text:str) int {
+    let bytes = UTF8.bytes(text)
+    if bytes.count() == 0 { return -1 }
+    var value = 0
+    for byte in bytes {
+        if byte < 48 || byte > 57 { return -1 }
+        value = value * 10 + (byte - 48) as int
+        if value > 65535 { return -1 }
+    }
+    return value
+}
+
+func token_equals(bytes:uint8[], start:int, end:int, text:str) bool {
+    let expected = UTF8.bytes(text)
+    if end - start != expected.count() { return false }
+    var index = 0
+    while index < expected.count() {
+        if bytes[start + index] != expected[index] { return false }
+        index++
+    }
+    return true
+}
+
+func whitespace(byte:uint8) bool { return byte == 32 || byte == 9 || byte == 10 || byte == 13 }

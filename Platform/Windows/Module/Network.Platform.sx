@@ -1,0 +1,96 @@
+use Interop.C
+use Interop.Windows
+use STD.Text.Encoding
+
+internal struct RawEndpoint {
+    let family:int
+    let port:uint16
+    let scope:uint32
+    let bytes:uint8[16]
+}
+
+func endpoint_family(value:RawEndpoint) int { return value.family }
+func endpoint_port(value:RawEndpoint) uint16 { return value.port }
+func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
+func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
+
+let system_getaddrinfo = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<uint>) int32>(library:Windows.ws2_32, name:"GetAddrInfoW")
+let system_freeaddrinfo = C.function<func(C.Pointer<uint8>) void>(library:Windows.ws2_32, name:"FreeAddrInfoW")
+let system_startup = C.function<func(uint32, C.MutablePointer<int>) int32>(library:Windows.ws2_32, name:"WSAStartup")
+let system_cleanup = C.function<func() int32>(library:Windows.ws2_32, name:"WSACleanup")
+
+func resolve(host:str, service:str, family:int, transport:int) RawEndpoint[]? {
+    var startup_data:int[64]
+    if system_startup(0x0202, C.mutable_pointer(startup_data)) != 0 { return null }
+    let wide_host = wide_string(host)
+    let wide_service = wide_string(service)
+    var root:uint = 0
+    let code = system_getaddrinfo(
+        C.pointer(wide_host),
+        C.pointer(wide_service),
+        C.pointer_bits(0 as uint),
+        C.mutable_pointer(root)
+    )
+    if code != 0 || root == 0 {
+        let ignored = system_cleanup()
+        return null
+    }
+    var result:RawEndpoint[] = []
+    var current = root
+    var visited = 0
+    while current != 0 && visited < 4096 {
+        let native_family = C.load<int32>(current, 4 as uint)
+        let native_transport = C.load<int32>(current, 8 as uint)
+        let wanted_family = family == 0 || (family == 4 && native_family == 2) || (family == 6 && native_family == 23)
+        let wanted_transport = (transport == 1 && native_transport == 1) || (transport == 2 && native_transport == 2)
+        if wanted_family && wanted_transport {
+            let address = C.address_at(current, 32 as uint)
+            if address != 0 {
+                if native_family == 2 { result.append(ipv4_endpoint(address)) }
+                elif native_family == 23 { result.append(ipv6_endpoint(address)) }
+            }
+        }
+        current = C.address_at(current, 40 as uint)
+        visited++
+    }
+    system_freeaddrinfo(C.pointer_bits(root))
+    let ignored = system_cleanup()
+    if visited >= 4096 { return null }
+    return result
+}
+
+func ipv4_endpoint(address:uint) RawEndpoint {
+    var storage:uint8[16]
+    var index = 0
+    while index < 4 {
+        storage[index] = C.load<uint8>(address, (4 + index) as uint)
+        index++
+    }
+    return RawEndpoint(family:4, port:network_port(address), scope:0, bytes:storage)
+}
+
+func ipv6_endpoint(address:uint) RawEndpoint {
+    var storage:uint8[16]
+    var index = 0
+    while index < 16 {
+        storage[index] = C.load<uint8>(address, (8 + index) as uint)
+        index++
+    }
+    return RawEndpoint(
+        family:6,
+        port:network_port(address),
+        scope:C.load<uint32>(address, 24 as uint),
+        bytes:storage
+    )
+}
+
+func network_port(address:uint) uint16 {
+    return ((C.load<uint8>(address, 2 as uint) as uint16) << 8) + C.load<uint8>(address, 3 as uint) as uint16
+}
+
+func wide_string(text:str) str {
+    var bytes = Encoding.encode(text, Encoding.Kind.utf16_little_endian())
+    bytes.append(0 as uint8)
+    let view = @bytes[0:bytes.count()]
+    return C.string(view)
+}

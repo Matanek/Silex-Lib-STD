@@ -1,0 +1,103 @@
+use Interop.C
+
+func wrapping_add(left:uint, right:uint) uint {
+    var result = left
+    var carry = right
+    while carry != 0 {
+        let next = (result & carry) << 1
+        result = result ^ carry
+        carry = next
+    }
+    return result
+}
+
+func fnv_multiply(value:uint) uint {
+    var result = value
+    result = wrapping_add(result, value << 1)
+    result = wrapping_add(result, value << 4)
+    result = wrapping_add(result, value << 5)
+    result = wrapping_add(result, value << 7)
+    result = wrapping_add(result, value << 8)
+    return wrapping_add(result, value << 40)
+}
+
+// HASH
+
+public func hash_bool(value:@bool) uint {
+    if value {
+        return 1
+    }
+    return 0
+}
+
+public func hash_int(value:@int) uint {
+    if value < 0 {
+        return ((-(value + 1)) as uint) * 2 + 1
+    }
+    return (value as uint) * 2
+}
+
+public func hash_uint(value:@uint) uint {
+    return value ^ 0
+}
+
+public func hash_str(value:@str) uint {
+    var result:uint = 14695981039346656037
+    var index:uint = 0
+    let count = C.byte_count(value)
+    while index < count {
+        result = fnv_multiply(result ^ C.byte_at(value, index))
+        index++
+    }
+    return result
+}
+
+public func hash(value:@bool) uint {
+    return hash_bool(value)
+}
+
+public func hash(value:@int) uint {
+    return hash_int(value)
+}
+
+public func hash(value:@uint) uint {
+    return hash_uint(value)
+}
+
+public func hash(value:@str) uint {
+    return hash_str(value)
+}
+
+// EQUAL
+
+public func equal_bool(left:@bool, right:@bool) bool {
+    return left == right
+}
+
+public func equal_int(left:@int, right:@int) bool {
+    return left == right
+}
+
+public func equal_uint(left:@uint, right:@uint) bool {
+    return left == right
+}
+
+public func equal_str(left:@str, right:@str) bool {
+    return left == right
+}
+
+public func equal(left:@bool, right:@bool) bool {
+    return equal_bool(left, right)
+}
+
+public func equal(left:@int, right:@int) bool {
+    return equal_int(left, right)
+}
+
+public func equal(left:@uint, right:@uint) bool {
+    return equal_uint(left, right)
+}
+
+public func equal(left:@str, right:@str) bool {
+    return equal_str(left, right)
+}

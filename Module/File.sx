@@ -1,0 +1,178 @@
+use STD.Path.Path as Path
+use STD.System.Error
+use STD.System.ErrorKind
+use STD.IO
+use STD.Text.UTF8
+use STD.File.Platform
+
+public class File {
+    private var descriptor:int
+    private var closed:bool
+
+    internal init(descriptor:int) {
+        self.descriptor = descriptor
+        self.closed = false
+    }
+
+    public func read(buffer:&uint8[..]) Result<int, Error> {
+        if self.closed { return Result<int, Error>.failure(file_error("file.read", null, "file is closed")) }
+        var index = 0
+        while index < buffer.count() {
+            let value = Platform.read_byte(self.descriptor)
+            if value == -1 { return Result<int, Error>.success(index) }
+            if value < 0 { return Result<int, Error>.failure(file_error("file.read", null, "system read failed")) }
+            buffer[index] = value as uint8
+            index++
+        }
+        return Result<int, Error>.success(index)
+    }
+
+    public func write(buffer:@uint8[..]) Result<int, Error> {
+        if self.closed { return Result<int, Error>.failure(file_error("file.write", null, "file is closed")) }
+        var index = 0
+        while index < buffer.count() {
+            if !Platform.write_byte(self.descriptor, buffer[index]) {
+                return Result<int, Error>.failure(file_error("file.write", null, "system write failed"))
+            }
+            index++
+        }
+        return Result<int, Error>.success(index)
+    }
+
+    public func flush() Result<void, Error> {
+        if self.closed { return Result<void, Error>.failure(file_error("file.flush", null, "file is closed")) }
+        if Platform.flush(self.descriptor) { return Result<void, Error>.success() }
+        return Result<void, Error>.failure(file_error("file.flush", null, "system flush failed"))
+    }
+
+    public func seek(offset:int, from:SeekFrom) Result<int, Error> {
+        if self.closed { return Result<int, Error>.failure(file_error("file.seek", null, "file is closed")) }
+        let position = Platform.seek(self.descriptor, offset, seek_code(from))
+        if position >= 0 { return Result<int, Error>.success(position) }
+        return Result<int, Error>.failure(file_error("file.seek", null, "system seek failed"))
+    }
+
+    public func position() Result<int, Error> { return self.seek(0, SeekFrom.current()) }
+
+    public func length() Result<int, Error> {
+        let original = try self.position()
+        let result = try self.seek(0, SeekFrom.end())
+        let ignored = try self.seek(original, SeekFrom.start())
+        return Result<int, Error>.success(result)
+    }
+
+    public func set_length(length:int) Result<void, Error> {
+        if length < 0 { return Result<void, Error>.failure(file_error("file.set_length", null, "length must be non-negative")) }
+        if self.closed { return Result<void, Error>.failure(file_error("file.set_length", null, "file is closed")) }
+        if Platform.set_length(self.descriptor, length) { return Result<void, Error>.success() }
+        return Result<void, Error>.failure(file_error("file.set_length", null, "system truncate failed"))
+    }
+
+    internal func close_handle() bool {
+        if self.closed { return false }
+        self.closed = true
+        return Platform.close(self.descriptor)
+    }
+}
+
+extend File : IO.Reader, IO.Writer {}
+
+public enum Access { read; write; read_write }
+public enum Creation { open_existing; create_new; open_or_create; truncate_existing; create_or_truncate }
+public enum SeekFrom { start; current; end }
+
+public struct OpenOptions {
+    let access:Access
+    let creation:Creation
+    let append:bool
+}
+
+public func open(path:Path, options:OpenOptions) Result<File, Error> {
+    let access = access_code(options.access)
+    let creation = creation_code(options.creation)
+    if access == 1 && (creation != 1 || options.append) {
+        return Result<File, Error>.failure(file_error("file.open", path, "invalid access, creation, and append combination"))
+    }
+    if options.append && (creation == 4 || creation == 5) {
+        return Result<File, Error>.failure(file_error("file.open", path, "append cannot be combined with truncation"))
+    }
+    let descriptor = Platform.open(path, access, creation, options.append)
+    if descriptor < 0 { return Result<File, Error>.failure(file_error("file.open", path, "system open failed")) }
+    return Result<File, Error>.success(File(descriptor))
+}
+
+public func close(file:File) Result<void, Error> {
+    if file.close_handle() { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(file_error("file.close", null, "system close failed or file already closed"))
+}
+
+public func read_all(path:Path, maximum_bytes:int) Result<uint8[], Error> {
+    if maximum_bytes < 0 { return Result<uint8[], Error>.failure(file_error("file.read_all", path, "maximum_bytes must be non-negative")) }
+    let options = OpenOptions(access:Access.read(), creation:Creation.open_existing(), append:false)
+    match open(path, options) {
+        failure(error) => { return Result<uint8[], Error>.failure(error) }
+        success(var file) => {
+            var result:uint8[] = []
+            var byte:uint8[1] = [0]
+            while result.count() <= maximum_bytes {
+                var view = &byte[0:1]
+                let count = try file.read(view)
+                if count == 0 {
+                    let ignored = close(move file)
+                    return Result<uint8[], Error>.success(result)
+                }
+                result.append(view[0])
+            }
+            let ignored = close(move file)
+            return Result<uint8[], Error>.failure(file_error("file.read_all", path, "file exceeds the configured maximum byte count"))
+        }
+    }
+}
+
+public func read_text(path:Path, maximum_bytes:int) Result<str, Error> {
+    let bytes = try read_all(path, maximum_bytes)
+    let view = @bytes[0:bytes.count()]
+    match UTF8.decode(view) {
+        success(text) => { return Result<str, Error>.success(text) }
+        failure(error) => {
+            return Result<str, Error>.failure(Error(
+                kind:ErrorKind.invalid_data(),
+                operation:"file.read_text",
+                subject:path,
+                detail:"file contents are not valid UTF-8"
+            ))
+        }
+    }
+}
+
+public func write_all(path:Path, bytes:@uint8[..]) Result<void, Error> {
+    let options = OpenOptions(access:Access.write(), creation:Creation.create_or_truncate(), append:false)
+    match open(path, options) {
+        failure(error) => { return Result<void, Error>.failure(error) }
+        success(var file) => {
+            let written = try file.write(bytes)
+            if written != bytes.count() {
+                let ignored = close(move file)
+                return Result<void, Error>.failure(file_error("file.write_all", path, "short write"))
+            }
+            try file.flush()
+            return close(move file)
+        }
+    }
+}
+
+public func write_all(path:Path, text:str) Result<void, Error> {
+    let bytes = UTF8.bytes(text)
+    let view = @bytes[0:bytes.count()]
+    return write_all(path, view)
+}
+
+func access_code(value:Access) int { return match value { read => 1; write => 2; read_write => 3 } }
+func creation_code(value:Creation) int {
+    return match value { open_existing => 1; create_new => 2; open_or_create => 3; truncate_existing => 4; create_or_truncate => 5 }
+}
+func seek_code(value:SeekFrom) int { return match value { start => 0; current => 1; end => 2 } }
+
+func file_error(operation:str, subject:str?, detail:str) Error {
+    return Error(kind:ErrorKind.other(), operation:operation, subject:subject, detail:detail)
+}

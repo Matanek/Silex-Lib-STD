@@ -1,0 +1,48 @@
+use Interop.C
+use Interop.MacOS
+
+let ioctl = C.function<func(int32, uint, C.MutablePointer<int>) int32>(
+    library:MacOS.lib_system,
+    name:"__ioctl"
+)
+
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(
+    library:MacOS.lib_system,
+    name:"read"
+)
+
+let poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(
+    library:MacOS.lib_system,
+    name:"poll"
+)
+
+func activate() int[9]? {
+    var original:int[9] = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let tiocgeta:uint = 0x40487413
+    let tiocseta:uint = 0x80487414
+    if ioctl(0, tiocgeta, C.mutable_pointer(original)) != 0 { return null }
+    var raw = original
+    let all:uint = 0xFFFF_FFFF_FFFF_FFFF
+    raw[0] = ((raw[0] as uint) & (all ^ 4075)) as int
+    raw[2] = (((raw[2] as uint) & (all ^ 0x1300)) + 0x300) as int
+    raw[3] = ((raw[3] as uint) & (all ^ 1432)) as int
+    if ioctl(0, tiocseta, C.mutable_pointer(raw)) != 0 { return null }
+    return original
+}
+
+func restore(original:int[9]) bool {
+    var state = original
+    return ioctl(0, 0x80487414 as uint, C.mutable_pointer(state)) == 0
+}
+
+func poll_byte(timeout_milliseconds:int) int {
+    // pollfd { fd=0, events=POLLIN, revents=0 } packed into eight bytes.
+    var descriptor:uint = 0x1_0000_0000
+    let ready = poll(C.mutable_pointer(descriptor), 1 as C.Size, timeout_milliseconds as int32)
+    if ready == 0 { return -1 }
+    if ready < 0 { return -2 }
+    var byte:uint32 = 0
+    let count = system_read(0, C.mutable_pointer(byte), 1 as C.Size)
+    if count != 1 { return -2 }
+    return (byte & 255) as int
+}

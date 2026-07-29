@@ -1,0 +1,156 @@
+use Interop.C
+use Interop.Linux
+
+internal struct RawEndpoint {
+    let family:int
+    let port:uint16
+    let scope:uint32
+    let bytes:uint8[16]
+}
+
+func endpoint_family(value:RawEndpoint) int { return value.family }
+func endpoint_port(value:RawEndpoint) uint16 { return value.port }
+func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
+func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
+
+let system_socket = C.function<func(int32, int32, int32) int32>(library:Linux.kernel, name:"socket")
+let system_connect = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"connect")
+let system_bind = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"bind")
+let system_listen = C.function<func(int32, int32) int32>(library:Linux.kernel, name:"listen")
+let system_accept = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Linux.kernel, name:"accept")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
+let system_shutdown = C.function<func(int32, int32) int32>(library:Linux.kernel, name:"shutdown")
+let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
+let system_getsockname = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Linux.kernel, name:"getsockname")
+let system_getpeername = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Linux.kernel, name:"getpeername")
+let system_setsockopt = C.function<func(int32, int32, int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"setsockopt")
+
+func connect(family:int, address:@uint8[..], port:uint16, scope:uint32, connect_timeout:int, read_timeout:int, write_timeout:int) int {
+    let descriptor = system_socket(native_family(family), 0x8_0001, 6)
+    if descriptor < 0 { return -1 }
+    if connect_timeout >= 0 || !configure(descriptor, read_timeout, write_timeout) {
+        let ignored = system_close(descriptor)
+        return -1
+    }
+    var storage:int[4]
+    let length = write_address(storage, family, address, port, scope)
+    if system_connect(descriptor, C.mutable_pointer(storage), length) != 0 {
+        let ignored = system_close(descriptor)
+        return -1
+    }
+    return descriptor as int
+}
+
+func listen(family:int, address:@uint8[..], port:uint16, scope:uint32, backlog:int) int {
+    let descriptor = system_socket(native_family(family), 0x8_0001, 6)
+    if descriptor < 0 { return -2 }
+    var storage:int[4]
+    let length = write_address(storage, family, address, port, scope)
+    let bind_code = system_bind(descriptor, C.mutable_pointer(storage), length)
+    if bind_code != 0 {
+        let code = -bind_code
+        let ignored = system_close(descriptor)
+        return -1000 - code
+    }
+    if system_listen(descriptor, backlog as int32) != 0 {
+        let ignored = system_close(descriptor)
+        return -4
+    }
+    return descriptor as int
+}
+
+func accept(listener:int, timeout:int, read_timeout:int, write_timeout:int) int {
+    if timeout >= 0 && !set_timeout(listener as int32, 20, timeout) { return -1 }
+    var storage:int[4]
+    var length:uint32 = 32
+    let descriptor = system_accept(listener as int32, C.mutable_pointer(storage), C.mutable_pointer(length))
+    if descriptor < 0 { return -1 }
+    if !configure(descriptor, read_timeout, write_timeout) {
+        let ignored = system_close(descriptor)
+        return -1
+    }
+    return descriptor as int
+}
+
+func read_byte(descriptor:int) int {
+    var value:uint32 = 0
+    let count = system_read(descriptor as int32, C.mutable_pointer(value), 1 as C.Size)
+    if count == 0 { return -1 }
+    if count != 1 { return -2 }
+    return (value & 255) as int
+}
+
+func write_byte(descriptor:int, value:uint8) bool {
+    var storage:uint32 = value as uint32
+    return system_write(descriptor as int32, C.mutable_pointer(storage), 1 as C.Size) == 1
+}
+
+func shutdown(descriptor:int, write:bool) bool {
+    var direction = 0
+    if write { direction = 1 }
+    return system_shutdown(descriptor as int32, direction as int32) == 0
+}
+
+func close(descriptor:int) bool { return system_close(descriptor as int32) == 0 }
+func stream_endpoint(descriptor:int, peer:bool) RawEndpoint? { return queried_endpoint(descriptor, peer) }
+func local_endpoint(descriptor:int) RawEndpoint? { return queried_endpoint(descriptor, false) }
+
+func queried_endpoint(descriptor:int, peer:bool) RawEndpoint? {
+    var storage:int[4]
+    var length:uint32 = 32
+    var code = 0
+    if peer { code = system_getpeername(descriptor as int32, C.mutable_pointer(storage), C.mutable_pointer(length)) }
+    else { code = system_getsockname(descriptor as int32, C.mutable_pointer(storage), C.mutable_pointer(length)) }
+    if code != 0 { return null }
+    return read_address(C.address_bits(C.mutable_pointer(storage)))
+}
+
+func configure(descriptor:int32, read_timeout:int, write_timeout:int) bool {
+    if read_timeout >= 0 && !set_timeout(descriptor, 20, read_timeout) { return false }
+    if write_timeout >= 0 && !set_timeout(descriptor, 21, write_timeout) { return false }
+    return true
+}
+
+func set_timeout(descriptor:int32, option:int32, milliseconds:int) bool {
+    var value:int[2]
+    value[0] = milliseconds / 1000
+    value[1] = (milliseconds % 1000) * 1000
+    return system_setsockopt(descriptor, 1, option, C.mutable_pointer(value), 16) == 0
+}
+
+func native_family(family:int) int32 { if family == 4 { return 2 } return 10 }
+
+func write_address(storage:&int[4], family:int, address:@uint8[..], port:uint16, scope:uint32) uint32 {
+    let bits = C.address_bits(C.mutable_pointer(storage))
+    let ignored_family = C.store<uint16>(bits, 0 as uint, native_family(family) as uint16)
+    let ignored_port_high = C.store<uint8>(bits, 2 as uint, (port >> 8) as uint8)
+    let ignored_port_low = C.store<uint8>(bits, 3 as uint, (port & 255) as uint8)
+    var length = 28
+    var offset = 8
+    if family == 4 { length = 16; offset = 4 }
+    var index = 0
+    while index < address.count() {
+        let ignored = C.store<uint8>(bits, (offset + index) as uint, address[index])
+        index++
+    }
+    if family == 6 { let ignored_scope = C.store<uint32>(bits, 24 as uint, scope) }
+    return length as uint32
+}
+
+func read_address(address:uint) RawEndpoint? {
+    let family = C.load<uint16>(address, 0 as uint)
+    var storage:uint8[16]
+    var count = 0
+    var offset = 0
+    var result_family = 0
+    if family == 2 { count = 4; offset = 4; result_family = 4 }
+    elif family == 10 { count = 16; offset = 8; result_family = 6 }
+    else { return null }
+    var index = 0
+    while index < count { storage[index] = C.load<uint8>(address, (offset + index) as uint); index++ }
+    let port = ((C.load<uint8>(address, 2 as uint) as uint16) << 8) + C.load<uint8>(address, 3 as uint) as uint16
+    var scope:uint32 = 0
+    if result_family == 6 { scope = C.load<uint32>(address, 24 as uint) }
+    return RawEndpoint(family:result_family, port:port, scope:scope, bytes:storage)
+}

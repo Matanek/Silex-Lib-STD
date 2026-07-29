@@ -1,0 +1,71 @@
+use Interop.C
+use Interop.Linux
+use STD.File
+use STD.Text.UTF8
+
+let system_getcwd = C.function<func(C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"getcwd")
+let system_chdir = C.function<func(C.Pointer<uint8>) C.SignedSize>(library:Linux.kernel, name:"chdir")
+let system_readlink = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"readlink")
+let system_getpid = C.function<func() C.SignedSize>(library:Linux.kernel, name:"getpid")
+
+func arguments() str[]? {
+    match File.read_all("/proc/self/cmdline", 0x10_0000) {
+        failure(error) => { return null }
+        success(bytes) => { return split_arguments(bytes) }
+    }
+}
+
+func current_directory() str? {
+    var buffer:int[512]
+    let count = system_getcwd(C.mutable_pointer(buffer), 4096 as C.Size)
+    if count <= 0 { return null }
+    return text_at(C.address_bits(C.mutable_pointer(buffer)), count - 1)
+}
+
+func set_current_directory(path:str) bool { return system_chdir(C.terminated_pointer(path)) == 0 }
+
+func executable_path() str? {
+    var buffer:int[512]
+    let count = system_readlink(C.terminated_pointer("/proc/self/exe"), C.mutable_pointer(buffer), 4096 as C.Size)
+    if count <= 0 { return null }
+    return text_at(C.address_bits(C.mutable_pointer(buffer)), count)
+}
+
+func id() uint { return system_getpid() as uint }
+
+func split_arguments(bytes:uint8[]) str[] {
+    var result:str[] = []
+    var start = 0
+    var index = 0
+    while index < bytes.count() {
+        if bytes[index] == 0 {
+            let view = @bytes[start:index]
+            result.append(decode_valid(view))
+            start = index + 1
+        }
+        index++
+    }
+    if start < bytes.count() {
+        let tail = @bytes[start:bytes.count()]
+        result.append(decode_valid(tail))
+    }
+    return result
+}
+
+func text_at(address:uint, count:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < count {
+        bytes.append(C.load<uint8>(address, index as uint))
+        index++
+    }
+    let view = @bytes[0:bytes.count()]
+    return decode_valid(view)
+}
+
+func decode_valid(bytes:@uint8[..]) str {
+    match UTF8.decode(bytes) {
+        success(text) => { return text }
+        failure(error) => { panic("system process text contains invalid UTF-8") }
+    }
+}

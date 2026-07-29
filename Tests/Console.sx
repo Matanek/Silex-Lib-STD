@@ -1,0 +1,9 @@
+use STD.Console
+use STD.Console.Session.Key
+
+func main() {
+    Console.write("")
+    Console.write_error("")
+    Console.flush()
+    let key = Key.enter()
+}

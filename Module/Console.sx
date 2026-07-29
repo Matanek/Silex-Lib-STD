@@ -1,0 +1,132 @@
+use Interop.C
+use STD.Console.Platform
+use STD.Text.UTF8.decode
+
+public struct Dimensions {
+    let columns:int
+    let rows:int
+}
+
+public enum Color {
+    default
+    black
+    red
+    green
+    yellow
+    blue
+    magenta
+    cyan
+    white
+    bright_black
+    bright_red
+    bright_green
+    bright_yellow
+    bright_blue
+    bright_magenta
+    bright_cyan
+    bright_white
+}
+
+public enum TextStyle {
+    bold
+    dim
+    italic
+    underline
+    inverse
+}
+
+public func write(text:str) { Platform.write_descriptor(1, text) }
+public func write_line(text:str) { Platform.write_descriptor(1, text + "\n") }
+public func write_error(text:str) { Platform.write_descriptor(2, text) }
+public func write_error_line(text:str) { Platform.write_descriptor(2, text + "\n") }
+
+// Console writes cross the unbuffered system boundary directly.
+public func flush() {}
+
+public func is_interactive() bool { return Platform.interactive() }
+
+public func get_dimensions() Dimensions? {
+    let packed = Platform.dimensions()
+    if packed < 0 { return null }
+    let value = packed as uint
+    return Dimensions(
+        columns:((value >> 16) & 0xFFFF) as int,
+        rows:(value & 0xFFFF) as int
+    )
+}
+
+public func clear_screen() { write("\u{1b}[2J\u{1b}[H") }
+public func clear_line() { write("\u{1b}[2K\r") }
+public func show_cursor() { write("\u{1b}[?25h") }
+public func hide_cursor() { write("\u{1b}[?25l") }
+public func reset_style() { write("\u{1b}[0m") }
+
+public func move_cursor(column:int, row:int) {
+    if column < 0 || row < 0 { panic("Console.move_cursor requires non-negative coordinates") }
+    write("\u{1b}[$(row + 1);$(column + 1)H")
+}
+
+public func set_foreground(color:Color) { write("\u{1b}[$(color_code(color, false))m") }
+public func set_background(color:Color) { write("\u{1b}[$(color_code(color, true))m") }
+public func enable_style(style:TextStyle) { write("\u{1b}[$(style_code(style))m") }
+
+public func read_line() str? {
+    var bytes:uint8[] = []
+    while true {
+        let value = Platform.read_byte()
+        if value < 0 {
+            if bytes.count() == 0 { return null }
+            return decoded(bytes)
+        }
+        if value == 10 { return decoded(bytes) }
+        if value != 13 { bytes.append(value as uint8) }
+    }
+    panic("Console.read_line loop terminated unexpectedly")
+}
+
+public func wait_for_enter() {
+    let ignored = read_line()
+}
+
+func decoded(bytes:uint8[]) str {
+    let view = @bytes[0:bytes.count()]
+    match decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("console input is not valid UTF-8") }
+    }
+}
+
+func color_code(color:Color, background:bool) int {
+    let foreground = match color {
+        default => 39
+        black => 30
+        red => 31
+        green => 32
+        yellow => 33
+        blue => 34
+        magenta => 35
+        cyan => 36
+        white => 37
+        bright_black => 90
+        bright_red => 91
+        bright_green => 92
+        bright_yellow => 93
+        bright_blue => 94
+        bright_magenta => 95
+        bright_cyan => 96
+        bright_white => 97
+    }
+    if !background { return foreground }
+    if foreground == 39 { return 49 }
+    return foreground + 10
+}
+
+func style_code(style:TextStyle) int {
+    return match style {
+        bold => 1
+        dim => 2
+        italic => 3
+        underline => 4
+        inverse => 7
+    }
+}

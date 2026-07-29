@@ -1,0 +1,44 @@
+use STD.Path
+
+func main() {
+    match Path.normalize("/usr//local/../bin/") {
+        success(value) => { assert(value == "/usr/bin", "normalize POSIX path") }
+        failure(error) => { panic("valid path rejected") }
+    }
+    match Path.join("/usr/local", "../bin/tool") {
+        success(value) => { assert(value == "/usr/bin/tool", "join and normalize") }
+        failure(error) => { panic("valid path join rejected") }
+    }
+    match Path.parent("/usr/bin/tool") {
+        success(value) => {
+            if let actual = value { assert(actual == "/usr/bin", "path parent") }
+            else { panic("path parent was absent") }
+        }
+        failure(error) => { panic("valid parent rejected") }
+    }
+    match Path.name("archive.tar.gz") {
+        success(value) => {
+            if let actual = value { assert(actual == "archive.tar.gz", "path name") }
+            else { panic("path name was absent") }
+        }
+        failure(error) => { panic("valid name rejected") }
+    }
+    match Path.stem("archive.tar.gz") {
+        success(value) => {
+            if let actual = value { assert(actual == "archive.tar", "path stem") }
+            else { panic("path stem was absent") }
+        }
+        failure(error) => { panic("valid stem rejected") }
+    }
+    match Path.extension("archive.tar.gz") {
+        success(value) => {
+            if let actual = value { assert(actual == "gz", "path extension") }
+            else { panic("path extension was absent") }
+        }
+        failure(error) => { panic("valid extension rejected") }
+    }
+    match Path.is_absolute("/usr/bin") {
+        success(value) => { assert(value, "absolute POSIX path") }
+        failure(error) => { panic("valid absolute path rejected") }
+    }
+}

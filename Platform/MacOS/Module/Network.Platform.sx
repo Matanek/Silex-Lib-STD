@@ -1,0 +1,78 @@
+use Interop.C
+use Interop.MacOS
+
+internal struct RawEndpoint {
+    let family:int
+    let port:uint16
+    let scope:uint32
+    let bytes:uint8[16]
+}
+
+func endpoint_family(value:RawEndpoint) int { return value.family }
+func endpoint_port(value:RawEndpoint) uint16 { return value.port }
+func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
+func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
+
+let system_getaddrinfo = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<uint>) int32>(library:MacOS.lib_system, name:"getaddrinfo")
+let system_freeaddrinfo = C.function<func(C.Pointer<uint8>) void>(library:MacOS.lib_system, name:"freeaddrinfo")
+
+func resolve(host:str, service:str, family:int, transport:int) RawEndpoint[]? {
+    var root:uint = 0
+    let code = system_getaddrinfo(
+        C.terminated_pointer(host),
+        C.terminated_pointer(service),
+        C.pointer_bits(0 as uint),
+        C.mutable_pointer(root)
+    )
+    if code != 0 || root == 0 { return null }
+    var result:RawEndpoint[] = []
+    var current = root
+    var visited = 0
+    while current != 0 && visited < 4096 {
+        let native_family = C.load<int32>(current, 4 as uint)
+        let native_transport = C.load<int32>(current, 8 as uint)
+        let wanted_family = family == 0 || (family == 4 && native_family == 2) || (family == 6 && native_family == 30)
+        let wanted_transport = (transport == 1 && native_transport == 1) || (transport == 2 && native_transport == 2)
+        if wanted_family && wanted_transport {
+            let address = C.address_at(current, 32 as uint)
+            if address != 0 {
+                if native_family == 2 { result.append(ipv4_endpoint(address)) }
+                elif native_family == 30 { result.append(ipv6_endpoint(address)) }
+            }
+        }
+        current = C.address_at(current, 40 as uint)
+        visited++
+    }
+    system_freeaddrinfo(C.pointer_bits(root))
+    if visited >= 4096 { return null }
+    return result
+}
+
+func ipv4_endpoint(address:uint) RawEndpoint {
+    var storage:uint8[16]
+    var index = 0
+    while index < 4 {
+        storage[index] = C.load<uint8>(address, (4 + index) as uint)
+        index++
+    }
+    return RawEndpoint(family:4, port:network_port(address), scope:0, bytes:storage)
+}
+
+func ipv6_endpoint(address:uint) RawEndpoint {
+    var storage:uint8[16]
+    var index = 0
+    while index < 16 {
+        storage[index] = C.load<uint8>(address, (8 + index) as uint)
+        index++
+    }
+    return RawEndpoint(
+        family:6,
+        port:network_port(address),
+        scope:C.load<uint32>(address, 24 as uint),
+        bytes:storage
+    )
+}
+
+func network_port(address:uint) uint16 {
+    return ((C.load<uint8>(address, 2 as uint) as uint16) << 8) + C.load<uint8>(address, 3 as uint) as uint16
+}

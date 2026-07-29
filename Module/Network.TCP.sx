@@ -1,0 +1,254 @@
+use STD.IO
+use STD.Network
+use STD.Network.TCP.Platform
+use STD.System.Error
+use STD.System.ErrorKind
+use STD.Text.UTF8
+
+public struct StreamOptions {
+    let read_timeout_milliseconds:int?
+    let write_timeout_milliseconds:int?
+}
+
+public struct ConnectOptions {
+    let connect_timeout_milliseconds:int?
+    let stream:StreamOptions
+}
+
+public class Stream {
+    private var descriptor:int
+    private var closed:bool
+
+    internal init(descriptor:int) {
+        self.descriptor = descriptor
+        self.closed = false
+    }
+
+    public func read(buffer:&uint8[..]) Result<int, Error> {
+        if self.closed { return Result<int, Error>.failure(failure("tcp.read", "stream is closed")) }
+        var index = 0
+        while index < buffer.count() {
+            let value = Platform.read_byte(self.descriptor)
+            if value == -1 { return Result<int, Error>.success(index) }
+            if value < 0 { return Result<int, Error>.failure(failure("tcp.read", "system receive failed")) }
+            buffer[index] = value as uint8
+            index++
+        }
+        return Result<int, Error>.success(index)
+    }
+
+    public func write(buffer:@uint8[..]) Result<int, Error> {
+        if self.closed { return Result<int, Error>.failure(failure("tcp.write", "stream is closed")) }
+        var index = 0
+        while index < buffer.count() {
+            if !Platform.write_byte(self.descriptor, buffer[index]) {
+                return Result<int, Error>.failure(failure("tcp.write", "system send failed"))
+            }
+            index++
+        }
+        return Result<int, Error>.success(index)
+    }
+
+    public func shutdown_read() Result<void, Error> { return shutdown(self, false) }
+    public func shutdown_write() Result<void, Error> { return shutdown(self, true) }
+    public func local_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, false) }
+    public func peer_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, true) }
+
+    internal func handle() int { return self.descriptor }
+    internal func is_closed() bool { return self.closed }
+    internal func close_handle() bool {
+        if self.closed { return false }
+        self.closed = true
+        return Platform.close(self.descriptor)
+    }
+}
+
+extend Stream : IO.Reader, IO.Writer {}
+
+public class Listener {
+    private var descriptor:int
+    private var closed:bool
+
+    internal init(descriptor:int) {
+        self.descriptor = descriptor
+        self.closed = false
+    }
+
+    internal func handle() int { return self.descriptor }
+    internal func is_closed() bool { return self.closed }
+    internal func close_handle() bool {
+        if self.closed { return false }
+        self.closed = true
+        return Platform.close(self.descriptor)
+    }
+}
+
+public struct Accepted {
+    var stream:Stream
+    let peer:Network.Endpoint
+}
+
+public func connect(endpoint:Network.Endpoint, options:ConnectOptions) Result<Stream, Error> {
+    let connect_timeout = try timeout(options.connect_timeout_milliseconds, "tcp.connect")
+    let read_timeout = try timeout(options.stream.read_timeout_milliseconds, "tcp.connect")
+    let write_timeout = try timeout(options.stream.write_timeout_milliseconds, "tcp.connect")
+    if connect_timeout >= 0 {
+        return Result<Stream, Error>.failure(Error(
+            kind:ErrorKind.unsupported(), operation:"tcp.connect", subject:null,
+            detail:"connect timeouts are not implemented by the bootstrap socket backend yet"
+        ))
+    }
+    return connect_endpoint(endpoint, connect_timeout, read_timeout, write_timeout)
+}
+
+public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream, Error> {
+    let endpoints = try Network.resolve(host, port, Network.ResolveOptions(
+        family:Network.Family.any(),
+        transport:Network.Transport.stream()
+    ))
+    var last:Error? = null
+    for endpoint in endpoints {
+        match connect(endpoint, options) {
+            success(var stream) => { return Result<Stream, Error>.success(stream) }
+            failure(error) => { last = error }
+        }
+    }
+    if error = last { return Result<Stream, Error>.failure(error) }
+    return Result<Stream, Error>.failure(Error(
+        kind:ErrorKind.not_found(), operation:"tcp.connect", subject:host, detail:"no endpoint"
+    ))
+}
+
+public func listen(endpoint:Network.Endpoint, backlog:int) Result<Listener, Error> {
+    if backlog <= 0 { return Result<Listener, Error>.failure(invalid("tcp.listen", "backlog must be positive")) }
+    let descriptor = endpoint_descriptor(endpoint, backlog)
+    if descriptor == -2 { return Result<Listener, Error>.failure(failure("tcp.listen", "system socket creation failed")) }
+    if descriptor <= -1000 { return Result<Listener, Error>.failure(failure("tcp.listen", "system bind failed with errno " + decimal(-descriptor - 1000))) }
+    if descriptor < 0 { return Result<Listener, Error>.failure(failure("tcp.listen", "system listen failed")) }
+    return Result<Listener, Error>.success(Listener(descriptor))
+}
+
+public func accept(listener:&Listener, timeout_milliseconds:int?, stream_options:StreamOptions) Result<Accepted, Error> {
+    if listener.is_closed() { return Result<Accepted, Error>.failure(failure("tcp.accept", "listener is closed")) }
+    let wait = try timeout(timeout_milliseconds, "tcp.accept")
+    let read = try timeout(stream_options.read_timeout_milliseconds, "tcp.accept")
+    let write = try timeout(stream_options.write_timeout_milliseconds, "tcp.accept")
+    let descriptor = Platform.accept(listener.handle(), wait, read, write)
+    if descriptor < 0 { return Result<Accepted, Error>.failure(failure("tcp.accept", "system accept failed")) }
+    var stream = Stream(descriptor)
+    let peer = try stream.peer_endpoint()
+    return Result<Accepted, Error>.success(Accepted(stream:stream, peer:peer))
+}
+
+public func local_endpoint(listener:@Listener) Result<Network.Endpoint, Error> {
+    if listener.is_closed() { return Result<Network.Endpoint, Error>.failure(failure("tcp.endpoint", "listener is closed")) }
+    if raw = Platform.local_endpoint(listener.handle()) {
+        return Result<Network.Endpoint, Error>.success(endpoint_from_parts(
+            Platform.endpoint_bytes(raw), Platform.endpoint_family(raw), Platform.endpoint_port(raw), Platform.endpoint_scope(raw)
+        ))
+    }
+    return Result<Network.Endpoint, Error>.failure(failure("tcp.endpoint", "system endpoint query failed"))
+}
+
+public func close(stream:Stream) Result<void, Error> {
+    if stream.close_handle() { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(failure("tcp.close", "system close failed or stream is already closed"))
+}
+
+public func close(listener:Listener) Result<void, Error> {
+    if listener.close_handle() { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(failure("tcp.close", "system close failed or listener is already closed"))
+}
+
+func connect_endpoint(value:Network.Endpoint, connect_timeout:int, read_timeout:int, write_timeout:int) Result<Stream, Error> {
+    let descriptor = match value.address {
+        ipv4(bytes) => connect4(bytes, value, connect_timeout, read_timeout, write_timeout)
+        ipv6(bytes) => connect6(bytes, value, connect_timeout, read_timeout, write_timeout)
+    }
+    if descriptor < 0 { return Result<Stream, Error>.failure(failure("tcp.connect", "system connect failed")) }
+    return Result<Stream, Error>.success(Stream(descriptor))
+}
+
+func connect4(bytes:uint8[4], value:Network.Endpoint, connect_timeout:int, read_timeout:int, write_timeout:int) int {
+    if value.scope_id != 0 { return -1 }
+    let address = @bytes[0:4]
+    return Platform.connect(4, address, value.port, 0, connect_timeout, read_timeout, write_timeout)
+}
+
+func connect6(bytes:uint8[16], value:Network.Endpoint, connect_timeout:int, read_timeout:int, write_timeout:int) int {
+    let address = @bytes[0:16]
+    return Platform.connect(6, address, value.port, value.scope_id, connect_timeout, read_timeout, write_timeout)
+}
+
+func endpoint_descriptor(value:Network.Endpoint, backlog:int) int {
+    return match value.address {
+        ipv4(bytes) => listen4(bytes, value, backlog)
+        ipv6(bytes) => listen6(bytes, value, backlog)
+    }
+}
+
+func listen4(bytes:uint8[4], value:Network.Endpoint, backlog:int) int {
+    if value.scope_id != 0 { return -1 }
+    let address = @bytes[0:4]
+    return Platform.listen(4, address, value.port, 0, backlog)
+}
+
+func listen6(bytes:uint8[16], value:Network.Endpoint, backlog:int) int {
+    let address = @bytes[0:16]
+    return Platform.listen(6, address, value.port, value.scope_id, backlog)
+}
+
+func shutdown(stream:@Stream, write:bool) Result<void, Error> {
+    if stream.is_closed() { return Result<void, Error>.failure(failure("tcp.shutdown", "stream is closed")) }
+    if Platform.shutdown(stream.handle(), write) { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(failure("tcp.shutdown", "system shutdown failed"))
+}
+
+func stream_endpoint(stream:@Stream, peer:bool) Result<Network.Endpoint, Error> {
+    if stream.is_closed() { return Result<Network.Endpoint, Error>.failure(failure("tcp.endpoint", "stream is closed")) }
+    if raw = Platform.stream_endpoint(stream.handle(), peer) {
+        return Result<Network.Endpoint, Error>.success(endpoint_from_parts(
+            Platform.endpoint_bytes(raw), Platform.endpoint_family(raw), Platform.endpoint_port(raw), Platform.endpoint_scope(raw)
+        ))
+    }
+    return Result<Network.Endpoint, Error>.failure(failure("tcp.endpoint", "system endpoint query failed"))
+}
+
+func endpoint_from_parts(bytes:uint8[16], family:int, port:uint16, scope:uint32) Network.Endpoint {
+    var address = Network.IpAddress.ipv6(bytes)
+    if family == 4 { address = Network.IpAddress.ipv4([bytes[0], bytes[1], bytes[2], bytes[3]]) }
+    return Network.Endpoint(address:address, port:port, scope_id:scope)
+}
+
+func timeout(value:int?, operation:str) Result<int, Error> {
+    if present = value {
+        if present < 0 { return Result<int, Error>.failure(invalid(operation, "timeout must be non-negative")) }
+        return Result<int, Error>.success(present)
+    }
+    return Result<int, Error>.success(-1)
+}
+
+func invalid(operation:str, detail:str) Error {
+    return Error(kind:ErrorKind.invalid_input(), operation:operation, subject:null, detail:detail)
+}
+
+func failure(operation:str, detail:str) Error {
+    return Error(kind:ErrorKind.other(), operation:operation, subject:null, detail:detail)
+}
+
+func decimal(value:int) str {
+    var bytes:uint8[20]
+    var index = 20
+    var remaining = value
+    if remaining == 0 { return "0" }
+    while remaining > 0 {
+        index--
+        bytes[index] = (48 + remaining % 10) as uint8
+        remaining /= 10
+    }
+    let view = @bytes[index:20]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("ASCII error formatting failed") }
+    }
+}

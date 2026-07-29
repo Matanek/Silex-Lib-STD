@@ -1,0 +1,49 @@
+use Interop.C
+use Interop.Windows
+use STD.Text.Encoding
+
+let system_entries = C.function<func() C.Pointer<uint8> >(library:Windows.kernel32, name:"GetEnvironmentStringsW")
+let system_free_entries = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"FreeEnvironmentStringsW")
+
+func entries() str[] {
+    var result:str[] = []
+    let block = C.address_bits(system_entries())
+    if block == 0 { return result }
+    var offset:uint = 0
+    while offset < 0x20_0000 {
+        let count = wide_length(block + offset)
+        if count == 0 {
+            let ignored = system_free_entries(C.pointer_bits(block))
+            return result
+        }
+        result.append(wide_text(block + offset, count))
+        offset += ((count + 1) as uint) * 2
+    }
+    let ignored = system_free_entries(C.pointer_bits(block))
+    panic("Windows environment block exceeds 2 MiB")
+}
+
+func wide_length(address:uint) int {
+    var count = 0
+    while count < 0x10_0000 {
+        if C.load<uint16>(address, (count as uint) * 2) == 0 { return count }
+        count++
+    }
+    panic("Windows environment entry exceeds 1 Mi UTF-16 code units")
+}
+
+func wide_text(address:uint, count:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < count {
+        let unit = C.load<uint16>(address, (index as uint) * 2)
+        bytes.append((unit & 255) as uint8)
+        bytes.append((unit >> 8) as uint8)
+        index++
+    }
+    let view = @bytes[0:bytes.count()]
+    match Encoding.decode(view, Encoding.Kind.utf16_little_endian()) {
+        success(text) => { return text }
+        failure(error) => { panic("Windows environment contains invalid UTF-16") }
+    }
+}

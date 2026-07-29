@@ -1,0 +1,25 @@
+use STD.JSON
+use STD.JSON.Format
+use STD.JSON.Value
+
+func main() {
+    match JSON.parse("{\"name\":\"Silex\",\"unicode\":\"\\u00e9\\ud83d\\ude00\",\"items\":[1,true,null]}") {
+        failure(error) => { panic("valid JSON was rejected") }
+        success(var value) => {
+            assert(JSON.stringify(value, Format.compact()) == "{\"name\":\"Silex\",\"unicode\":\"é😀\",\"items\":[1,true,null]}", "JSON round trip")
+            if let members = value.as_object() {
+                assert(members.count() == 3, "JSON object members")
+            } else { panic("JSON object expected") }
+        }
+    }
+
+    match JSON.parse("{\"duplicate\":1,\"duplicate\":2}") {
+        success(var value) => { panic("duplicate JSON member was accepted") }
+        failure(error) => { assert(error.byte_offset > 0, "JSON error location") }
+    }
+
+    match Value.number_text("01") {
+        success(var value) => { panic("invalid JSON number was accepted") }
+        failure(error) => {}
+    }
+}

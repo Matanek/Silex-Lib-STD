@@ -1,0 +1,38 @@
+use Interop.C
+use Interop.MacOS
+use STD.Text.UTF8
+
+let system_environ = C.function<func() C.Pointer<uint8> >(library:MacOS.lib_system, name:"_NSGetEnviron")
+
+func entries() str[] {
+    var result:str[] = []
+    let root = C.address_bits(system_environ())
+    if root == 0 { return result }
+    let environment = C.address_at(root, 0 as uint)
+    var index:uint = 0
+    while environment != 0 {
+        let entry = C.address_at(environment, index * 8)
+        if entry == 0 { return result }
+        result.append(text_at(entry))
+        index++
+    }
+    return result
+}
+
+func text_at(address:uint) str {
+    var bytes:uint8[] = []
+    var offset:uint = 0
+    while offset < 0x100_0000 {
+        let byte = C.load<uint8>(address, offset)
+        if byte == 0 {
+            let view = @bytes[0:bytes.count()]
+            match UTF8.decode(view) {
+                success(text) => { return text }
+                failure(error) => { panic("system environment contains invalid UTF-8") }
+            }
+        }
+        bytes.append(byte)
+        offset++
+    }
+    panic("system environment entry exceeds 16 MiB")
+}

@@ -1,0 +1,117 @@
+use Interop.C
+use Interop.MacOS
+use STD.Text.UTF8
+
+internal struct RawMetadata { public let kind:int; public let size:int; public let readonly:bool }
+internal struct RawEntry { public let name:str; public let kind:int }
+
+func metadata_kind(value:RawMetadata) int { return value.kind }
+func metadata_size(value:RawMetadata) int { return value.size }
+func metadata_readonly(value:RawMetadata) bool { return value.readonly }
+func entry_name(value:RawEntry) str { return value.name }
+func entry_kind(value:RawEntry) int { return value.kind }
+
+let system_stat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:MacOS.lib_system, name:"stat")
+let system_lstat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:MacOS.lib_system, name:"lstat")
+let system_opendir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:MacOS.lib_system, name:"opendir")
+let system_readdir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:MacOS.lib_system, name:"readdir")
+let system_closedir = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"closedir")
+let system_mkdir = C.function<func(C.Pointer<uint8>, uint32) int32>(library:MacOS.lib_system, name:"mkdir")
+let system_unlink = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"unlink")
+let system_rmdir = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"rmdir")
+let system_rename = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"rename")
+let system_copyfile = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, uint32) int32>(library:MacOS.lib_system, name:"copyfile")
+let system_chmod = C.function<func(C.Pointer<uint8>, uint32) int32>(library:MacOS.lib_system, name:"chmod")
+let system_realpath = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) C.Pointer<uint8> >(library:MacOS.lib_system, name:"realpath")
+
+func metadata(path:str, follow:bool) RawMetadata? {
+    var status:int[18]
+    var code = system_lstat(C.terminated_pointer(path), C.mutable_pointer(status))
+    if follow { code = system_stat(C.terminated_pointer(path), C.mutable_pointer(status)) }
+    if code != 0 { return null }
+    let address = C.address_bits(C.mutable_pointer(status))
+    let mode = C.load<uint16>(address, 4 as uint) as uint32
+    return RawMetadata(kind:kind_from_mode(mode), size:C.load<int>(address, 96 as uint), readonly:(mode & 146) == 0)
+}
+
+func canonicalize(path:str) str? {
+    var buffer:int[128]
+    let result = C.address_bits(system_realpath(C.terminated_pointer(path), C.mutable_pointer(buffer)))
+    if result == 0 { return null }
+    return text_at(result, 1024)
+}
+
+func entries(path:str) RawEntry[]? {
+    let directory = C.address_bits(system_opendir(C.terminated_pointer(path)))
+    if directory == 0 { return null }
+    var result:RawEntry[] = []
+    while true {
+        let entry = C.address_bits(system_readdir(C.pointer_bits(directory)))
+        if entry == 0 {
+            let ignored = system_closedir(C.pointer_bits(directory))
+            return result
+        }
+        let length = C.load<uint16>(entry, 18 as uint) as int
+        let name = text_at(entry + 21, length)
+        if name != "." && name != ".." {
+            result.append(RawEntry(name:name, kind:kind_from_directory_type(C.load<uint8>(entry, 20 as uint))))
+        }
+    }
+    panic("directory traversal terminated unexpectedly")
+}
+
+func create_directory(path:str) bool { return system_mkdir(C.terminated_pointer(path), 493) == 0 }
+func remove_file(path:str) bool { return system_unlink(C.terminated_pointer(path)) == 0 }
+func remove_directory(path:str) bool { return system_rmdir(C.terminated_pointer(path)) == 0 }
+func rename(source:str, destination:str) bool { return system_rename(C.terminated_pointer(source), C.terminated_pointer(destination)) == 0 }
+
+func copy_file(source:str, destination:str, replace:bool) bool {
+    var flags:uint32 = 15
+    if !replace { flags += 64 }
+    return system_copyfile(C.terminated_pointer(source), C.terminated_pointer(destination), C.pointer_bits(0 as uint), flags) == 0
+}
+
+func set_readonly(path:str, readonly:bool) bool {
+    var status:int[18]
+    if system_stat(C.terminated_pointer(path), C.mutable_pointer(status)) != 0 { return false }
+    let address = C.address_bits(C.mutable_pointer(status))
+    var mode = C.load<uint16>(address, 4 as uint) as uint32
+    if readonly { mode = mode & 0xFF6D }
+    elif (mode & 128) == 0 { mode += 128 }
+    return system_chmod(C.terminated_pointer(path), mode) == 0
+}
+
+func kind_from_mode(mode:uint32) int {
+    let file_type = mode & 0xF000
+    if file_type == 0x8000 { return 1 }
+    if file_type == 0x4000 { return 2 }
+    if file_type == 0xA000 { return 3 }
+    return 4
+}
+
+func kind_from_directory_type(kind:uint8) int {
+    if kind == 8 { return 1 }
+    if kind == 4 { return 2 }
+    if kind == 10 { return 3 }
+    return 4
+}
+
+func text_at(address:uint, maximum:int) str {
+    var bytes:uint8[] = []
+    var offset:uint = 0
+    while offset < maximum as uint {
+        let byte = C.load<uint8>(address, offset)
+        if byte == 0 { return decode_bytes(bytes) }
+        bytes.append(byte)
+        offset++
+    }
+    return decode_bytes(bytes)
+}
+
+func decode_bytes(bytes:uint8[]) str {
+    let view = @bytes[0:bytes.count()]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("system filesystem text contains invalid UTF-8") }
+    }
+}

@@ -1,0 +1,308 @@
+use STD.System.Error
+use STD.System.ErrorKind
+use STD.Text.UTF8
+use STD.Network.Platform
+
+public enum Family { any; ipv4; ipv6 }
+public enum Transport { stream; datagram }
+public enum IpAddress { ipv4(uint8[4]); ipv6(uint8[16]) }
+
+public struct Endpoint {
+    let address:IpAddress
+    let port:uint16
+    let scope_id:uint32
+}
+
+public struct ResolveOptions {
+    let family:Family
+    let transport:Transport
+}
+
+public func parse_ip(text:str) Result<IpAddress, Error> {
+    let bytes = UTF8.bytes(text)
+    if contains(bytes, 58) { return parse_ipv6(bytes, text) }
+    if parsed = parse_ipv4(bytes, 0, bytes.count()) {
+        return Result<IpAddress, Error>.success(IpAddress.ipv4(parsed))
+    }
+    return invalid_address(text)
+}
+
+public func format_ip(address:IpAddress) str {
+    return match address {
+        ipv4(bytes) => format_ipv4(bytes)
+        ipv6(bytes) => format_ipv6(bytes)
+    }
+}
+
+public func format_endpoint(endpoint:Endpoint) str {
+    match endpoint.address {
+        ipv4(bytes) => { return format_ipv4(bytes) + ":" + decimal(endpoint.port as uint) }
+        ipv6(bytes) => {
+            var scope = ""
+            if endpoint.scope_id != 0 { scope = "%" + decimal(endpoint.scope_id as uint) }
+            return "[" + format_ipv6(bytes) + scope + "]:" + decimal(endpoint.port as uint)
+        }
+    }
+    panic("unknown network address family")
+}
+
+public func resolve(host:str, port:uint16, options:ResolveOptions) Result<Endpoint[], Error> {
+    match parse_ip(host) {
+        success(address) => {
+            if accepts(options.family, address) {
+                return Result<Endpoint[], Error>.success([Endpoint(address:address, port:port, scope_id:0)])
+            }
+            return Result<Endpoint[], Error>.success([])
+        }
+        failure(error) => {}
+    }
+    if raw_endpoints = Platform.resolve(host, decimal(port as uint), family_code(options.family), transport_code(options.transport)) {
+        var result:Endpoint[] = []
+        for raw in raw_endpoints {
+            let bytes = Platform.endpoint_bytes(raw)
+            var address = IpAddress.ipv6(bytes)
+            if Platform.endpoint_family(raw) == 4 {
+                address = IpAddress.ipv4([bytes[0], bytes[1], bytes[2], bytes[3]])
+            }
+            result.append(Endpoint(
+                address:address,
+                port:Platform.endpoint_port(raw),
+                scope_id:Platform.endpoint_scope(raw)
+            ))
+        }
+        return Result<Endpoint[], Error>.success(result)
+    }
+    return Result<Endpoint[], Error>.failure(Error(
+        kind:ErrorKind.not_found(),
+        operation:"network.resolve",
+        subject:host,
+        detail:"name resolution failed"
+    ))
+}
+
+func accepts(family:Family, address:IpAddress) bool {
+    return match family {
+        any => true
+        ipv4 => address_is_ipv4(address)
+        ipv6 => !address_is_ipv4(address)
+    }
+}
+
+func address_is_ipv4(address:IpAddress) bool {
+    return match address { ipv4(bytes) => true; ipv6(bytes) => false }
+}
+
+func family_code(value:Family) int { return match value { any => 0; ipv4 => 4; ipv6 => 6 } }
+func transport_code(value:Transport) int { return match value { stream => 1; datagram => 2 } }
+
+func parse_ipv4(bytes:uint8[], start:int, end:int) uint8[4]? {
+    var result:uint8[4]
+    var part = 0
+    var index = start
+    while part < 4 {
+        if index >= end { return null }
+        let first = index
+        var value = 0
+        while index < end && bytes[index] != 46 {
+            let byte = bytes[index]
+            if byte < 48 || byte > 57 { return null }
+            value = value * 10 + (byte - 48) as int
+            if value > 255 { return null }
+            index++
+        }
+        if index == first || (index - first > 1 && bytes[first] == 48) { return null }
+        result[part] = value as uint8
+        part++
+        if part < 4 {
+            if index >= end || bytes[index] != 46 { return null }
+            index++
+        } elif index != end { return null }
+    }
+    return result
+}
+
+func parse_ipv6(bytes:uint8[], subject:str) Result<IpAddress, Error> {
+    var double_colon = -1
+    var index = 0
+    while index + 1 < bytes.count() {
+        if bytes[index] == 58 && bytes[index + 1] == 58 {
+            if double_colon >= 0 { return invalid_address(subject) }
+            double_colon = index
+            index += 2
+        } else { index++ }
+    }
+
+    var groups:uint16[] = []
+    if double_colon < 0 {
+        if parsed = parse_groups(bytes, 0, bytes.count()) { groups = parsed }
+        else { return invalid_address(subject) }
+        if groups.count() != 8 { return invalid_address(subject) }
+    } else {
+        var left:uint16[] = []
+        var right:uint16[] = []
+        if double_colon > 0 {
+            if parsed = parse_groups(bytes, 0, double_colon) { left = parsed }
+            else { return invalid_address(subject) }
+        }
+        if double_colon + 2 < bytes.count() {
+            if parsed = parse_groups(bytes, double_colon + 2, bytes.count()) { right = parsed }
+            else { return invalid_address(subject) }
+        }
+        if left.count() + right.count() >= 8 { return invalid_address(subject) }
+        for value in left { groups.append(value) }
+        var zeros = 8 - left.count() - right.count()
+        while zeros > 0 { groups.append(0 as uint16); zeros-- }
+        for value in right { groups.append(value) }
+    }
+    var result:uint8[16]
+    index = 0
+    while index < 8 {
+        result[index * 2] = (groups[index] >> 8) as uint8
+        result[index * 2 + 1] = (groups[index] & 255) as uint8
+        index++
+    }
+    return Result<IpAddress, Error>.success(IpAddress.ipv6(result))
+}
+
+func parse_groups(bytes:uint8[], start:int, end:int) uint16[]? {
+    var result:uint16[] = []
+    var index = start
+    while index < end {
+        let segment_start = index
+        while index < end && bytes[index] != 58 { index++ }
+        if segment_start == index { return null }
+        var has_dot = false
+        var scan = segment_start
+        while scan < index {
+            if bytes[scan] == 46 { has_dot = true }
+            scan++
+        }
+        if has_dot {
+            if index != end { return null }
+            if address = parse_ipv4(bytes, segment_start, index) {
+                result.append(((address[0] as uint16) << 8) + address[1] as uint16)
+                result.append(((address[2] as uint16) << 8) + address[3] as uint16)
+            } else { return null }
+        } else {
+            if index - segment_start > 4 { return null }
+            var value:uint16 = 0
+            scan = segment_start
+            while scan < index {
+                let digit = hex_digit(bytes[scan])
+                if digit < 0 { return null }
+                value = (value << 4) + digit as uint16
+                scan++
+            }
+            result.append(value)
+        }
+        if index < end { index++ }
+    }
+    return result
+}
+
+func format_ipv4(bytes:uint8[4]) str {
+    return decimal(bytes[0] as uint) + "." + decimal(bytes[1] as uint) + "." +
+        decimal(bytes[2] as uint) + "." + decimal(bytes[3] as uint)
+}
+
+func format_ipv6(bytes:uint8[16]) str {
+    var groups:uint16[8]
+    var index = 0
+    while index < 8 {
+        groups[index] = ((bytes[index * 2] as uint16) << 8) + bytes[index * 2 + 1] as uint16
+        index++
+    }
+    var best_start = -1
+    var best_count = 0
+    index = 0
+    while index < 8 {
+        if groups[index] != 0 { index++; continue }
+        let start = index
+        while index < 8 && groups[index] == 0 { index++ }
+        let count = index - start
+        if count >= 2 && count > best_count { best_start = start; best_count = count }
+    }
+    if best_start < 0 { return joined_hex(groups, 0, 8) }
+    let left = joined_hex(groups, 0, best_start)
+    let right = joined_hex(groups, best_start + best_count, 8)
+    if left.count() == 0 && right.count() == 0 { return "::" }
+    if left.count() == 0 { return "::" + right }
+    if right.count() == 0 { return left + "::" }
+    return left + "::" + right
+}
+
+func joined_hex(groups:uint16[8], start:int, end:int) str {
+    var result = ""
+    var index = start
+    while index < end {
+        if index > start { result = result + ":" }
+        result = result + hexadecimal(groups[index])
+        index++
+    }
+    return result
+}
+
+func hexadecimal(value:uint16) str {
+    var bytes:uint8[4]
+    var index = 4
+    var remaining = value
+    if remaining == 0 { return "0" }
+    while remaining > 0 {
+        index--
+        let digit = (remaining & 15) as uint8
+        if digit < 10 { bytes[index] = 48 + digit }
+        else { bytes[index] = 87 + digit }
+        remaining = remaining >> 4
+    }
+    return decoded4(bytes, index, 4)
+}
+
+func decimal(value:uint) str {
+    var bytes:uint8[20]
+    var index = 20
+    var remaining = value
+    if remaining == 0 { return "0" }
+    while remaining > 0 {
+        index--
+        bytes[index] = ((48 as uint) + remaining % 10) as uint8
+        remaining /= 10
+    }
+    return decoded20(bytes, index, 20)
+}
+
+func decoded20(bytes:uint8[20], start:int, end:int) str {
+    let view = @bytes[start:end]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("ASCII network formatting failed") }
+    }
+}
+
+func decoded4(bytes:uint8[4], start:int, end:int) str {
+    let view = @bytes[start:end]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("ASCII network formatting failed") }
+    }
+}
+
+func contains(bytes:uint8[], value:uint8) bool {
+    for byte in bytes { if byte == value { return true } }
+    return false
+}
+
+func hex_digit(byte:uint8) int {
+    if byte >= 48 && byte <= 57 { return (byte - 48) as int }
+    if byte >= 65 && byte <= 70 { return (byte - 55) as int }
+    if byte >= 97 && byte <= 102 { return (byte - 87) as int }
+    return -1
+}
+
+func invalid_address(subject:str) Result<IpAddress, Error> {
+    return Result<IpAddress, Error>.failure(Error(
+        kind:ErrorKind.invalid_input(),
+        operation:"network.parse_ip",
+        subject:subject,
+        detail:"invalid IPv4 or IPv6 address"
+    ))
+}

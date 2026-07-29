@@ -1,0 +1,228 @@
+use Interop.C
+use STD.Text.Data
+use STD.Text.UTF8
+
+public enum Normalization { nfc; nfd; nfkc; nfkd }
+
+public func normalize(text:str, form:Normalization) str {
+    let input = UTF8.scalars(text)
+    var decomposed:uint32[] = []
+    let compatible = match form { nfc => false; nfd => false; nfkc => true; nfkd => true }
+    for scalar in input { append_decomposed(decomposed, scalar, compatible) }
+    let composed = match form { nfc => true; nfd => false; nfkc => true; nfkd => false }
+    if composed { return encoded(compose(decomposed)) }
+    return encoded(decomposed)
+}
+public func is_normalized(text:str, form:Normalization) bool { return text == normalize(text, form) }
+public func lowercase(text:str) str { return map_case(text, 1) }
+public func uppercase(text:str) str { return map_case(text, 2) }
+public func case_fold(text:str) str { return map_case(text, 3) }
+public func unicode_version() str { return "17.0.0" }
+
+func append_decomposed(output:&uint32[], scalar:uint32, compatible:bool) {
+    if scalar >= 0xAC00 && scalar <= 0xD7A3 {
+        let offset = scalar - 0xAC00
+        let leading:uint32 = 0x1100 + offset / 588
+        let vowel:uint32 = 0x1161 + (offset % 588) / 28
+        let trailing = offset % 28
+        append_ordered(output, leading)
+        append_ordered(output, vowel)
+        if trailing != 0 { append_ordered(output, (0x11A7 as uint32) + trailing) }
+        return
+    }
+    if values = decomposition(scalar, compatible) {
+        for value in values { append_decomposed(output, value, compatible) }
+        return
+    }
+    append_ordered(output, scalar)
+}
+
+func append_ordered(output:&uint32[], scalar:uint32) {
+    output.append(scalar)
+    let current = combining_class(scalar)
+    if current == 0 { return }
+    var index = output.count() - 1
+    while index > 0 {
+        let previous = combining_class(output[index - 1])
+        if previous == 0 || previous <= current { return }
+        let temporary = output[index - 1]
+        output[index - 1] = output[index]
+        output[index] = temporary
+        index--
+    }
+}
+
+func compose(values:uint32[]) uint32[] {
+    if values.count() == 0 { return [] }
+    var result:uint32[] = [values[0]]
+    var starter_index = 0
+    var starter = values[0]
+    var previous_class:uint32 = 0
+    var index = 1
+    while index < values.count() {
+        let scalar = values[index]
+        let current_class = combining_class(scalar)
+        let candidate = composite(starter, scalar)
+        if candidate != 0 && (previous_class < current_class || previous_class == 0) {
+            result[starter_index] = candidate
+            starter = candidate
+        } else {
+            if current_class == 0 {
+                starter_index = result.count()
+                starter = scalar
+            }
+            result.append(scalar)
+            previous_class = current_class
+        }
+        index++
+    }
+    return result
+}
+
+func composite(first:uint32, second:uint32) uint32 {
+    if first >= 0x1100 && first <= 0x1112 && second >= 0x1161 && second <= 0x1175 {
+        return (0xAC00 as uint32) + ((first - 0x1100) * 21 + (second - 0x1161)) * 28
+    }
+    if first >= 0xAC00 && first <= 0xD7A3 && (first - 0xAC00) % 28 == 0 && second >= 0x11A8 && second <= 0x11C2 {
+        return first + second - 0x11A7
+    }
+    let keys = Data.composition_keys()
+    let record = find_pair(keys, first, second)
+    if record < 0 { return 0 }
+    return read_u21(Data.composition_values(), record * 4)
+}
+
+func decomposition(scalar:uint32, compatible:bool) uint32[]? {
+    let record = find_key(Data.decomposition_keys(), scalar)
+    if record < 0 { return null }
+    let metadata = Data.decomposition_metadata()
+    if read_digit(metadata, record * 6 + 5) != 0 && !compatible { return null }
+    let offset = read_u21(metadata, record * 6) as int
+    let count = read_digit(metadata, record * 6 + 4) as int
+    return read_values(Data.decomposition_values(), offset, count)
+}
+
+func combining_class(scalar:uint32) uint32 {
+    let record = find_key(Data.combining_keys(), scalar)
+    if record < 0 { return 0 }
+    return read_u21(Data.combining_values(), record * 4)
+}
+
+func map_case(text:str, kind:int) str {
+    let input = UTF8.scalars(text)
+    var output:uint32[] = []
+    var index = 0
+    while index < input.count() {
+        let scalar = input[index]
+        if kind == 1 && scalar == 0x03A3 && final_sigma(input, index) {
+            output.append(0x03C2 as uint32)
+        } else {
+            var keys = Data.lowercase_keys()
+            var metadata = Data.lowercase_metadata()
+            var values = Data.lowercase_values()
+            if kind == 2 {
+                keys = Data.uppercase_keys()
+                metadata = Data.uppercase_metadata()
+                values = Data.uppercase_values()
+            } elif kind == 3 {
+                keys = Data.fold_keys()
+                metadata = Data.fold_metadata()
+                values = Data.fold_values()
+            }
+            if mapped = case_mapping(keys, metadata, values, scalar) { for value in mapped { output.append(value) } }
+            else { output.append(scalar) }
+        }
+        index++
+    }
+    return encoded(output)
+}
+
+func case_mapping(keys:str, metadata:str, values:str, scalar:uint32) uint32[]? {
+    let record = find_key(keys, scalar)
+    if record < 0 { return null }
+    let offset = read_u21(metadata, record * 5) as int
+    let count = read_digit(metadata, record * 5 + 4) as int
+    return read_values(values, offset, count)
+}
+
+func final_sigma(values:uint32[], index:int) bool {
+    var before = index
+    var preceded = false
+    while before > 0 {
+        before--
+        let scalar = values[before]
+        if in_plain_ranges(Data.case_ignorable_ranges(), scalar) { continue }
+        preceded = in_plain_ranges(Data.cased_ranges(), scalar)
+        break
+    }
+    if !preceded { return false }
+    var after = index + 1
+    while after < values.count() {
+        let scalar = values[after]
+        if in_plain_ranges(Data.case_ignorable_ranges(), scalar) {
+            after++
+            continue
+        }
+        return !in_plain_ranges(Data.cased_ranges(), scalar)
+    }
+    return true
+}
+
+func encoded(values:uint32[]) str {
+    let view = @values[0:values.count()]
+    match UTF8.from_scalars(view) {
+        success(text) => { return text }
+        failure(error) => { panic("Unicode table produced an invalid scalar") }
+    }
+}
+func read_values(data:str, offset:int, count:int) uint32[] {
+    var result:uint32[] = []
+    var index = 0
+    while index < count {
+        result.append(read_u21(data, (offset + index) * 4))
+        index++
+    }
+    return result
+}
+func find_key(data:str, scalar:uint32) int {
+    var first = 0
+    var last = (C.byte_count(data) / 4) as int
+    while first < last {
+        let middle = first + (last - first) / 2
+        if read_u21(data, middle * 4) < scalar { first = middle + 1 } else { last = middle }
+    }
+    if first * 4 < C.byte_count(data) as int && read_u21(data, first * 4) == scalar { return first }
+    return -1
+}
+func find_pair(data:str, first_scalar:uint32, second_scalar:uint32) int {
+    var first = 0
+    var last = (C.byte_count(data) / 8) as int
+    while first < last {
+        let middle = first + (last - first) / 2
+        let left = read_u21(data, middle * 8)
+        let right = read_u21(data, middle * 8 + 4)
+        if left < first_scalar || (left == first_scalar && right < second_scalar) { first = middle + 1 } else { last = middle }
+    }
+    if first * 8 < C.byte_count(data) as int && read_u21(data, first * 8) == first_scalar && read_u21(data, first * 8 + 4) == second_scalar { return first }
+    return -1
+}
+func in_plain_ranges(data:str, scalar:uint32) bool {
+    var first = 0
+    var last = (C.byte_count(data) / 8) as int
+    while first < last {
+        let middle = first + (last - first) / 2
+        if read_u21(data, middle * 8 + 4) < scalar { first = middle + 1 } else { last = middle }
+    }
+    return first * 8 < C.byte_count(data) as int && read_u21(data, first * 8) <= scalar
+}
+func read_u21(data:str, offset:int) uint32 {
+    return (read_digit(data, offset) << 18) + (read_digit(data, offset + 1) << 12) + (read_digit(data, offset + 2) << 6) + read_digit(data, offset + 3)
+}
+func read_digit(data:str, offset:int) uint32 {
+    let byte = C.byte_at(data, offset as uint)
+    if byte >= 65 && byte <= 90 { return (byte - 65) as uint32 }
+    if byte >= 97 && byte <= 122 { return (byte - 97 + 26) as uint32 }
+    if byte >= 48 && byte <= 57 { return (byte - 48 + 52) as uint32 }
+    if byte == 43 { return 62 }
+    return 63
+}

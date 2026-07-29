@@ -1,0 +1,90 @@
+use STD.System.PlatformSelection
+use STD.System.TargetSelection
+
+public enum Platform {
+    macos
+    linux
+    windows
+}
+
+public enum Architecture {
+    arm64
+    x64
+}
+
+public struct Target {
+    let platform:Platform
+    let architecture:Architecture
+}
+
+public func platform() Platform {
+    let value = PlatformSelection.value()
+    if value == 1 { return Platform.macos() }
+    if value == 2 { return Platform.linux() }
+    if value == 3 { return Platform.windows() }
+    panic("STD platform selection is invalid")
+}
+
+public func target() Target {
+    let selected_platform = platform()
+    let architecture = TargetSelection.architecture()
+    if architecture == 1 { return Target(platform:selected_platform, architecture:Architecture.arm64()) }
+    if architecture == 2 { return Target(platform:selected_platform, architecture:Architecture.x64()) }
+    panic("STD target selection is invalid")
+}
+
+public func platform_name(value:Platform) str {
+    return match value {
+        macos => "macos"
+        linux => "linux"
+        windows => "windows"
+    }
+}
+
+public func target_name(value:Target) str {
+    return platform_name(value.platform) + "-" + match value.architecture {
+        arm64 => "arm64"
+        x64 => "x64"
+    }
+}
+
+public enum ErrorKind {
+    not_found
+    already_exists
+    permission_denied
+    invalid_input
+    invalid_data
+    name_too_long
+    unexpected_end
+    limit_exceeded
+    not_directory
+    is_directory
+    directory_not_empty
+    resource_busy
+    resource_exhausted
+    too_many_open_files
+    read_only_file_system
+    cross_device
+    interrupted
+    would_block
+    timed_out
+    broken_pipe
+    message_too_large
+    address_in_use
+    address_unavailable
+    network_unreachable
+    host_unreachable
+    connection_refused
+    connection_aborted
+    connection_reset
+    not_connected
+    unsupported
+    other
+}
+
+public struct Error {
+    let kind:ErrorKind
+    let operation:str
+    let subject:str?
+    let detail:str
+}

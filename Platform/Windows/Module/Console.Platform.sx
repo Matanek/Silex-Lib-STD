@@ -1,0 +1,59 @@
+use Interop.C
+use Interop.Windows
+
+let crt_write = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(
+    library:Windows.ucrtbase,
+    name:"_write"
+)
+
+let crt_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(
+    library:Windows.ucrtbase,
+    name:"_read"
+)
+
+let crt_isatty = C.function<func(int32) int32>(library:Windows.ucrtbase, name:"_isatty")
+let get_std_handle = C.function<func(int32) uint>(library:Windows.kernel32, name:"GetStdHandle")
+let get_console_screen_buffer_info = C.function<func(uint, C.MutablePointer<int>) int32>(
+    library:Windows.kernel32,
+    name:"GetConsoleScreenBufferInfo"
+)
+
+func write_descriptor(descriptor:int, text:str) {
+    let count = C.byte_count(text)
+    if count > 0xFFFF_FFFF { panic("console write exceeds the Windows CRT limit") }
+    let written = crt_write(descriptor as int32, C.pointer(text), count as uint32)
+    if written < 0 || written as uint != count { panic("console write failed") }
+}
+
+func read_byte() int {
+    var byte:uint32 = 0
+    let count = crt_read(0, C.mutable_pointer(byte), 1)
+    if count == 0 { return -1 }
+    if count != 1 { panic("console read failed") }
+    return (byte & 255) as int
+}
+
+func interactive() bool { return crt_isatty(1) != 0 }
+
+func dimensions() int {
+    // CONSOLE_SCREEN_BUFFER_INFO occupies 22 contiguous bytes. Three Silex
+    // integer slots provide 24 writable bytes without exposing that Win32
+    // structure to the portable Console API.
+    var info:int[3] = [0, 0, 0]
+    let stdout_handle = get_std_handle(-11)
+    if get_console_screen_buffer_info(stdout_handle, C.mutable_pointer(info)) == 0 { return -1 }
+    let middle = info[1] as uint
+    let left = signed_word((middle >> 16) & 0xFFFF)
+    let top = signed_word((middle >> 32) & 0xFFFF)
+    let right = signed_word((middle >> 48) & 0xFFFF)
+    let bottom = signed_word((info[2] as uint) & 0xFFFF)
+    let columns = right - left + 1
+    let rows = bottom - top + 1
+    if columns <= 0 || rows <= 0 { return -1 }
+    return (((columns as uint) << 16) + (rows as uint)) as int
+}
+
+func signed_word(value:uint) int {
+    if value >= 0x8000 { return value as int - 0x1_0000 }
+    return value as int
+}

@@ -1,0 +1,71 @@
+use STD.Time.Internal.monotonic_microseconds
+use STD.Time.Internal.seconds_between
+
+public struct Clock {
+    var last_microseconds:int
+    var pending_seconds:float
+    var total_seconds:float
+    var time_scale:float = 1.0
+    var initialized:bool
+    var paused:bool
+
+    func tick() float {
+        if self.paused { return 0.0 }
+        let now = monotonic_microseconds()
+        if !self.initialized {
+            self.last_microseconds = now
+            self.initialized = true
+            return 0.0
+        }
+        let elapsed = self.pending_seconds + seconds_between(self.last_microseconds, now) * self.time_scale
+        self.pending_seconds = 0.0
+        self.total_seconds += elapsed
+        self.last_microseconds = now
+        return elapsed
+    }
+
+    func reset() {
+        self.last_microseconds = 0
+        self.pending_seconds = 0.0
+        self.total_seconds = 0.0
+        self.initialized = false
+        self.paused = false
+    }
+
+    func pause() {
+        if self.paused { return }
+        if self.initialized {
+            let now = monotonic_microseconds()
+            self.pending_seconds += seconds_between(self.last_microseconds, now) * self.time_scale
+            self.last_microseconds = now
+        }
+        self.paused = true
+    }
+
+    func resume() {
+        if !self.paused { return }
+        if self.initialized { self.last_microseconds = monotonic_microseconds() }
+        self.paused = false
+    }
+
+    func is_paused() bool { return self.paused }
+
+    func set_time_scale(scale:float) {
+        if self.initialized && !self.paused {
+            let now = monotonic_microseconds()
+            self.pending_seconds += seconds_between(self.last_microseconds, now) * self.time_scale
+            self.last_microseconds = now
+        }
+        self.time_scale = scale
+    }
+
+    func get_time_scale() float { return self.time_scale }
+
+    func get_total_seconds() float {
+        if !self.initialized || self.paused { return self.total_seconds + self.pending_seconds }
+        let active = seconds_between(self.last_microseconds, monotonic_microseconds()) * self.time_scale
+        return self.total_seconds + self.pending_seconds + active
+    }
+
+    func get_total_milliseconds() float { return self.get_total_seconds() * 1_000.0 }
+}

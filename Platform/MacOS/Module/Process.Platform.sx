@@ -1,0 +1,63 @@
+use Interop.C
+use Interop.MacOS
+use STD.Text.UTF8
+
+let system_argc = C.function<func() C.Pointer<uint8> >(library:MacOS.lib_system, name:"_NSGetArgc")
+let system_argv = C.function<func() C.Pointer<uint8> >(library:MacOS.lib_system, name:"_NSGetArgv")
+let system_getcwd = C.function<func(C.MutablePointer<int>, C.Size) C.Pointer<uint8> >(library:MacOS.lib_system, name:"getcwd")
+let system_chdir = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"chdir")
+let system_executable_path = C.function<func(C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:MacOS.lib_system, name:"_NSGetExecutablePath")
+let system_getpid = C.function<func() int32>(library:MacOS.lib_system, name:"getpid")
+
+func arguments() str[]? {
+    var result:str[] = []
+    let count_root = C.address_bits(system_argc())
+    let arguments_root = C.address_bits(system_argv())
+    if count_root == 0 || arguments_root == 0 { return result }
+    let count = C.load<int32>(count_root, 0 as uint)
+    let arguments = C.address_at(arguments_root, 0 as uint)
+    var index = 0
+    while index < count {
+        let argument = C.address_at(arguments, (index as uint) * 8)
+        if argument == 0 { return result }
+        result.append(text_at(argument))
+        index++
+    }
+    return result
+}
+
+func current_directory() str? {
+    var buffer:int[512]
+    let returned = C.address_bits(system_getcwd(C.mutable_pointer(buffer), 4096 as C.Size))
+    if returned == 0 { return null }
+    return text_at(returned)
+}
+
+func set_current_directory(path:str) bool { return system_chdir(C.terminated_pointer(path)) == 0 }
+
+func executable_path() str? {
+    var buffer:int[512]
+    var size:uint32 = 4096
+    if system_executable_path(C.mutable_pointer(buffer), C.mutable_pointer(size)) != 0 { return null }
+    return text_at(C.address_bits(C.mutable_pointer(buffer)))
+}
+
+func id() uint { return system_getpid() as uint }
+
+func text_at(address:uint) str {
+    var bytes:uint8[] = []
+    var offset:uint = 0
+    while offset < 4096 {
+        let byte = C.load<uint8>(address, offset)
+        if byte == 0 {
+            let view = @bytes[0:bytes.count()]
+            match UTF8.decode(view) {
+                success(text) => { return text }
+                failure(error) => { panic("system process text contains invalid UTF-8") }
+            }
+        }
+        bytes.append(byte)
+        offset++
+    }
+    panic("system process text exceeds 4096 bytes")
+}

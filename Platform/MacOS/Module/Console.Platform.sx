@@ -1,0 +1,42 @@
+use Interop.C
+use Interop.MacOS
+
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(
+    library:MacOS.lib_system,
+    name:"write"
+)
+
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(
+    library:MacOS.lib_system,
+    name:"read"
+)
+
+let isatty = C.function<func(int32) int32>(library:MacOS.lib_system, name:"isatty")
+
+let ioctl = C.function<func(int32, uint, C.MutablePointer<uint32>) int32>(
+    library:MacOS.lib_system,
+    name:"__ioctl"
+)
+
+func write_descriptor(descriptor:int, text:str) {
+    let count = C.byte_count(text)
+    let written = system_write(descriptor as int32, C.pointer(text), count)
+    if written != count as C.SignedSize { panic("console write failed") }
+}
+
+func read_byte() int {
+    var byte:uint32 = 0
+    let count = system_read(0, C.mutable_pointer(byte), 1 as C.Size)
+    if count == 0 { return -1 }
+    if count != 1 { panic("console read failed") }
+    return (byte & 255) as int
+}
+
+func interactive() bool { return isatty(1) != 0 }
+
+func dimensions() int {
+    var packed:uint32 = 0
+    let tiocgwinsz:uint = 0x40087468
+    if ioctl(1, tiocgwinsz, C.mutable_pointer(packed)) != 0 { return -1 }
+    return packed as int
+}

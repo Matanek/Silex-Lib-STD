@@ -1,0 +1,212 @@
+use Interop.C
+use STD.Console
+use STD.Console.Session.Platform
+use STD.Collections.Queue.Queue as Queue
+use STD.Text.UTF8
+
+public enum Key {
+    character(str)
+    enter
+    escape
+    tab
+    backspace
+    delete
+    arrow_up
+    arrow_down
+    arrow_left
+    arrow_right
+    home
+    end
+    page_up
+    page_down
+    function(int)
+    unknown(str)
+}
+
+public struct KeyEvent {
+    let key:Key
+    let shift:bool
+    let control:bool
+    let alt:bool
+}
+
+public class Session {
+    private var original:int[9]
+    private var open:bool
+    private var alternate:bool
+
+    public init() {
+        if let state = Platform.activate() {
+            self.original = state
+            self.open = true
+            self.alternate = false
+        } else {
+            panic("Console.Session requires an interactive terminal")
+        }
+    }
+
+    public func read_key() KeyEvent {
+        if !self.open { panic("Console.Session.read_key requires an open session") }
+        if let event = read_event(-1) { return event }
+        panic("Console.Session.read_key failed")
+    }
+
+    public func poll_key(timeout_milliseconds:int) KeyEvent? {
+        if !self.open { panic("Console.Session.poll_key requires an open session") }
+        if timeout_milliseconds < 0 { panic("Console.Session.poll_key requires a non-negative timeout") }
+        return read_event(timeout_milliseconds)
+    }
+
+    public func poll_keys(maximum_count:int, timeout_milliseconds:int) Queue<KeyEvent> {
+        if maximum_count <= 0 { panic("Console.Session.poll_keys requires a positive maximum count") }
+        var events = Queue<KeyEvent>(maximum_count)
+        if let first = self.poll_key(timeout_milliseconds) { events.add(first) }
+        else { return events }
+        while events.count() < maximum_count {
+            if let event = self.poll_key(0) { events.add(event) }
+            else { return events }
+        }
+        return events
+    }
+
+    public func enter_alternate_screen() {
+        if !self.open { panic("Console.Session is closed") }
+        if !self.alternate {
+            Console.write("\u{1b}[?1049h")
+            self.alternate = true
+        }
+    }
+
+    public func leave_alternate_screen() {
+        if !self.open { panic("Console.Session is closed") }
+        if self.alternate {
+            Console.write("\u{1b}[?1049l")
+            self.alternate = false
+        }
+    }
+
+    public func is_open() bool { return self.open }
+
+    public func close() {
+        if !self.open { return }
+        if self.alternate { Console.write("\u{1b}[?1049l") }
+        Console.write("\u{1b}[0m\u{1b}[?25h")
+        if !Platform.restore(self.original) { panic("Console.Session could not restore the terminal") }
+        self.open = false
+        self.alternate = false
+    }
+
+    drop {
+        if self.open {
+            if self.alternate { Console.write("\u{1b}[?1049l") }
+            Console.write("\u{1b}[0m\u{1b}[?25h")
+            let ignored = Platform.restore(self.original)
+        }
+    }
+}
+
+func read_event(timeout:int) KeyEvent? {
+    let first = Platform.poll_byte(timeout)
+    if first == -1 { return null }
+    if first < 0 { panic("Console.Session input failed") }
+    if first == 13 || first == 10 { return event(Key.enter()) }
+    if first == 9 { return event(Key.tab()) }
+    if first == 8 || first == 127 { return event(Key.backspace()) }
+    if first >= 1 && first <= 26 {
+        return KeyEvent(key:Key.character(single((first + 96) as uint8)), shift:false, control:true, alt:false)
+    }
+    if first != 27 { return character(first, false) }
+
+    let second = Platform.poll_byte(25)
+    if second == -1 { return event(Key.escape()) }
+    if second < 0 { panic("Console.Session input failed") }
+    if second != 91 && second != 79 {
+        if second == 13 || second == 10 { return modified(Key.enter(), false, false, true) }
+        return character(second, true)
+    }
+
+    var sequence:uint8[] = [second as uint8]
+    var final = Platform.poll_byte(25)
+    while final >= 0 && (final < 64 || final > 126) && sequence.count() < 16 {
+        sequence.append(final as uint8)
+        final = Platform.poll_byte(25)
+    }
+    if final < 0 { return unknown(sequence) }
+    sequence.append(final as uint8)
+    return escape_sequence(sequence)
+}
+
+func escape_sequence(bytes:uint8[]) KeyEvent {
+    let final = bytes[bytes.count() - 1]
+    if final == 65 { return event(Key.arrow_up()) }
+    if final == 66 { return event(Key.arrow_down()) }
+    if final == 67 { return event(Key.arrow_right()) }
+    if final == 68 { return event(Key.arrow_left()) }
+    if final == 72 { return event(Key.home()) }
+    if final == 70 { return event(Key.end()) }
+    if bytes[0] == 79 && final >= 80 && final <= 83 { return event(Key.function((final - 79) as int)) }
+    if final == 126 {
+        let number = decimal(bytes, 1, bytes.count() - 1)
+        if number == 1 || number == 7 { return event(Key.home()) }
+        if number == 3 { return event(Key.delete()) }
+        if number == 4 || number == 8 { return event(Key.end()) }
+        if number == 5 { return event(Key.page_up()) }
+        if number == 6 { return event(Key.page_down()) }
+        let function_number = function_key(number)
+        if function_number > 0 { return event(Key.function(function_number)) }
+    }
+    return unknown(bytes)
+}
+
+func character(first:int, alt:bool) KeyEvent {
+    var bytes:uint8[] = [first as uint8]
+    var length = 1
+    if first >= 194 && first <= 223 { length = 2 }
+    elif first >= 224 && first <= 239 { length = 3 }
+    elif first >= 240 && first <= 244 { length = 4 }
+    while bytes.count() < length {
+        let next = Platform.poll_byte(25)
+        if next < 0 { return unknown(bytes) }
+        bytes.append(next as uint8)
+    }
+    let view = @bytes[0:bytes.count()]
+    match UTF8.decode(view) {
+        success(text) => { return KeyEvent(key:Key.character(text), shift:false, control:false, alt:alt) }
+        failure(error) => { return unknown(bytes) }
+    }
+}
+
+func single(value:uint8) str {
+    var bytes:uint8[1] = [value]
+    return C.string(@bytes[0:1])
+}
+
+func unknown(bytes:uint8[]) KeyEvent {
+    let view = @bytes[0:bytes.count()]
+    return event(Key.unknown(C.string(view)))
+}
+
+func decimal(bytes:uint8[], start:int, end:int) int {
+    var value = 0
+    var index = start
+    while index < end && bytes[index] >= 48 && bytes[index] <= 57 {
+        value = value * 10 + (bytes[index] - 48) as int
+        index++
+    }
+    return value
+}
+
+func function_key(code:int) int {
+    let codes:int[] = [11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24]
+    var index = 0
+    while index < codes.count() {
+        if codes[index] == code { return index + 1 }
+        index++
+    }
+    return 0
+}
+
+func event(key:Key) KeyEvent { return KeyEvent(key:key, shift:false, control:false, alt:false) }
+func modified(key:Key, shift:bool, control:bool, alt:bool) KeyEvent {
+    return KeyEvent(key:key, shift:shift, control:control, alt:alt)
+}

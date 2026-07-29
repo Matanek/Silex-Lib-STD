@@ -1,0 +1,60 @@
+use Interop.C
+use Interop.Windows
+
+let crt_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(library:Windows.ucrtbase, name:"_read")
+let get_std_handle = C.function<func(int32) uint>(library:Windows.kernel32, name:"GetStdHandle")
+let get_console_mode = C.function<func(uint, C.MutablePointer<uint32>) int32>(library:Windows.kernel32, name:"GetConsoleMode")
+let set_console_mode = C.function<func(uint, uint32) int32>(library:Windows.kernel32, name:"SetConsoleMode")
+let get_console_cp = C.function<func() uint32>(library:Windows.kernel32, name:"GetConsoleCP")
+let set_console_cp = C.function<func(uint32) int32>(library:Windows.kernel32, name:"SetConsoleCP")
+let wait_for_single_object = C.function<func(uint, uint32) uint32>(library:Windows.kernel32, name:"WaitForSingleObject")
+
+func activate() int[9]? {
+    let input = get_std_handle(-10)
+    let output = get_std_handle(-11)
+    var input_mode:uint32 = 0
+    var output_mode:uint32 = 0
+    if get_console_mode(input, C.mutable_pointer(input_mode)) == 0 { return null }
+    if get_console_mode(output, C.mutable_pointer(output_mode)) == 0 { return null }
+    let input_mask:uint32 = 0xFFFF_FFFF ^ 0x2C7
+    let raw_input:uint32 = (input_mode & input_mask) + 0x280
+    let output_mask:uint32 = 0xFFFF_FFFF ^ 0x4
+    let raw_output:uint32 = (output_mode & output_mask) + 0x4
+    if set_console_mode(input, raw_input) == 0 { return null }
+    if set_console_mode(output, raw_output) == 0 {
+        let ignored = set_console_mode(input, input_mode)
+        return null
+    }
+    let code_page = get_console_cp()
+    if set_console_cp(65001) == 0 {
+        let ignored_input = set_console_mode(input, input_mode)
+        let ignored_output = set_console_mode(output, output_mode)
+        return null
+    }
+    var result:int[9] = [input as int, input_mode as int, output as int, output_mode as int, code_page as int, 0, 0, 0, 0]
+    return result
+}
+
+func restore(original:int[9]) bool {
+    let input = original[0] as uint
+    let output = original[2] as uint
+    let input_restored = set_console_mode(input, original[1] as uint32) != 0
+    let output_restored = set_console_mode(output, original[3] as uint32) != 0
+    let code_page_restored = set_console_cp(original[4] as uint32) != 0
+    return input_restored && output_restored && code_page_restored
+}
+
+func poll_byte(timeout_milliseconds:int) int {
+    let input = get_std_handle(-10)
+    var timeout:uint32 = 0xFFFF_FFFF
+    if timeout_milliseconds >= 0 {
+        if timeout_milliseconds > 0xFFFF_FFFE { timeout = 0xFFFF_FFFE }
+        else { timeout = timeout_milliseconds as uint32 }
+    }
+    let status = wait_for_single_object(input, timeout)
+    if status == 258 { return -1 }
+    if status != 0 { return -2 }
+    var byte:uint32 = 0
+    if crt_read(0, C.mutable_pointer(byte), 1) != 1 { return -2 }
+    return (byte & 255) as int
+}

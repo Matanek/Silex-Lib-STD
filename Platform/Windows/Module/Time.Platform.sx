@@ -1,0 +1,24 @@
+use Interop.C
+use Interop.Windows
+
+let query_performance_counter = C.function<func(C.MutablePointer<int>) int32>(
+    library:Windows.kernel32,
+    name:"QueryPerformanceCounter"
+)
+
+let query_performance_frequency = C.function<func(C.MutablePointer<int>) int32>(
+    library:Windows.kernel32,
+    name:"QueryPerformanceFrequency"
+)
+
+func monotonic_microseconds() int {
+    var counter:int = 0
+    var frequency:int = 0
+    if query_performance_counter(C.mutable_pointer(counter)) == 0 {
+        panic("Windows QueryPerformanceCounter failed")
+    }
+    if query_performance_frequency(C.mutable_pointer(frequency)) == 0 || frequency <= 0 {
+        panic("Windows QueryPerformanceFrequency failed")
+    }
+    return (counter / frequency) * 1_000_000 + ((counter % frequency) * 1_000_000) / frequency
+}

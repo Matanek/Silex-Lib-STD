@@ -1,0 +1,25 @@
+use STD.Time.Clock
+use STD.Time.Stopwatch
+
+func main() {
+    var stopwatch = Stopwatch()
+    assert(!stopwatch.is_running(), "new stopwatch is stopped")
+    stopwatch.start()
+    assert(stopwatch.is_running(), "started stopwatch is running")
+    let first = stopwatch.get_elapsed_seconds()
+    let second = stopwatch.get_elapsed_seconds()
+    assert(first >= 0.0 && second >= first, "stopwatch is monotonic")
+    stopwatch.stop()
+    assert(!stopwatch.is_running(), "stopped stopwatch is stopped")
+
+    var clock = Clock()
+    assert(clock.tick() == 0.0, "first clock tick initializes")
+    clock.set_time_scale(2.0)
+    assert(clock.get_time_scale() == 2.0, "clock time scale")
+    assert(clock.tick() >= 0.0, "clock tick is monotonic")
+    clock.pause()
+    assert(clock.is_paused(), "clock pauses")
+    assert(clock.tick() == 0.0, "paused clock does not advance")
+    clock.resume()
+    assert(!clock.is_paused(), "clock resumes")
+}

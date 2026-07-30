@@ -12,6 +12,15 @@ test "scalar math" {
     assert(Math.saturate(-1.0) == 0.0, "saturate lower")
     assert(Math.saturate(2.0) == 1.0, "saturate upper")
     assert(Math.abs(-42.0) == 42.0, "absolute")
+    assert(Math.trunc(3.75) == 3.0, "truncate positive")
+    assert(Math.trunc(-3.75) == -3.0, "truncate negative")
+    assert(Math.floor(3.75) == 3.0, "floor positive")
+    assert(Math.floor(-3.25) == -4.0, "floor negative")
+    assert(Math.ceil(3.25) == 4.0, "ceil positive")
+    assert(Math.ceil(-3.75) == -3.0, "ceil negative")
+    assert(Math.round(3.5) == 4.0, "round positive half")
+    assert(Math.round(-3.5) == -4.0, "round negative half")
+    assert(Math.trunc(8388608.0) == 8388608.0, "large floats are integral")
     assert(Math.lerp(10.0, 20.0, 0.25) == 12.5, "lerp")
     assert(Math.mix(10.0, 20.0, 0.25) == 12.5, "mix")
     assert(Math.nearly_equal(1.0, 1.0000005), "default tolerance")
@@ -51,6 +60,10 @@ test "Vec2" {
     assert(vector.normalized().nearly_equal(Math.Vec2(0.6, 0.8), 0.00001), "Vec2 normalized")
     assert(vector.add(Math.Vec2.one()).nearly_equal(Math.Vec2(4.0, 5.0)), "Vec2 addition")
     assert(vector.lerp(Math.Vec2(5.0, 8.0), 0.5).nearly_equal(Math.Vec2(4.0, 6.0)), "Vec2 lerp")
+    assert(Math.Vec2(1.25, -1.75).floor() == Math.Vec2(1.0, -2.0), "Vec2 floor")
+    assert(Math.Vec2(1.25, -1.75).ceil() == Math.Vec2(2.0, -1.0), "Vec2 ceil")
+    assert(Math.Vec2(1.5, -1.5).round() == Math.Vec2(2.0, -2.0), "Vec2 round")
+    assert(Math.Vec2(1.75, -1.75).trunc() == Math.Vec2(1.0, -1.0), "Vec2 trunc")
     assert(Math.Vec2.right().to_str() == "{ 1.0 0.0 }", "Vec2 extensions")
 }
 
@@ -62,6 +75,10 @@ test "Vec3" {
     assert(right.dot(up) == 0.0, "Vec3 orthogonal dot product")
     assert(Math.Vec3(2.0, 0.0, 0.0).normalized().nearly_equal(right), "Vec3 normalized")
     assert(Math.Vec3(1.0, 2.0, 3.0).distance(Math.Vec3(1.0, 2.0, 6.0)) == 3.0, "Vec3 distance")
+    assert(Math.Vec3(1.25, -1.75, 2.5).floor() == Math.Vec3(1.0, -2.0, 2.0), "Vec3 floor")
+    assert(Math.Vec3(1.25, -1.75, 2.5).ceil() == Math.Vec3(2.0, -1.0, 3.0), "Vec3 ceil")
+    assert(Math.Vec3(1.5, -1.5, 2.5).round() == Math.Vec3(2.0, -2.0, 3.0), "Vec3 round")
+    assert(Math.Vec3(1.75, -1.75, 2.75).trunc() == Math.Vec3(1.0, -1.0, 2.0), "Vec3 trunc")
     assert(right.to_str() == "{ 1.0 0.0 0.0 }", "Vec3 extensions")
 }
 
@@ -71,6 +88,28 @@ test "Vec4" {
     assert(vector.multiply(2.0).nearly_equal(Math.Vec4(2.0, 4.0, 6.0, 8.0)), "Vec4 scalar multiply")
     assert(Math.Vec4.unit_w().dot(vector) == 4.0, "Vec4 unit w")
     assert(Math.Vec4.zero().normalized().nearly_equal(Math.Vec4.zero()), "Vec4 zero normalized")
+    assert(Math.Vec4(1.25, -1.75, 2.5, -2.5).floor() == Math.Vec4(1.0, -2.0, 2.0, -3.0), "Vec4 floor")
+    assert(Math.Vec4(1.25, -1.75, 2.5, -2.5).ceil() == Math.Vec4(2.0, -1.0, 3.0, -2.0), "Vec4 ceil")
+    assert(Math.Vec4(1.5, -1.5, 2.5, -2.5).round() == Math.Vec4(2.0, -2.0, 3.0, -3.0), "Vec4 round")
+    assert(Math.Vec4(1.75, -1.75, 2.75, -2.75).trunc() == Math.Vec4(1.0, -1.0, 2.0, -2.0), "Vec4 trunc")
+}
+
+test "Rect" {
+    let area = Math.Rect(10.0, 20.0, 100.0, 50.0)
+    assert(area.position() == Math.Vec2(10.0, 20.0), "Rect position")
+    assert(area.size() == Math.Vec2(100.0, 50.0), "Rect size")
+    assert(area.center() == Math.Vec2(60.0, 45.0), "Rect center")
+    assert(area.contains(Math.Vec2(10.0, 20.0)), "Rect contains minimum")
+    assert(!area.contains(Math.Vec2(110.0, 70.0)), "Rect excludes maximum")
+    let overlap = Math.Rect(80.0, 40.0, 50.0, 50.0)
+    assert(area.intersects(overlap), "Rect intersection test")
+    if let intersection = area.intersection(overlap) {
+        assert(intersection == Math.Rect(80.0, 40.0, 30.0, 30.0), "Rect intersection")
+    } else {
+        assert(false, "Rect intersection exists")
+    }
+    assert(area.translated(Math.Vec2(5.0, -5.0)) == Math.Rect(15.0, 15.0, 100.0, 50.0), "Rect translation")
+    assert(area.scaled(Math.Vec2(2.0, 0.5)) == Math.Rect(20.0, 10.0, 200.0, 25.0), "Rect scale")
 }
 
 test "Quat" {

@@ -1,0 +1,60 @@
+use STD.Math
+use STD.Math.Vec2 as Vec2
+
+public struct Rect {
+    var x:float
+    var y:float
+    var w:float
+    var h:float
+
+    init() {}
+
+    init(x:float, y:float, w:float, h:float) {
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+    }
+
+    init(position:Vec2, size:Vec2) {
+        self.x = position.x
+        self.y = position.y
+        self.w = size.x
+        self.h = size.y
+    }
+
+    func position() Vec2 { return Vec2(self.x, self.y) }
+    func size() Vec2 { return Vec2(self.w, self.h) }
+    func minimum() Vec2 { return self.position() }
+    func maximum() Vec2 { return Vec2(self.x + self.w, self.y + self.h) }
+    func center() Vec2 { return Vec2(self.x + self.w * 0.5, self.y + self.h * 0.5) }
+
+    func is_empty() bool {
+        return self.w <= 0.0 || self.h <= 0.0
+    }
+
+    func contains(point:Vec2) bool {
+        return !self.is_empty() && point.x >= self.x && point.y >= self.y && point.x < self.x + self.w && point.y < self.y + self.h
+    }
+
+    func intersects(other:Rect) bool {
+        return !self.is_empty() && !other.is_empty() && self.x < other.x + other.w && other.x < self.x + self.w && self.y < other.y + other.h && other.y < self.y + self.h
+    }
+
+    func intersection(other:Rect) Rect? {
+        let left = Math.max(self.x, other.x)
+        let top = Math.max(self.y, other.y)
+        let right = Math.min(self.x + self.w, other.x + other.w)
+        let bottom = Math.min(self.y + self.h, other.y + other.h)
+        if right <= left || bottom <= top { return null }
+        return Rect(left, top, right - left, bottom - top)
+    }
+
+    func translated(offset:Vec2) Rect {
+        return Rect(self.x + offset.x, self.y + offset.y, self.w, self.h)
+    }
+
+    func scaled(scale:Vec2) Rect {
+        return Rect(self.x * scale.x, self.y * scale.y, self.w * scale.x, self.h * scale.y)
+    }
+}

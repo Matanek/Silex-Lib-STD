@@ -95,6 +95,22 @@ public struct Vec2 {
         )
     }
 
+    func floor() Vec2 {
+        return Vec2(Math.floor(self.x), Math.floor(self.y))
+    }
+
+    func ceil() Vec2 {
+        return Vec2(Math.ceil(self.x), Math.ceil(self.y))
+    }
+
+    func round() Vec2 {
+        return Vec2(Math.round(self.x), Math.round(self.y))
+    }
+
+    func trunc() Vec2 {
+        return Vec2(Math.trunc(self.x), Math.trunc(self.y))
+    }
+
     func nearly_equal(other:Vec2) bool {
         return self.nearly_equal(other, Math.epsilon())
     }

@@ -127,6 +127,22 @@ public struct Vec4 {
         )
     }
 
+    func floor() Vec4 {
+        return Vec4(Math.floor(self.x), Math.floor(self.y), Math.floor(self.z), Math.floor(self.w))
+    }
+
+    func ceil() Vec4 {
+        return Vec4(Math.ceil(self.x), Math.ceil(self.y), Math.ceil(self.z), Math.ceil(self.w))
+    }
+
+    func round() Vec4 {
+        return Vec4(Math.round(self.x), Math.round(self.y), Math.round(self.z), Math.round(self.w))
+    }
+
+    func trunc() Vec4 {
+        return Vec4(Math.trunc(self.x), Math.trunc(self.y), Math.trunc(self.z), Math.trunc(self.w))
+    }
+
     func nearly_equal(other:Vec4) bool {
         return self.nearly_equal(other, Math.epsilon())
     }

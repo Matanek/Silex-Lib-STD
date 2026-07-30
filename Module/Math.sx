@@ -154,6 +154,62 @@ public func abs(value:float) float {
     return value
 }
 
+public func trunc(value:float) float {
+    if value != value || value == 0.0 || (value != 0.0 && value + value == value) {
+        return value
+    }
+
+    var magnitude = value
+    var sign = 1.0
+    if magnitude < 0.0 {
+        magnitude = -magnitude
+        sign = -1.0
+    }
+
+    // Every float32 value at or above 2^23 is already integral.
+    if magnitude >= 8388608.0 {
+        return value
+    }
+
+    var step = 1.0
+    while step * 2.0 <= magnitude {
+        step *= 2.0
+    }
+
+    var integral = 0.0
+    while step >= 1.0 {
+        if magnitude >= step {
+            magnitude -= step
+            integral += step
+        }
+        step *= 0.5
+    }
+    return integral * sign
+}
+
+public func floor(value:float) float {
+    let integral = trunc(value)
+    if integral > value {
+        return integral - 1.0
+    }
+    return integral
+}
+
+public func ceil(value:float) float {
+    let integral = trunc(value)
+    if integral < value {
+        return integral + 1.0
+    }
+    return integral
+}
+
+public func round(value:float) float {
+    if value < 0.0 {
+        return ceil(value - 0.5)
+    }
+    return floor(value + 0.5)
+}
+
 public func lerp(start:float, end:float, amount:float) float {
     return start + (end - start) * amount
 }

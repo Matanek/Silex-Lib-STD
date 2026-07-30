@@ -59,6 +59,21 @@ print(System.target_name(selected))
 compiler. Cross-compiling with `--target windows-x64` therefore produces
 `windows` and `x64` in the resulting program.
 
+`STD.Math` provides scalar rounding and shared geometric values:
+
+```sx
+use STD.Math
+
+let integral = Math.floor(12.75)
+let size = Math.Vec2(1280.4, 720.8).round()
+let viewport = Math.Rect(Math.Vec2(), size)
+```
+
+`floor`, `ceil`, `round` and `trunc` preserve the `float` type. The same
+component-wise operations are available on `Vec2`, `Vec3` and `Vec4`.
+`Rect` stores `x`, `y`, `w` and `h`, exposes position, size, bounds and center,
+and supports containment, intersection, translation and scaling.
+
 Text files use UTF-8 without a byte-order mark or newline conversion. The text
 helpers keep encoding details out of ordinary file operations:
 

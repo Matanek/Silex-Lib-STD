@@ -1,303 +1,379 @@
-public func sqrt(value:float) float {
-    if value != value {
-        return value
-    }
-    if value < 0.0 {
-        return invalid_float(value)
-    }
-    if value == 0.0 || value + value == value {
-        return value
-    }
+// Scalar real operations keep the concrete precision selected by the caller.
+// Platform helpers are internal implementation details; IEEE 754 behavior is
+// defined here where it differs from a raw system operation.
 
-    var estimate = 1.0
-    if value > 1.0 {
-        estimate = value
-    }
-    var previous = 0.0
-    var iteration = 0
-    while iteration < 128 {
-        let next = (estimate + value / estimate) * 0.5
-        if next == estimate || next == previous {
-            return next
-        }
-        previous = estimate
-        estimate = next
-        iteration += 1
-    }
-    return estimate
+public func sqrt(value:float32) float32 { return Platform.sqrt(value) }
+public func sqrt(value:float64) float64 { return Platform.sqrt(value) }
+public func sin(value:float32) float32 { return Platform.sin(value) }
+public func sin(value:float64) float64 { return Platform.sin(value) }
+public func cos(value:float32) float32 { return Platform.cos(value) }
+public func cos(value:float64) float64 { return Platform.cos(value) }
+public func tan(value:float32) float32 { return Platform.tan(value) }
+public func tan(value:float64) float64 { return Platform.tan(value) }
+public func asin(value:float32) float32 { return Platform.asin(value) }
+public func asin(value:float64) float64 { return Platform.asin(value) }
+public func atan(value:float32) float32 { return Platform.atan(value) }
+public func atan(value:float64) float64 { return Platform.atan(value) }
+public func atan2(y:float32, x:float32) float32 { return Platform.atan2(y, x) }
+public func atan2(y:float64, x:float64) float64 { return Platform.atan2(y, x) }
+
+public func pi() float { return 3.1415927 }
+public func pi<T>() T { return pi_for(0.0 as T) }
+public func half_pi() float { return pi() * 0.5 }
+public func half_pi<T>() T { return half_pi_for(0.0 as T) }
+public func two_pi() float { return pi() * 2.0 }
+public func two_pi<T>() T { return two_pi_for(0.0 as T) }
+
+// Compatibility epsilon: it is not a machine epsilon or a universal domain
+// threshold. `machine_epsilon<T>()` exposes the representation property.
+public func epsilon() float { return 0.000001 }
+public func epsilon<T>() T { return epsilon_for(0.0 as T) }
+public func machine_epsilon<T>() T { return machine_epsilon_for(0.0 as T) }
+
+public func radians(degrees:float32) float32 { return degrees * (pi() / 180.0) }
+public func radians(degrees:float64) float64 { return degrees * (pi<float64>() / (180.0 as float64)) }
+public func degrees(radians:float32) float32 { return radians * (180.0 / pi()) }
+public func degrees(radians:float64) float64 { return radians * ((180.0 as float64) / pi<float64>()) }
+
+public func is_nan(value:float32) bool { return value != value }
+public func is_nan(value:float64) bool { return value != value }
+public func is_infinite(value:float32) bool { return value != 0.0 && value + value == value }
+public func is_infinite(value:float64) bool { return value != (0.0 as float64) && value + value == value }
+public func is_finite(value:float32) bool { return !is_nan(value) && !is_infinite(value) }
+public func is_finite(value:float64) bool { return !is_nan(value) && !is_infinite(value) }
+public func is_normal(value:float32) bool {
+    return is_finite(value) && abs(value) >= 1.17549435e-38
+}
+public func is_normal(value:float64) bool {
+    let minimum:float64 = 2.2250738585072014e-308
+    return is_finite(value) && abs(value) >= minimum
+}
+public func sign_bit(value:float32) bool { return Platform.copy_sign(1.0, value) < 0.0 }
+public func sign_bit(value:float64) bool {
+    return Platform.copy_sign(1.0 as float64, value) < (0.0 as float64)
 }
 
-public func sin(value:float) float {
-    var angle = reduce_angle(value)
-    if angle > half_pi() {
-        angle = pi() - angle
-    }
-    if angle < -half_pi() {
-        angle = -pi() - angle
-    }
-    let squared = angle * angle
-    var result = 0.000002755732 + squared * -0.00000002505211
-    result = -0.0001984127 + squared * result
-    result = 0.008333333 + squared * result
-    result = -0.16666667 + squared * result
-    return angle * (1.0 + squared * result)
-}
-
-public func cos(value:float) float {
-    var angle = reduce_angle(value)
-    var sign = 1.0
-    if angle > half_pi() {
-        angle = pi() - angle
-        sign = -1.0
-    }
-    if angle < -half_pi() {
-        angle = -pi() - angle
-        sign = -1.0
-    }
-    let squared = angle * angle
-    var result = 0.000024801588 + squared * -0.0000002755732
-    result = -0.0013888889 + squared * result
-    result = 0.041666668 + squared * result
-    result = -0.5 + squared * result
-    return sign * (1.0 + squared * result)
-}
-
-public func tan(value:float) float {
-    return sin(value) / cos(value)
-}
-
-public func asin(value:float) float {
-    if value != value || value < -1.0 || value > 1.0 {
-        return invalid_float(value)
-    }
-    if value == 1.0 {
-        return half_pi()
-    }
-    if value == -1.0 {
-        return -half_pi()
-    }
-    return atan2(value, sqrt((1.0 - value) * (1.0 + value)))
-}
-
-public func atan2(y:float, x:float) float {
-    if x != x || y != y {
-        return invalid_float(x + y)
-    }
-    if x > 0.0 {
-        return atan(y / x)
-    }
-    if x < 0.0 {
-        if y >= 0.0 {
-            return atan(y / x) + pi()
-        }
-        return atan(y / x) - pi()
-    }
-    if y > 0.0 {
-        return half_pi()
-    }
-    if y < 0.0 {
-        return -half_pi()
-    }
-    return 0.0
-}
-
-public func pi() float {
-    return 3.1415927
-}
-
-public func half_pi() float {
-    return pi() * 0.5
-}
-
-public func two_pi() float {
-    return pi() * 2.0
-}
-
-public func epsilon() float {
-    return 0.000001
-}
-
-public func radians(degrees:float) float {
-    return degrees * (pi() / 180.0)
-}
-
-public func degrees(radians:float) float {
-    return radians * (180.0 / pi())
-}
-
-public func min(left:float, right:float) float {
-    if left < right {
-        return left
-    }
+public func min(left:float32, right:float32) float32 {
+    if is_nan(left) { return right }
+    if is_nan(right) { return left }
+    if left < right { return left }
+    if right < left { return right }
+    if sign_bit(left) { return left }
     return right
 }
 
-public func max(left:float, right:float) float {
-    if left > right {
-        return left
-    }
+public func min(left:float64, right:float64) float64 {
+    if is_nan(left) { return right }
+    if is_nan(right) { return left }
+    if left < right { return left }
+    if right < left { return right }
+    if sign_bit(left) { return left }
     return right
 }
 
-public func clamp(value:float, minimum:float, maximum:float) float {
+public func max(left:float32, right:float32) float32 {
+    if is_nan(left) { return right }
+    if is_nan(right) { return left }
+    if left > right { return left }
+    if right > left { return right }
+    if !sign_bit(left) { return left }
+    return right
+}
+
+public func max(left:float64, right:float64) float64 {
+    if is_nan(left) { return right }
+    if is_nan(right) { return left }
+    if left > right { return left }
+    if right > left { return right }
+    if !sign_bit(left) { return left }
+    return right
+}
+
+public func clamp(value:float32, minimum:float32, maximum:float32) float32 {
+    if is_nan(value) { return value }
+    if is_nan(minimum) || is_nan(maximum) || minimum > maximum { return invalid_float(value) }
     return min(max(value, minimum), maximum)
 }
 
-public func saturate(value:float) float {
-    return clamp(value, 0.0, 1.0)
+public func clamp(value:float64, minimum:float64, maximum:float64) float64 {
+    if is_nan(value) { return value }
+    if is_nan(minimum) || is_nan(maximum) || minimum > maximum { return invalid_float(value) }
+    return min(max(value, minimum), maximum)
 }
 
-public func abs(value:float) float {
-    if value < 0.0 {
-        return 0.0 - value
-    }
-    return value
+public func saturate(value:float32) float32 { return clamp(value, 0.0, 1.0) }
+public func saturate(value:float64) float64 {
+    return clamp(value, 0.0 as float64, 1.0 as float64)
 }
 
-public func trunc(value:float) float {
-    if value != value || value == 0.0 || (value != 0.0 && value + value == value) {
-        return value
-    }
+public func abs(value:float32) float32 { return Platform.copy_sign(value, 1.0) }
+public func abs(value:float64) float64 { return Platform.copy_sign(value, 1.0 as float64) }
+public func trunc(value:float32) float32 { return Platform.trunc(value) }
+public func trunc(value:float64) float64 { return Platform.trunc(value) }
+public func floor(value:float32) float32 { return Platform.floor(value) }
+public func floor(value:float64) float64 { return Platform.floor(value) }
+public func ceil(value:float32) float32 { return Platform.ceil(value) }
+public func ceil(value:float64) float64 { return Platform.ceil(value) }
+public func round(value:float32) float32 { return Platform.round(value) }
+public func round(value:float64) float64 { return Platform.round(value) }
 
-    var magnitude = value
-    var sign = 1.0
-    if magnitude < 0.0 {
-        magnitude = -magnitude
-        sign = -1.0
+public func sign(value:float32) float32 {
+    if is_nan(value) || value == 0.0 { return value }
+    if sign_bit(value) { return -1.0 }
+    return 1.0
+}
+public func sign(value:float64) float64 {
+    if is_nan(value) || value == 0.0 { return value }
+    if sign_bit(value) { return -1.0 }
+    return 1.0
+}
+public func copy_sign(magnitude:float32, sign:float32) float32 { return Platform.copy_sign(magnitude, sign) }
+public func copy_sign(magnitude:float64, sign:float64) float64 { return Platform.copy_sign(magnitude, sign) }
+public func fraction(value:float32) float32 {
+    let result = value - trunc(value)
+    if result == 0.0 { return copy_sign(result, value) }
+    return result
+}
+public func fraction(value:float64) float64 {
+    let result = value - trunc(value)
+    if result == 0.0 { return copy_sign(result, value) }
+    return result
+}
+public func round_even(value:float32) float32 {
+    if !is_finite(value) || value == 0.0 { return value }
+    let lower = floor(value)
+    let distance = value - lower
+    if distance < 0.5 { return lower }
+    if distance > 0.5 { return lower + 1.0 }
+    if lower - trunc(lower * 0.5) * 2.0 == 0.0 { return lower }
+    return lower + 1.0
+}
+public func round_even(value:float64) float64 {
+    if !is_finite(value) || value == 0.0 { return value }
+    let lower = floor(value)
+    let distance = value - lower
+    if distance < 0.5 { return lower }
+    if distance > 0.5 { return lower + 1.0 }
+    if lower - trunc(lower * 0.5) * 2.0 == 0.0 { return lower }
+    return lower + 1.0
+}
+public func remainder(value:float32, divisor:float32) float32 {
+    if is_nan(value) || is_nan(divisor) { return value + divisor }
+    if divisor == 0.0 || is_infinite(value) { return invalid_float(value) }
+    if is_infinite(divisor) { return value }
+    let result = value - trunc(value / divisor) * divisor
+    if result == 0.0 { return copy_sign(result, value) }
+    return result
+}
+public func remainder(value:float64, divisor:float64) float64 {
+    if is_nan(value) || is_nan(divisor) { return value + divisor }
+    if divisor == 0.0 || is_infinite(value) { return invalid_float(value) }
+    if is_infinite(divisor) { return value }
+    let result = value - trunc(value / divisor) * divisor
+    if result == 0.0 { return copy_sign(result, value) }
+    return result
+}
+public func modulo(value:float32, modulus:float32) float32 {
+    if is_nan(value) || is_nan(modulus) { return value + modulus }
+    if modulus == 0.0 || is_infinite(value) { return invalid_float(value) }
+    if is_infinite(modulus) {
+        if value == 0.0 { return copy_sign(value, modulus) }
+        if sign_bit(value) == sign_bit(modulus) { return value }
+        return modulus
     }
-
-    // Every float32 value at or above 2^23 is already integral.
-    if magnitude >= 8388608.0 {
-        return value
+    let result = value - floor(value / modulus) * modulus
+    if result == 0.0 { return copy_sign(result, modulus) }
+    return result
+}
+public func modulo(value:float64, modulus:float64) float64 {
+    if is_nan(value) || is_nan(modulus) { return value + modulus }
+    if modulus == 0.0 || is_infinite(value) { return invalid_float(value) }
+    if is_infinite(modulus) {
+        if value == 0.0 { return copy_sign(value, modulus) }
+        if sign_bit(value) == sign_bit(modulus) { return value }
+        return modulus
     }
-
-    var step = 1.0
-    while step * 2.0 <= magnitude {
-        step *= 2.0
-    }
-
-    var integral = 0.0
-    while step >= 1.0 {
-        if magnitude >= step {
-            magnitude -= step
-            integral += step
-        }
-        step *= 0.5
-    }
-    return integral * sign
+    let result = value - floor(value / modulus) * modulus
+    if result == 0.0 { return copy_sign(result, modulus) }
+    return result
+}
+public func cbrt(value:float32) float32 { return Platform.cbrt(value) }
+public func cbrt(value:float64) float64 { return Platform.cbrt(value) }
+public func exp(value:float32) float32 { return Platform.exp(value) }
+public func exp(value:float64) float64 { return Platform.exp(value) }
+public func exp2(value:float32) float32 { return Platform.exp2(value) }
+public func exp2(value:float64) float64 { return Platform.exp2(value) }
+public func log(value:float32) float32 { return Platform.log(value) }
+public func log(value:float64) float64 { return Platform.log(value) }
+public func log2(value:float32) float32 { return Platform.log2(value) }
+public func log2(value:float64) float64 { return Platform.log2(value) }
+public func log10(value:float32) float32 { return Platform.log10(value) }
+public func log10(value:float64) float64 { return Platform.log10(value) }
+public func pow(base:float32, exponent:float32) float32 { return Platform.pow(base, exponent) }
+public func pow(base:float64, exponent:float64) float64 { return Platform.pow(base, exponent) }
+public func acos(value:float32) float32 { return Platform.acos(value) }
+public func acos(value:float64) float64 { return Platform.acos(value) }
+public func sinh(value:float32) float32 { return Platform.sinh(value) }
+public func sinh(value:float64) float64 { return Platform.sinh(value) }
+public func cosh(value:float32) float32 { return Platform.cosh(value) }
+public func cosh(value:float64) float64 { return Platform.cosh(value) }
+public func tanh(value:float32) float32 { return Platform.tanh(value) }
+public func tanh(value:float64) float64 { return Platform.tanh(value) }
+public func asinh(value:float32) float32 { return Platform.asinh(value) }
+public func asinh(value:float64) float64 { return Platform.asinh(value) }
+public func acosh(value:float32) float32 { return Platform.acosh(value) }
+public func acosh(value:float64) float64 { return Platform.acosh(value) }
+public func atanh(value:float32) float32 { return Platform.atanh(value) }
+public func atanh(value:float64) float64 { return Platform.atanh(value) }
+public func hypot(x:float32, y:float32) float32 {
+    if is_nan(x) || is_nan(y) { return x + y }
+    let scale = max(abs(x), abs(y))
+    if is_infinite(scale) || scale == 0.0 { return scale }
+    let scaled_x = x / scale
+    let scaled_y = y / scale
+    return scale * sqrt(scaled_x * scaled_x + scaled_y * scaled_y)
+}
+public func hypot(x:float64, y:float64) float64 {
+    if is_nan(x) || is_nan(y) { return x + y }
+    let scale = max(abs(x), abs(y))
+    if is_infinite(scale) || scale == 0.0 { return scale }
+    let scaled_x = x / scale
+    let scaled_y = y / scale
+    return scale * sqrt(scaled_x * scaled_x + scaled_y * scaled_y)
 }
 
-public func floor(value:float) float {
-    let integral = trunc(value)
-    if integral > value {
-        return integral - 1.0
-    }
-    return integral
-}
+public func e() float { return 2.7182817 }
+public func e<T>() T { return e_for(0.0 as T) }
+public func sqrt_two() float { return 1.4142135 }
+public func sqrt_two<T>() T { return sqrt_two_for(0.0 as T) }
+public func ln_two() float { return 0.6931472 }
+public func ln_two<T>() T { return ln_two_for(0.0 as T) }
 
-public func ceil(value:float) float {
-    let integral = trunc(value)
-    if integral < value {
-        return integral + 1.0
-    }
-    return integral
-}
-
-public func round(value:float) float {
-    if value < 0.0 {
-        return ceil(value - 0.5)
-    }
-    return floor(value + 0.5)
-}
-
-public func lerp(start:float, end:float, amount:float) float {
+public func lerp(start:float32, end:float32, amount:float32) float32 {
     return start + (end - start) * amount
 }
-
-public func mix(start:float, end:float, amount:float) float {
-    return lerp(start, end, amount)
+public func lerp(start:float64, end:float64, amount:float64) float64 {
+    return start + (end - start) * amount
+}
+public func mix(start:float32, end:float32, amount:float32) float32 { return lerp(start, end, amount) }
+public func mix(start:float64, end:float64, amount:float64) float64 { return lerp(start, end, amount) }
+public func inverse_lerp(start:float32, end:float32, value:float32) float32 {
+    if start == end { return invalid_float(value) }
+    return (value - start) / (end - start)
+}
+public func inverse_lerp(start:float64, end:float64, value:float64) float64 {
+    if start == end { return invalid_float(value) }
+    return (value - start) / (end - start)
+}
+public func remap(value:float32, source_start:float32, source_end:float32, target_start:float32, target_end:float32) float32 {
+    return lerp(target_start, target_end, inverse_lerp(source_start, source_end, value))
+}
+public func remap(value:float64, source_start:float64, source_end:float64, target_start:float64, target_end:float64) float64 {
+    return lerp(target_start, target_end, inverse_lerp(source_start, source_end, value))
+}
+public func lerp_clamped(start:float32, end:float32, amount:float32) float32 {
+    return lerp(start, end, clamp(amount, 0.0, 1.0))
+}
+public func lerp_clamped(start:float64, end:float64, amount:float64) float64 {
+    return lerp(start, end, clamp(amount, 0.0, 1.0))
+}
+public func step(edge:float32, value:float32) float32 {
+    if is_nan(edge) || is_nan(value) { return edge + value }
+    if value < edge { return 0.0 }
+    return 1.0
+}
+public func step(edge:float64, value:float64) float64 {
+    if is_nan(edge) || is_nan(value) { return edge + value }
+    if value < edge { return 0.0 }
+    return 1.0
+}
+public func smooth_step(edge_start:float32, edge_end:float32, value:float32) float32 {
+    if edge_start == edge_end { return invalid_float(value) }
+    let amount = clamp(inverse_lerp(edge_start, edge_end, value), 0.0, 1.0)
+    return amount * amount * (3.0 - 2.0 * amount)
+}
+public func smooth_step(edge_start:float64, edge_end:float64, value:float64) float64 {
+    if edge_start == edge_end { return invalid_float(value) }
+    let amount = clamp(inverse_lerp(edge_start, edge_end, value), 0.0, 1.0)
+    return amount * amount * (3.0 - 2.0 * amount)
 }
 
-public func nearly_equal(left:float, right:float) bool {
-    return nearly_equal(left, right, epsilon())
+public func nearly_equal(left:float32, right:float32) bool {
+    return nearly_equal(left, right, 1.0e-6, 1.0e-5)
+}
+public func nearly_equal(left:float64, right:float64) bool {
+    let tolerance:float64 = 1.0e-12
+    return nearly_equal(left, right, tolerance, tolerance)
+}
+public func nearly_equal(left:float32, right:float32, tolerance:float32) bool {
+    return nearly_equal(left, right, tolerance, 0.0)
+}
+public func nearly_equal(left:float64, right:float64, tolerance:float64) bool {
+    return nearly_equal(left, right, tolerance, 0.0)
+}
+public func nearly_equal(left:float32, right:float32, absolute_tolerance:float32, relative_tolerance:float32) bool {
+    if absolute_tolerance < 0.0 || relative_tolerance < 0.0 ||
+        is_nan(absolute_tolerance) || is_nan(relative_tolerance) { return false }
+    if left == right { return true }
+    if is_nan(left) || is_nan(right) || is_infinite(left) || is_infinite(right) { return false }
+    let scale = max(abs(left), abs(right))
+    return abs(left - right) <= max(absolute_tolerance, relative_tolerance * scale)
+}
+public func nearly_equal(left:float64, right:float64, absolute_tolerance:float64, relative_tolerance:float64) bool {
+    if absolute_tolerance < 0.0 || relative_tolerance < 0.0 ||
+        is_nan(absolute_tolerance) || is_nan(relative_tolerance) { return false }
+    if left == right { return true }
+    if is_nan(left) || is_nan(right) || is_infinite(left) || is_infinite(right) { return false }
+    let scale = max(abs(left), abs(right))
+    return abs(left - right) <= max(absolute_tolerance, relative_tolerance * scale)
 }
 
-public func nearly_equal(left:float, right:float, tolerance:float) bool {
-    return abs(left - right) <= tolerance
+func invalid_float(value:float32) float32 {
+    let zero = value - value
+    return zero / zero
 }
-
-func invalid_float(value:float) float {
+func invalid_float(value:float64) float64 {
     let zero = value - value
     return zero / zero
 }
 
-func reduce_angle(value:float) float {
-    if value != value || (value != 0.0 && value + value == value) {
-        return invalid_float(value)
-    }
-
-    var angle = value
-    var sign = 1.0
-    if angle < 0.0 {
-        angle = -angle
-        sign = -1.0
-    }
-
-    let period = two_pi()
-    var scale = period
-    while scale * 2.0 <= angle {
-        scale *= 2.0
-    }
-    while scale > period {
-        if angle >= scale {
-            angle -= scale
-        }
-        scale *= 0.5
-    }
-    while angle > pi() {
-        angle -= period
-    }
-    return angle * sign
+func pi_for(marker:float32) float32 { return 3.1415927 + marker }
+func pi_for(marker:float64) float64 {
+    let value:float64 = 3.141592653589793
+    return value + marker
 }
-
-func atan(value:float) float {
-    if value != value {
-        return value
-    }
-
-    var argument = value
-    var sign = 1.0
-    if argument < 0.0 {
-        argument = -argument
-        sign = -1.0
-    }
-
-    var inverted = false
-    if argument > 1.0 {
-        argument = 1.0 / argument
-        inverted = true
-    }
-
-    var offset = 0.0
-    if argument > 0.41421357 {
-        argument = (argument - 1.0) / (argument + 1.0)
-        offset = pi() * 0.25
-    }
-
-    let squared = argument * argument
-    var result = 0.04761905 + squared * -0.04347826
-    result = -0.05263158 + squared * result
-    result = 0.05882353 + squared * result
-    result = -0.06666667 + squared * result
-    result = 0.07692308 + squared * result
-    result = -0.09090909 + squared * result
-    result = 0.11111111 + squared * result
-    result = -0.14285715 + squared * result
-    result = 0.2 + squared * result
-    result = -0.33333334 + squared * result
-    result = offset + argument * (1.0 + squared * result)
-    if inverted {
-        result = half_pi() - result
-    }
-    return result * sign
+func half_pi_for(marker:float32) float32 { return 1.5707964 + marker }
+func half_pi_for(marker:float64) float64 {
+    let value:float64 = 1.5707963267948966
+    return value + marker
+}
+func two_pi_for(marker:float32) float32 { return 6.2831855 + marker }
+func two_pi_for(marker:float64) float64 {
+    let value:float64 = 6.283185307179586
+    return value + marker
+}
+func epsilon_for(marker:float32) float32 { return 0.000001 + marker }
+func epsilon_for(marker:float64) float64 {
+    let value:float64 = 0.000001
+    return value + marker
+}
+func machine_epsilon_for(marker:float32) float32 { return 1.1920929e-7 + marker }
+func machine_epsilon_for(marker:float64) float64 {
+    let value:float64 = 2.220446049250313e-16
+    return value + marker
+}
+func e_for(marker:float32) float32 { return 2.7182817 + marker }
+func e_for(marker:float64) float64 {
+    let value:float64 = 2.718281828459045
+    return value + marker
+}
+func sqrt_two_for(marker:float32) float32 { return 1.4142135 + marker }
+func sqrt_two_for(marker:float64) float64 {
+    let value:float64 = 1.4142135623730951
+    return value + marker
+}
+func ln_two_for(marker:float32) float32 { return 0.6931472 + marker }
+func ln_two_for(marker:float64) float64 {
+    let value:float64 = 0.6931471805599453
+    return value + marker
 }

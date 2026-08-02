@@ -80,11 +80,14 @@ public struct Vec4 {
     }
 
     func normalized() Vec4 {
-        let length = self.length()
-        if length <= Math.epsilon() {
-            return Vec4.zero()
-        }
-        return self.divide(length)
+        let scale = Math.max(
+            Math.max(Math.abs(self.x), Math.abs(self.y)),
+            Math.max(Math.abs(self.z), Math.abs(self.w))
+        )
+        if scale == 0.0 && !Math.is_nan(self.x) && !Math.is_nan(self.y) &&
+            !Math.is_nan(self.z) && !Math.is_nan(self.w) { return Vec4.zero() }
+        let scaled = self.divide(scale)
+        return scaled.divide(Math.sqrt(scaled.length_squared()))
     }
 
     func lerp(other:Vec4, amount:float) Vec4 {
@@ -144,7 +147,8 @@ public struct Vec4 {
     }
 
     func nearly_equal(other:Vec4) bool {
-        return self.nearly_equal(other, Math.epsilon())
+        return Math.nearly_equal(self.x, other.x) && Math.nearly_equal(self.y, other.y) &&
+            Math.nearly_equal(self.z, other.z) && Math.nearly_equal(self.w, other.w)
     }
 
     func nearly_equal(other:Vec4, tolerance:float) bool {

@@ -1,0 +1,108 @@
+use Interop.C
+use Interop.Linux
+
+let math_sqrt32 = C.function<func(float32) float32>(library:Linux.kernel, name:"sqrtf")
+let math_sqrt64 = C.function<func(float64) float64>(library:Linux.kernel, name:"sqrt")
+let math_sin32 = C.function<func(float32) float32>(library:Linux.kernel, name:"sinf")
+let math_sin64 = C.function<func(float64) float64>(library:Linux.kernel, name:"sin")
+let math_cos32 = C.function<func(float32) float32>(library:Linux.kernel, name:"cosf")
+let math_cos64 = C.function<func(float64) float64>(library:Linux.kernel, name:"cos")
+let math_tan32 = C.function<func(float32) float32>(library:Linux.kernel, name:"tanf")
+let math_tan64 = C.function<func(float64) float64>(library:Linux.kernel, name:"tan")
+let math_asin32 = C.function<func(float32) float32>(library:Linux.kernel, name:"asinf")
+let math_asin64 = C.function<func(float64) float64>(library:Linux.kernel, name:"asin")
+let math_atan32 = C.function<func(float32) float32>(library:Linux.kernel, name:"atanf")
+let math_atan64 = C.function<func(float64) float64>(library:Linux.kernel, name:"atan")
+let math_atan2_32 = C.function<func(float32, float32) float32>(library:Linux.kernel, name:"atan2f")
+let math_atan2_64 = C.function<func(float64, float64) float64>(library:Linux.kernel, name:"atan2")
+let math_trunc32 = C.function<func(float32) float32>(library:Linux.kernel, name:"truncf")
+let math_trunc64 = C.function<func(float64) float64>(library:Linux.kernel, name:"trunc")
+let math_floor32 = C.function<func(float32) float32>(library:Linux.kernel, name:"floorf")
+let math_floor64 = C.function<func(float64) float64>(library:Linux.kernel, name:"floor")
+let math_ceil32 = C.function<func(float32) float32>(library:Linux.kernel, name:"ceilf")
+let math_ceil64 = C.function<func(float64) float64>(library:Linux.kernel, name:"ceil")
+let math_round32 = C.function<func(float32) float32>(library:Linux.kernel, name:"roundf")
+let math_round64 = C.function<func(float64) float64>(library:Linux.kernel, name:"round")
+let math_copy_sign32 = C.function<func(float32, float32) float32>(library:Linux.kernel, name:"copysignf")
+let math_copy_sign64 = C.function<func(float64, float64) float64>(library:Linux.kernel, name:"copysign")
+let math_cbrt32 = C.function<func(float32) float32>(library:Linux.kernel, name:"cbrtf")
+let math_cbrt64 = C.function<func(float64) float64>(library:Linux.kernel, name:"cbrt")
+let math_exp32 = C.function<func(float32) float32>(library:Linux.kernel, name:"expf")
+let math_exp64 = C.function<func(float64) float64>(library:Linux.kernel, name:"exp")
+let math_exp2_32 = C.function<func(float32) float32>(library:Linux.kernel, name:"exp2f")
+let math_exp2_64 = C.function<func(float64) float64>(library:Linux.kernel, name:"exp2")
+let math_log32 = C.function<func(float32) float32>(library:Linux.kernel, name:"logf")
+let math_log64 = C.function<func(float64) float64>(library:Linux.kernel, name:"log")
+let math_log2_32 = C.function<func(float32) float32>(library:Linux.kernel, name:"log2f")
+let math_log2_64 = C.function<func(float64) float64>(library:Linux.kernel, name:"log2")
+let math_log10_32 = C.function<func(float32) float32>(library:Linux.kernel, name:"log10f")
+let math_log10_64 = C.function<func(float64) float64>(library:Linux.kernel, name:"log10")
+let math_pow32 = C.function<func(float32, float32) float32>(library:Linux.kernel, name:"powf")
+let math_pow64 = C.function<func(float64, float64) float64>(library:Linux.kernel, name:"pow")
+let math_acos32 = C.function<func(float32) float32>(library:Linux.kernel, name:"acosf")
+let math_acos64 = C.function<func(float64) float64>(library:Linux.kernel, name:"acos")
+let math_sinh32 = C.function<func(float32) float32>(library:Linux.kernel, name:"sinhf")
+let math_sinh64 = C.function<func(float64) float64>(library:Linux.kernel, name:"sinh")
+let math_cosh32 = C.function<func(float32) float32>(library:Linux.kernel, name:"coshf")
+let math_cosh64 = C.function<func(float64) float64>(library:Linux.kernel, name:"cosh")
+let math_tanh32 = C.function<func(float32) float32>(library:Linux.kernel, name:"tanhf")
+let math_tanh64 = C.function<func(float64) float64>(library:Linux.kernel, name:"tanh")
+let math_asinh32 = C.function<func(float32) float32>(library:Linux.kernel, name:"asinhf")
+let math_asinh64 = C.function<func(float64) float64>(library:Linux.kernel, name:"asinh")
+let math_acosh32 = C.function<func(float32) float32>(library:Linux.kernel, name:"acoshf")
+let math_acosh64 = C.function<func(float64) float64>(library:Linux.kernel, name:"acosh")
+let math_atanh32 = C.function<func(float32) float32>(library:Linux.kernel, name:"atanhf")
+let math_atanh64 = C.function<func(float64) float64>(library:Linux.kernel, name:"atanh")
+
+func sqrt(value:float32) float32 { return math_sqrt32(value) }
+func sqrt(value:float64) float64 { return math_sqrt64(value) }
+func sin(value:float32) float32 { return math_sin32(value) }
+func sin(value:float64) float64 { return math_sin64(value) }
+func cos(value:float32) float32 { return math_cos32(value) }
+func cos(value:float64) float64 { return math_cos64(value) }
+func tan(value:float32) float32 { return math_tan32(value) }
+func tan(value:float64) float64 { return math_tan64(value) }
+func asin(value:float32) float32 { return math_asin32(value) }
+func asin(value:float64) float64 { return math_asin64(value) }
+func atan(value:float32) float32 { return math_atan32(value) }
+func atan(value:float64) float64 { return math_atan64(value) }
+func atan2(y:float32, x:float32) float32 { return math_atan2_32(y, x) }
+func atan2(y:float64, x:float64) float64 { return math_atan2_64(y, x) }
+func trunc(value:float32) float32 { return math_trunc32(value) }
+func trunc(value:float64) float64 { return math_trunc64(value) }
+func floor(value:float32) float32 { return math_floor32(value) }
+func floor(value:float64) float64 { return math_floor64(value) }
+func ceil(value:float32) float32 { return math_ceil32(value) }
+func ceil(value:float64) float64 { return math_ceil64(value) }
+func round(value:float32) float32 { return math_round32(value) }
+func round(value:float64) float64 { return math_round64(value) }
+func copy_sign(magnitude:float32, sign:float32) float32 { return math_copy_sign32(magnitude, sign) }
+func copy_sign(magnitude:float64, sign:float64) float64 { return math_copy_sign64(magnitude, sign) }
+func cbrt(value:float32) float32 { return math_cbrt32(value) }
+func cbrt(value:float64) float64 { return math_cbrt64(value) }
+func exp(value:float32) float32 { return math_exp32(value) }
+func exp(value:float64) float64 { return math_exp64(value) }
+func exp2(value:float32) float32 { return math_exp2_32(value) }
+func exp2(value:float64) float64 { return math_exp2_64(value) }
+func log(value:float32) float32 { return math_log32(value) }
+func log(value:float64) float64 { return math_log64(value) }
+func log2(value:float32) float32 { return math_log2_32(value) }
+func log2(value:float64) float64 { return math_log2_64(value) }
+func log10(value:float32) float32 { return math_log10_32(value) }
+func log10(value:float64) float64 { return math_log10_64(value) }
+func pow(base:float32, exponent:float32) float32 { return math_pow32(base, exponent) }
+func pow(base:float64, exponent:float64) float64 { return math_pow64(base, exponent) }
+func acos(value:float32) float32 { return math_acos32(value) }
+func acos(value:float64) float64 { return math_acos64(value) }
+func sinh(value:float32) float32 { return math_sinh32(value) }
+func sinh(value:float64) float64 { return math_sinh64(value) }
+func cosh(value:float32) float32 { return math_cosh32(value) }
+func cosh(value:float64) float64 { return math_cosh64(value) }
+func tanh(value:float32) float32 { return math_tanh32(value) }
+func tanh(value:float64) float64 { return math_tanh64(value) }
+func asinh(value:float32) float32 { return math_asinh32(value) }
+func asinh(value:float64) float64 { return math_asinh64(value) }
+func acosh(value:float32) float32 { return math_acosh32(value) }
+func acosh(value:float64) float64 { return math_acosh64(value) }
+func atanh(value:float32) float32 { return math_atanh32(value) }
+func atanh(value:float64) float64 { return math_atanh64(value) }

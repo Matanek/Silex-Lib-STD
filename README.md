@@ -59,7 +59,8 @@ print(System.target_name(selected))
 compiler. Cross-compiling with `--target windows-x64` therefore produces
 `windows` and `x64` in the resulting program.
 
-`STD.Math` provides scalar rounding and shared geometric values:
+`STD.Math` provides IEEE 754 scalar operations in both language precisions and
+shared geometric values:
 
 ```sx
 use STD.Math
@@ -69,10 +70,73 @@ let size = Math.Vec2(1280.4, 720.8).round()
 let viewport = Math.Rect(Math.Vec2(), size)
 ```
 
-`floor`, `ceil`, `round` and `trunc` preserve the `float` type. The same
+Scalar functions preserve the concrete type of a `float32` or `float64`
+operand. Constants default to `float` and accept an explicit precision when it
+matters:
+
+```sx
+let ordinary = Math.pi()
+let precise:float64 = Math.pi<float64>()
+let root:float64 = Math.sqrt(2.0 as float64)
+```
+
+`is_nan`, `is_infinite`, `is_finite`, `is_normal` and `sign_bit` expose the
+portable classification of special values. Invalid real domains return NaN,
+overflow returns signed infinity, representable subnormals are preserved and
+signed zeros remain observable. `min` and `max` select the numeric operand when
+only one operand is NaN and select respectively negative and positive zero.
+`clamp` returns NaN for a NaN bound or an inverted interval.
+
+`epsilon()` remains the historical application tolerance `1e-6`; it is not a
+universal domain threshold. `machine_epsilon<T>()` exposes the spacing after
+one for advanced numeric code.
+
+`nearly_equal(left, right)` combines a small absolute tolerance with a relative
+tolerance scaled to the operands. The three-argument form keeps its historical
+absolute-only meaning, while the four-argument form accepts explicit absolute
+and relative tolerances. `Vec2`, `Vec3` and `Vec4` apply the same rules to every
+component. A domain-specific tolerance remains an application decision and
+should not be replaced by `epsilon()` or machine epsilon.
+
+`Vec2.normalized()`, `Vec3.normalized()` and `Vec4.normalized()` are total: an
+exactly zero vector stays zero, while every finite non-zero vector is scaled to
+unit length without treating a small magnitude as absent. `Quat.normalized()`
+uses the same scale-stable calculation and maps only the exactly zero
+quaternion to identity. Their value-returning signatures remain suitable for
+composable graphics code.
+
+`floor`, `ceil`, `round` and `trunc` preserve their operand precision. The same
 component-wise operations are available on `Vec2`, `Vec3` and `Vec4`.
+
+The scalar vocabulary also includes `sign`, `copy_sign`, `fraction`,
+`round_even`, `modulo`, `remainder`, `cbrt` and scale-stable `hypot`.
+`round` moves halfway cases away from zero, whereas `round_even` chooses the
+even integer. `remainder` uses a quotient truncated toward zero and keeps the
+dividend sign; `modulo` uses a quotient rounded toward negative infinity and
+keeps the modulus sign. A zero divisor returns NaN. The constants `e`,
+`sqrt_two` and `ln_two` follow the same default/explicit precision model as
+`pi`.
+
+Exponentials (`exp`, `exp2`), logarithms (`log`, `log2`, `log10`), real `pow`,
+trigonometry and inverse trigonometry, and the six direct/inverse hyperbolic
+functions live directly under `STD.Math`. Angles use radians; `radians` and
+`degrees` make degree conversion explicit. `log` is natural logarithm,
+`log(0)` is negative infinity, and negative inputs return NaN. A negative base
+to a finite non-integral power also returns NaN. `atan2(y, x)` preserves
+quadrants, signed zeros and infinities. `acosh` accepts values from one upward;
+`atanh` accepts `[-1, 1]`, returning signed infinity at its endpoints.
+
+`lerp` and its shader-vocabulary alias `mix` extrapolate when `amount` leaves
+`[0, 1]`; `lerp_clamped` states the bounded intention explicitly.
+`inverse_lerp` returns an unbounded position, and `remap` carries that position
+to another interval without hidden clamping. Degenerate source intervals return
+NaN. `step` implements an inclusive threshold, while `smooth_step` clamps its
+position before applying the cubic transition. Reversed smooth-step edges form
+a descending transition.
 `Rect` stores `x`, `y`, `w` and `h`, exposes position, size, bounds and center,
 and supports containment, intersection, translation and scaling.
+The complete right-handed coordinate, column-vector, projection-depth and
+semi-open rectangle contract is documented in [Docs/Math.md](Docs/Math.md).
 
 Text files use UTF-8 without a byte-order mark or newline conversion. The text
 helpers keep encoding details out of ordinary file operations:

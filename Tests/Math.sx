@@ -53,6 +53,305 @@ test "scalar math" {
     assert(invalid_asin != invalid_asin, "arc sine domain")
 }
 
+test "scalar IEEE 754 contract in both precisions" {
+    let precise_two:float64 = 2.0
+    let precise_root:float64 = Math.sqrt(precise_two)
+    let expected_root:float64 = 1.4142135623730951
+    let root_tolerance:float64 = 1.0e-15
+    let pi_lower_bound:float64 = 3.14159265358979
+    assert(Math.nearly_equal(precise_root, expected_root, root_tolerance), "float64 square root")
+    assert(Math.pi<float64>() > pi_lower_bound, "float64 pi precision")
+    assert(Math.machine_epsilon<float32>() == 1.1920929e-7, "float32 machine epsilon")
+    let expected_epsilon:float64 = 2.220446049250313e-16
+    assert(Math.machine_epsilon<float64>() == expected_epsilon, "float64 machine epsilon")
+
+    let positive_infinity = 1.0 / 0.0
+    let negative_infinity = -1.0 / 0.0
+    let nan = 0.0 / 0.0
+    assert(Math.is_infinite(positive_infinity), "positive infinity")
+    assert(Math.is_infinite(negative_infinity), "negative infinity")
+    assert(!Math.is_finite(positive_infinity), "infinity is not finite")
+    assert(Math.is_nan(nan), "NaN classification")
+    assert(!Math.is_normal(0.0), "zero is not normal")
+    assert(!Math.is_normal(1.17549435e-38 * 0.5), "float32 subnormal")
+    assert(Math.is_normal(1.0), "ordinary float is normal")
+
+    let negative_zero = -1.0 / positive_infinity
+    let positive_zero = 1.0 / positive_infinity
+    assert(Math.sign_bit(negative_zero), "negative zero sign")
+    assert(!Math.sign_bit(positive_zero), "positive zero sign")
+    assert(!Math.sign_bit(Math.abs(negative_zero)), "abs produces positive zero")
+    assert(Math.sign_bit(Math.min(negative_zero, positive_zero)), "minimum selects negative zero")
+    assert(!Math.sign_bit(Math.max(negative_zero, positive_zero)), "maximum selects positive zero")
+    assert(Math.min(nan, 3.0) == 3.0, "minimum ignores one NaN")
+    assert(Math.max(3.0, nan) == 3.0, "maximum ignores one NaN")
+    assert(Math.is_nan(Math.min(nan, nan)), "minimum keeps two NaNs")
+    assert(Math.is_nan(Math.clamp(1.0, 2.0, -2.0)), "invalid clamp interval")
+    assert(Math.is_nan(Math.clamp(1.0, nan, 2.0)), "NaN clamp bound")
+
+    let precise_infinity:float64 = (1.0 as float64) / (0.0 as float64)
+    let minimum_normal:float64 = 2.2250738585072014e-308
+    let precise_subnormal:float64 = minimum_normal * 0.5
+    assert(Math.is_infinite(precise_infinity), "float64 infinity")
+    assert(!Math.is_normal(precise_subnormal), "float64 subnormal")
+    assert(Math.sqrt(precise_infinity) == precise_infinity, "float64 infinity propagation")
+    assert(Math.is_nan(Math.sqrt(-1.0 as float64)), "float64 invalid square root")
+}
+
+test "relative and absolute approximate equality" {
+    assert(Math.nearly_equal(0.0, 0.0000005), "float32 default near zero")
+    assert(Math.nearly_equal(1000000.0, 1000005.0), "float32 default relative scale")
+    assert(!Math.nearly_equal(1000000.0, 1000005.0, 1.0), "explicit tolerance remains absolute")
+    assert(Math.nearly_equal(1000000.0, 1000005.0, 0.0, 0.00001), "explicit relative tolerance")
+    assert(!Math.nearly_equal(1.0, 1.0001, -1.0, 0.1), "negative absolute tolerance")
+
+    let left64:float64 = 1000000000000.0
+    let right64:float64 = 1000000000001.0
+    let absolute64:float64 = 0.5
+    let relative64:float64 = 1.0e-12
+    assert(Math.nearly_equal(left64, right64), "float64 default relative scale")
+    assert(!Math.nearly_equal(left64, right64, absolute64), "float64 explicit absolute tolerance")
+    assert(Math.nearly_equal(left64, right64, 0.0 as float64, relative64), "float64 explicit relative tolerance")
+
+    let infinity = 1.0 / 0.0
+    let nan = 0.0 / 0.0
+    let negative_zero = -1.0 / infinity
+    assert(Math.nearly_equal(infinity, infinity), "equal infinities")
+    assert(!Math.nearly_equal(infinity, -infinity), "opposite infinities")
+    assert(!Math.nearly_equal(infinity, 1.0), "infinity and finite")
+    assert(!Math.nearly_equal(nan, nan), "NaN is never nearly equal")
+    assert(Math.nearly_equal(negative_zero, 0.0), "signed zeros")
+    assert(!Math.nearly_equal(1.0, 1.0, nan, 0.0), "NaN tolerance")
+
+    assert(Math.Vec2(1000000.0, 0.0).nearly_equal(Math.Vec2(1000005.0, 0.0000005)), "Vec2 relative components")
+    assert(!Math.Vec3(1.0, 2.0, 3.0).nearly_equal(Math.Vec3(1.0, 2.0, 3.01), 0.001), "Vec3 absolute threshold")
+    assert(Math.Vec4(1.0, 2.0, 3.0, 4.0).nearly_equal(Math.Vec4(1.0, 2.0, 3.0, 4.0)), "Vec4 components")
+}
+
+test "total normalization across finite scales" {
+    let tiny2 = Math.Vec2(3.0e-30, 4.0e-30).normalized()
+    let huge2 = Math.Vec2(3.0e30, 4.0e30).normalized()
+    assert(tiny2.nearly_equal(Math.Vec2(0.6, 0.8), 0.00001), "tiny Vec2 direction")
+    assert(huge2.nearly_equal(Math.Vec2(0.6, 0.8), 0.00001), "huge Vec2 direction")
+    assert(Math.Vec2.zero().normalized() == Math.Vec2.zero(), "zero Vec2 fallback")
+
+    let tiny3 = Math.Vec3(0.0, 3.0e-30, 4.0e-30).normalized()
+    let huge3 = Math.Vec3(0.0, 3.0e30, 4.0e30).normalized()
+    assert(Math.nearly_equal(tiny3.length(), 1.0), "tiny Vec3 unit length")
+    assert(Math.nearly_equal(huge3.length(), 1.0), "huge Vec3 unit length")
+    assert(Math.Vec3.zero().normalized() == Math.Vec3.zero(), "zero Vec3 fallback")
+
+    let tiny4 = Math.Vec4(0.0, 0.0, 3.0e-30, 4.0e-30).normalized()
+    let huge4 = Math.Vec4(0.0, 0.0, 3.0e30, 4.0e30).normalized()
+    assert(Math.nearly_equal(tiny4.length(), 1.0), "tiny Vec4 unit length")
+    assert(Math.nearly_equal(huge4.length(), 1.0), "huge Vec4 unit length")
+    assert(Math.Vec4.zero().normalized() == Math.Vec4.zero(), "zero Vec4 fallback")
+
+    let zero_quaternion = Math.Quat(0.0, 0.0, 0.0, 0.0)
+    let tiny_quaternion = Math.Quat(0.0, 0.0, 3.0e-30, 4.0e-30).normalized()
+    let huge_quaternion = Math.Quat(0.0, 0.0, 3.0e30, 4.0e30).normalized()
+    assert(zero_quaternion.normalized() == Math.Quat.identity(), "zero quaternion fallback")
+    assert(Math.nearly_equal(tiny_quaternion.length(), 1.0), "tiny quaternion unit length")
+    assert(Math.nearly_equal(huge_quaternion.length(), 1.0), "huge quaternion unit length")
+
+    let nan = 0.0 / 0.0
+    let infinity = 1.0 / 0.0
+    assert(Math.is_nan(Math.Vec2(nan, 0.0).normalized().x), "Vec2 NaN propagation")
+    assert(Math.is_nan(Math.Vec3(infinity, 1.0, 0.0).normalized().x), "Vec3 infinity contract")
+    assert(Math.is_nan(Math.Vec4(0.0, nan, 0.0, 0.0).normalized().y), "Vec4 NaN propagation")
+    assert(Math.is_nan(Math.Quat(0.0, 0.0, infinity, 1.0).normalized().z), "quaternion infinity contract")
+}
+
+test "fundamental scalar operations" {
+    let infinity = 1.0 / 0.0
+    let nan = 0.0 / 0.0
+    let negative_zero = -1.0 / infinity
+    assert(Math.sign(-42.0) == -1.0, "negative sign")
+    assert(Math.sign(42.0) == 1.0, "positive sign")
+    assert(Math.sign_bit(Math.sign(negative_zero)), "sign preserves negative zero")
+    assert(Math.is_nan(Math.sign(nan)), "sign propagates NaN")
+    assert(Math.copy_sign(3.0, -0.0) == -3.0, "copy sign from zero")
+    assert(Math.sign_bit(Math.copy_sign(0.0, -1.0)), "copy sign to zero")
+    assert(Math.fraction(3.75) == 0.75, "positive fraction")
+    assert(Math.fraction(-3.75) == -0.75, "negative fraction")
+    assert(Math.sign_bit(Math.fraction(-2.0)), "integral fraction keeps signed zero")
+
+    assert(Math.round(2.5) == 3.0, "round half away from zero")
+    assert(Math.round_even(2.5) == 2.0, "round half to lower even")
+    assert(Math.round_even(3.5) == 4.0, "round half to upper even")
+    assert(Math.round_even(-2.5) == -2.0, "negative round half to even")
+    assert(Math.modulo(-5.5, 2.0) == 0.5, "modulo follows divisor sign")
+    assert(Math.modulo(5.5, -2.0) == -0.5, "negative modulus")
+    assert(Math.remainder(-5.5, 2.0) == -1.5, "remainder follows dividend sign")
+    assert(Math.remainder(5.5, -2.0) == 1.5, "remainder ignores divisor sign")
+    assert(Math.is_nan(Math.modulo(1.0, 0.0)), "zero modulus")
+    assert(Math.is_nan(Math.remainder(1.0, 0.0)), "zero divisor")
+
+    assert(Math.cbrt(-27.0) == -3.0, "negative cubic root")
+    assert(Math.sign_bit(Math.cbrt(negative_zero)), "cubic root keeps signed zero")
+    assert(Math.hypot(3.0, 4.0) == 5.0, "ordinary hypot")
+    assert(Math.nearly_equal(Math.hypot(3.0e30, 4.0e30), 5.0e30), "large stable hypot")
+    assert(Math.nearly_equal(Math.hypot(3.0e-30, 4.0e-30), 5.0e-30, 1.0e-35, 1.0e-5), "small stable hypot")
+
+    let e64:float64 = Math.e<float64>()
+    let sqrt_two64:float64 = Math.sqrt_two<float64>()
+    let ln_two64:float64 = Math.ln_two<float64>()
+    let e_lower:float64 = 2.71828182845904
+    let sqrt_two_lower:float64 = 1.41421356237309
+    let ln_two_lower:float64 = 0.69314718055994
+    assert(e64 > e_lower, "float64 e precision")
+    assert(sqrt_two64 > sqrt_two_lower, "float64 sqrt two precision")
+    assert(ln_two64 > ln_two_lower, "float64 ln two precision")
+    assert(Math.cbrt(8.0 as float64) == 2.0 as float64, "float64 cubic root")
+    assert(Math.hypot(3.0 as float64, 4.0 as float64) == 5.0 as float64, "float64 hypot")
+}
+
+test "transcendental families and domains" {
+    let tolerance = 0.00001
+    assert(Math.nearly_equal(Math.exp(1.0), Math.e(), tolerance), "natural exponential")
+    assert(Math.exp2(10.0) == 1024.0, "binary exponential")
+    assert(Math.nearly_equal(Math.log(Math.e()), 1.0, tolerance), "natural logarithm")
+    assert(Math.log2(1024.0) == 10.0, "binary logarithm")
+    assert(Math.log10(1000.0) == 3.0, "decimal logarithm")
+    assert(Math.pow(2.0, 10.0) == 1024.0, "real power")
+    assert(Math.pow(base:2, exponent:10) == 1024.0, "integer arguments select canonical float power")
+    assert(Math.pow(-2.0, 3.0) == -8.0, "negative integral power")
+    assert(Math.is_nan(Math.pow(-2.0, 0.5)), "negative non-integral power domain")
+    assert(Math.pow(0.0, 0.0) == 1.0, "zero power zero")
+
+    let infinity = 1.0 / 0.0
+    assert(Math.log(0.0) == -infinity, "logarithm zero")
+    assert(Math.is_nan(Math.log(-1.0)), "negative logarithm domain")
+    assert(Math.is_infinite(Math.exp(1000.0)), "exponential overflow")
+    assert(Math.nearly_equal(Math.acos(0.5), Math.pi() / 3.0, tolerance), "arc cosine")
+    assert(Math.nearly_equal(Math.atan(1.0), Math.pi() * 0.25, tolerance), "arc tangent")
+    assert(Math.is_nan(Math.acos(2.0)), "arc cosine domain")
+    assert(Math.sign_bit(Math.atan2(-0.0, -1.0)), "atan2 negative zero quadrant")
+    assert(!Math.sign_bit(Math.atan2(0.0, -1.0)), "atan2 positive zero quadrant")
+
+    assert(Math.nearly_equal(Math.sinh(1.0), 1.1752012, tolerance), "hyperbolic sine")
+    assert(Math.nearly_equal(Math.cosh(1.0), 1.5430807, tolerance), "hyperbolic cosine")
+    assert(Math.nearly_equal(Math.tanh(1.0), 0.7615942, tolerance), "hyperbolic tangent")
+    assert(Math.nearly_equal(Math.asinh(Math.sinh(0.75)), 0.75, tolerance), "inverse hyperbolic sine")
+    assert(Math.nearly_equal(Math.acosh(Math.cosh(0.75)), 0.75, tolerance), "inverse hyperbolic cosine")
+    assert(Math.nearly_equal(Math.atanh(Math.tanh(0.75)), 0.75, tolerance), "inverse hyperbolic tangent")
+    assert(Math.is_nan(Math.acosh(0.5)), "inverse hyperbolic cosine domain")
+    assert(Math.atanh(1.0) == infinity, "inverse hyperbolic tangent upper bound")
+    assert(Math.atanh(-1.0) == -infinity, "inverse hyperbolic tangent lower bound")
+    assert(Math.is_nan(Math.atanh(2.0)), "inverse hyperbolic tangent domain")
+
+    var sample = -32
+    while sample <= 32 {
+        let angle = (sample as float) * 0.125
+        let circle = Math.sin(angle) * Math.sin(angle) + Math.cos(angle) * Math.cos(angle)
+        assert(Math.nearly_equal(circle, 1.0, 0.00001), "dense float32 trigonometric identity")
+        let positive = Math.exp(angle * 0.25)
+        assert(Math.nearly_equal(Math.log(positive), angle * 0.25, 0.00001), "dense float32 log-exp identity")
+
+        let angle64:float64 = (sample as float64) * 0.125
+        let sine64 = Math.sin(angle64)
+        let cosine64 = Math.cos(angle64)
+        let circle64 = sine64 * sine64 + cosine64 * cosine64
+        let tolerance64:float64 = 1.0e-12
+        assert(Math.nearly_equal(circle64, 1.0 as float64, tolerance64), "dense float64 trigonometric identity")
+        let positive64 = Math.exp(angle64 * 0.25)
+        assert(Math.nearly_equal(Math.log(positive64), angle64 * 0.25, tolerance64), "dense float64 log-exp identity")
+        sample++
+    }
+}
+
+test "interpolation remapping and transitions" {
+    assert(Math.lerp(0.0, 10.0, 1.5) == 15.0, "lerp extrapolates")
+    assert(Math.mix(0.0, 10.0, -0.5) == -5.0, "mix extrapolates")
+    assert(Math.lerp_clamped(0.0, 10.0, 1.5) == 10.0, "clamped lerp upper bound")
+    assert(Math.lerp_clamped(0.0, 10.0, -0.5) == 0.0, "clamped lerp lower bound")
+    assert(Math.inverse_lerp(10.0, 20.0, 15.0) == 0.5, "inverse lerp")
+    assert(Math.inverse_lerp(20.0, 10.0, 15.0) == 0.5, "descending inverse lerp")
+    assert(Math.inverse_lerp(10.0, 20.0, 25.0) == 1.5, "inverse lerp extrapolates")
+    assert(Math.remap(5.0, 0.0, 10.0, 100.0, 200.0) == 150.0, "remap interval")
+    assert(Math.remap(15.0, 0.0, 10.0, 100.0, 200.0) == 250.0, "remap extrapolates")
+    assert(Math.is_nan(Math.inverse_lerp(1.0, 1.0, 1.0)), "degenerate inverse lerp")
+    assert(Math.is_nan(Math.remap(1.0, 1.0, 1.0, 0.0, 10.0)), "degenerate remap")
+
+    assert(Math.step(0.5, 0.49) == 0.0, "step below edge")
+    assert(Math.step(0.5, 0.5) == 1.0, "step includes edge")
+    assert(Math.smooth_step(0.0, 1.0, -1.0) == 0.0, "smooth step lower clamp")
+    assert(Math.smooth_step(0.0, 1.0, 0.5) == 0.5, "smooth step midpoint")
+    assert(Math.smooth_step(0.0, 1.0, 2.0) == 1.0, "smooth step upper clamp")
+    assert(Math.smooth_step(1.0, 0.0, -1.0) == 1.0, "descending smooth step lower side")
+    assert(Math.smooth_step(1.0, 0.0, 2.0) == 0.0, "descending smooth step upper side")
+    assert(Math.is_nan(Math.smooth_step(1.0, 1.0, 1.0)), "degenerate smooth step")
+
+    let nan = 0.0 / 0.0
+    assert(Math.is_nan(Math.step(0.0, nan)), "step propagates NaN value")
+    assert(Math.is_nan(Math.step(nan, 0.0)), "step propagates NaN edge")
+    assert(Math.is_nan(Math.lerp_clamped(0.0, 1.0, nan)), "clamped lerp propagates NaN")
+
+    let start64:float64 = 0.0
+    let end64:float64 = 10.0
+    let amount64:float64 = 0.25
+    assert(Math.lerp(start64, end64, amount64) == 2.5 as float64, "float64 lerp")
+    assert(Math.inverse_lerp(start64, end64, 2.5 as float64) == amount64, "float64 inverse lerp")
+    assert(Math.smooth_step(start64, end64, 5.0 as float64) == 0.5 as float64, "float64 smooth step")
+}
+
+test "documented graphics conventions" {
+    let right = Math.Vec3.right()
+    let up = Math.Vec3.up()
+    let front = Math.Vec3.front()
+    let back = Math.Vec3.back()
+    assert(right == Math.Vec3(1.0, 0.0, 0.0), "right is positive X")
+    assert(up == Math.Vec3(0.0, 1.0, 0.0), "up is positive Y")
+    assert(front == Math.Vec3(0.0, 0.0, -1.0), "front is negative Z")
+    assert(back == Math.Vec3(0.0, 0.0, 1.0), "back is positive Z")
+    assert(right.cross(up) == back, "right-handed cross product")
+
+    let columns = Math.Mat4(
+        Math.Vec4(1.0, 2.0, 3.0, 4.0),
+        Math.Vec4(5.0, 6.0, 7.0, 8.0),
+        Math.Vec4(9.0, 10.0, 11.0, 12.0),
+        Math.Vec4(13.0, 14.0, 15.0, 16.0)
+    )
+    assert(columns.x == Math.Vec4(1.0, 2.0, 3.0, 4.0), "x field is first column")
+    assert(columns.row(0) == Math.Vec4(1.0, 5.0, 9.0, 13.0), "row gathers columns")
+
+    let translation = Math.Mat4.translation(Math.Vec3(10.0, 20.0, 30.0))
+    let point = Math.Vec4(Math.Vec3(1.0, 2.0, 3.0), 1.0)
+    let direction = Math.Vec4(Math.Vec3(1.0, 2.0, 3.0), 0.0)
+    assert(translation.multiply(point) == Math.Vec4(11.0, 22.0, 33.0, 1.0), "translation transforms a point")
+    assert(translation.multiply(direction) == direction, "translation leaves a direction unchanged")
+
+    let scaling = Math.Mat4.scaling(Math.Vec3(2.0, 3.0, 4.0))
+    let composed = translation.multiply(scaling)
+    assert(composed.multiply(point) == translation.multiply(scaling.multiply(point)), "composition applies right operand first")
+    let rotation = Math.Mat4.rotation(Math.half_pi(), back)
+    assert(rotation.multiply(Math.Vec4(right, 0.0)).xyz().nearly_equal(up, 0.00001), "right-handed positive rotation")
+
+    let view = Math.Mat4.look_at(Math.Vec3.zero(), front, up)
+    assert(view.multiply(Math.Vec4(front, 1.0)) == Math.Vec4(front, 1.0), "view looks toward negative Z")
+
+    let perspective = Math.Mat4.perspective(Math.half_pi(), 1.0, 1.0, 10.0)
+    let perspective_near = perspective.multiply(Math.Vec4(0.0, 0.0, -1.0, 1.0))
+    let perspective_far = perspective.multiply(Math.Vec4(0.0, 0.0, -10.0, 1.0))
+    assert(Math.nearly_equal(perspective_near.z / perspective_near.w, -1.0), "perspective near depth is negative one")
+    assert(Math.nearly_equal(perspective_far.z / perspective_far.w, 1.0), "perspective far depth is positive one")
+
+    let orthographic = Math.Mat4.orthographic(-1.0, 1.0, -1.0, 1.0, 1.0, 10.0)
+    let orthographic_near = orthographic.multiply(Math.Vec4(0.0, 0.0, -1.0, 1.0))
+    let orthographic_far = orthographic.multiply(Math.Vec4(0.0, 0.0, -10.0, 1.0))
+    assert(Math.nearly_equal(orthographic_near.z, -1.0), "orthographic near depth is negative one")
+    assert(Math.nearly_equal(orthographic_far.z, 1.0), "orthographic far depth is positive one")
+
+    let area = Math.Rect(10.0, 20.0, 100.0, 50.0)
+    assert(area.contains(Math.Vec2(10.0, 20.0)), "rectangle includes minimum")
+    assert(!area.contains(Math.Vec2(110.0, 20.0)), "rectangle excludes maximum X")
+    assert(!area.contains(Math.Vec2(10.0, 70.0)), "rectangle excludes maximum Y")
+    assert(!area.intersects(Math.Rect(110.0, 20.0, 10.0, 10.0)), "touching rectangle does not intersect")
+    assert(Math.Rect(0.0, 0.0, 0.0, 1.0).is_empty(), "zero-width rectangle is empty")
+    assert(Math.Rect(0.0, 0.0, 1.0, -1.0).is_empty(), "negative-height rectangle is empty")
+    assert(area.scaled(Math.Vec2(2.0, 0.5)) == Math.Rect(20.0, 10.0, 200.0, 25.0), "rectangle scales from origin")
+}
+
 test "Vec2" {
     let vector = Math.Vec2(3.0, 4.0)
     assert(vector.length_squared() == 25.0, "Vec2 squared length")

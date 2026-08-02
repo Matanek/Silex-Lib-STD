@@ -73,11 +73,12 @@ public struct Vec3 {
     }
 
     func normalized() Vec3 {
-        let length = self.length()
-        if length <= Math.epsilon() {
+        let scale = Math.max(Math.max(Math.abs(self.x), Math.abs(self.y)), Math.abs(self.z))
+        if scale == 0.0 && !Math.is_nan(self.x) && !Math.is_nan(self.y) && !Math.is_nan(self.z) {
             return Vec3.zero()
         }
-        return self.divide(length)
+        let scaled = self.divide(scale)
+        return scaled.divide(Math.sqrt(scaled.length_squared()))
     }
 
     func lerp(other:Vec3, amount:float) Vec3 {
@@ -133,7 +134,8 @@ public struct Vec3 {
     }
 
     func nearly_equal(other:Vec3) bool {
-        return self.nearly_equal(other, Math.epsilon())
+        return Math.nearly_equal(self.x, other.x) && Math.nearly_equal(self.y, other.y) &&
+            Math.nearly_equal(self.z, other.z)
     }
 
     func nearly_equal(other:Vec3, tolerance:float) bool {

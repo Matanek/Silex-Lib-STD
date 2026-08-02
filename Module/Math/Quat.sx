@@ -75,11 +75,14 @@ public struct Quat {
     }
 
     func normalized() Quat {
-        let length = self.length()
-        if length <= Math.epsilon() {
-            return Quat.identity()
-        }
-        return self.multiply(1.0 / length)
+        let scale = Math.max(
+            Math.max(Math.abs(self.x), Math.abs(self.y)),
+            Math.max(Math.abs(self.z), Math.abs(self.w))
+        )
+        if scale == 0.0 && !Math.is_nan(self.x) && !Math.is_nan(self.y) &&
+            !Math.is_nan(self.z) && !Math.is_nan(self.w) { return Quat.identity() }
+        let scaled = self.multiply(1.0 / scale)
+        return scaled.multiply(1.0 / Math.sqrt(scaled.length_squared()))
     }
 
     func inverted() Quat {

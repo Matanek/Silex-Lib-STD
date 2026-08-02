@@ -15,83 +15,105 @@ public static class TaskManager {
     }
 }
 
-public class TaskHandle<T:Task> {
+internal class TaskState<T:Task> {
     internal var task:T
-    internal var thread:uint
-    public init(task:T) {
+    internal var thread:uint = 0
+    internal init(task:T) {
         self.task = task
-        self.thread = 0
+    }
+}
+
+public struct TaskHandle<T:Task> {
+    internal var state:TaskState<T>? = null
+    public init(task:T) { self.state = TaskState<T>(task) }
+    internal func shared() TaskState<T> {
+        if var state = self.state { return state }
+        panic("task handle has no state")
     }
     internal func start() {
-        let value = Platform.spawn(C.function_address<T>(run_task), C.object_address(self))
-        if value != 0 { self.thread = value; return }
+        var state = self.shared()
+        let value = Platform.spawn(C.function_address<T>(run_task), C.object_address(state))
+        if value != 0 { state.thread = value; return }
         panic("system thread creation failed")
     }
     public func complete() T {
-        if self.thread != 0 {
-            if !Platform.join(self.thread) { panic("system thread join failed") }
-            self.thread = 0
+        var state = self.shared()
+        if state.thread != 0 {
+            if !Platform.join(state.thread) { panic("system thread join failed") }
+            state.thread = 0
         }
-        return self.task
+        return state.task
     }
     public func complete(callback:func(T)) {
-        if self.thread != 0 {
-            if !Platform.join(self.thread) { panic("system thread join failed") }
-            self.thread = 0
+        var state = self.shared()
+        if state.thread != 0 {
+            if !Platform.join(state.thread) { panic("system thread join failed") }
+            state.thread = 0
         }
-        callback(self.task)
+        callback(state.task)
     }
     drop {
-        if self.thread != 0 {
-            if !Platform.join(self.thread) { panic("system thread join failed") }
-            self.thread = 0
+        var state = self.shared()
+        if state.thread != 0 {
+            if !Platform.join(state.thread) { panic("system thread join failed") }
+            state.thread = 0
         }
     }
 }
 
-public class TaskWaitHandle<T:Task> {
+internal class TaskWaitState<T:Task> {
     internal var task:T
     internal let callback:func(T)
-    internal var thread:uint
-    public init(task:T, callback:func(T)) {
+    internal var thread:uint = 0
+    internal init(task:T, callback:func(T)) {
         self.task = task
         self.callback = callback
-        self.thread = 0
+    }
+}
+
+public struct TaskWaitHandle<T:Task> {
+    internal var state:TaskWaitState<T>? = null
+    public init(task:T, callback:func(T)) { self.state = TaskWaitState<T>(task, callback) }
+    internal func shared() TaskWaitState<T> {
+        if var state = self.state { return state }
+        panic("task handle has no state")
     }
     internal func start() {
-        let value = Platform.spawn(C.function_address<T>(run_wait_task), C.object_address(self))
-        if value != 0 { self.thread = value; return }
+        var state = self.shared()
+        let value = Platform.spawn(C.function_address<T>(run_wait_task), C.object_address(state))
+        if value != 0 { state.thread = value; return }
         panic("system thread creation failed")
     }
     public func complete() {
-        if self.thread != 0 {
-            if !Platform.join(self.thread) { panic("system thread join failed") }
-            self.thread = 0
+        var state = self.shared()
+        if state.thread != 0 {
+            if !Platform.join(state.thread) { panic("system thread join failed") }
+            state.thread = 0
         }
     }
     drop {
-        if self.thread != 0 {
-            if !Platform.join(self.thread) { panic("system thread join failed") }
-            self.thread = 0
+        var state = self.shared()
+        if state.thread != 0 {
+            if !Platform.join(state.thread) { panic("system thread join failed") }
+            state.thread = 0
         }
     }
-    internal func completion() func(T) { return self.callback }
 }
 
 func run_task<T:Task>(context:uint) uint {
-    var handle = C.object_from_address<TaskHandle<T>>(context)
-    var running = handle.task
+    var state = C.object_from_address<TaskState<T>>(context)
+    var running = state.task
     running.execute()
-    handle.task = running
+    state.task = running
     return 0
 }
 
 func run_wait_task<T:Task>(context:uint) uint {
-    var handle = C.object_from_address<TaskWaitHandle<T>>(context)
-    var running = handle.task
+    var state = C.object_from_address<TaskWaitState<T>>(context)
+    var running = state.task
     running.execute()
-    handle.task = running
-    invoke_callback<T>(handle.completion(), running)
+    state.task = running
+    invoke_callback<T>(state.callback, running)
     return 0
 }
 

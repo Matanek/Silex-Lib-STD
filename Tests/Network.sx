@@ -20,12 +20,12 @@ test "IP addresses and resolution" {
         )
         assert(numeric.count() == 1, "numeric address resolution")
         assert(Network.format_endpoint(numeric[0]) == "127.0.0.1:8080", "numeric endpoint resolution")
-        let local = try Network.resolve(
+        let local_addresses = try Network.resolve(
             "localhost",
             80,
             Network.ResolveOptions(family:Network.Family.any(), transport:Network.Transport.stream())
         )
-        assert(local.count() > 0, "platform name resolution")
+        assert(local_addresses.count() > 0, "platform name resolution")
         match Network.parse_ip("999.1.1.1") {
             success(value) => { panic("invalid IPv4 address accepted") }
             failure(error) => {}

@@ -104,7 +104,7 @@ def parse_case_folding(path: Path) -> dict[int, tuple[int, ...]]:
 
 
 def function(name: str, value: str) -> str:
-    return f'func {name}() str {{ return "{value}" }}\n'
+    return f'internal func {name}() str {{ return "{value}" }}\n'
 
 
 def main():

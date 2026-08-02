@@ -148,13 +148,13 @@ public func local_endpoint(listener:@Listener) Result<Network.Endpoint, Error> {
     return Result<Network.Endpoint, Error>.failure(failure("tcp.endpoint", "system endpoint query failed"))
 }
 
-public func close(stream:Stream) Result<void, Error> {
-    if stream.close_handle() { return Result<void, Error>.success() }
+public func close(value:Stream) Result<void, Error> {
+    if value.close_handle() { return Result<void, Error>.success() }
     return Result<void, Error>.failure(failure("tcp.close", "system close failed or stream is already closed"))
 }
 
-public func close(listener:Listener) Result<void, Error> {
-    if listener.close_handle() { return Result<void, Error>.success() }
+public func close(value:Listener) Result<void, Error> {
+    if value.close_handle() { return Result<void, Error>.success() }
     return Result<void, Error>.failure(failure("tcp.close", "system close failed or listener is already closed"))
 }
 

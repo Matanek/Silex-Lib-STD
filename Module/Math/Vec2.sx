@@ -25,20 +25,20 @@ public struct Vec2 {
         return Vec2(self.x - other.x, self.y - other.y)
     }
 
-    func multiply(other:Vec2) Vec2 {
-        return Vec2(self.x * other.x, self.y * other.y)
+    func multiply(value:Vec2) Vec2 {
+        return Vec2(self.x * value.x, self.y * value.y)
     }
 
-    func multiply(scalar:float) Vec2 {
-        return Vec2(self.x * scalar, self.y * scalar)
+    func multiply(value:float) Vec2 {
+        return Vec2(self.x * value, self.y * value)
     }
 
-    func divide(other:Vec2) Vec2 {
-        return Vec2(self.x / other.x, self.y / other.y)
+    func divide(value:Vec2) Vec2 {
+        return Vec2(self.x / value.x, self.y / value.y)
     }
 
-    func divide(scalar:float) Vec2 {
-        return Vec2(self.x / scalar, self.y / scalar)
+    func divide(value:float) Vec2 {
+        return Vec2(self.x / value, self.y / value)
     }
 
     func negated() Vec2 {

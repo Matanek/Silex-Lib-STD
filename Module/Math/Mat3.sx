@@ -54,25 +54,25 @@ public struct Mat3 {
         )
     }
 
-    func multiply(scalar:float) Mat3 {
+    func multiply(value:float) Mat3 {
         return Mat3(
-            self.x.multiply(scalar),
-            self.y.multiply(scalar),
-            self.z.multiply(scalar)
+            self.x.multiply(value),
+            self.y.multiply(value),
+            self.z.multiply(value)
         )
     }
 
-    func multiply(vector:Vec3) Vec3 {
-        return self.x.multiply(vector.x).add(
-            self.y.multiply(vector.y)
-        ).add(self.z.multiply(vector.z))
+    func multiply(value:Vec3) Vec3 {
+        return self.x.multiply(value.x).add(
+            self.y.multiply(value.y)
+        ).add(self.z.multiply(value.z))
     }
 
-    func multiply(other:Mat3) Mat3 {
+    func multiply(value:Mat3) Mat3 {
         return Mat3(
-            self.multiply(other.x),
-            self.multiply(other.y),
-            self.multiply(other.z)
+            self.multiply(value.x),
+            self.multiply(value.y),
+            self.multiply(value.z)
         )
     }
 

@@ -24,20 +24,7 @@ public struct Dictionary<Key, Value> {
     public init(
         hash:func(@Key) uint = Hashing.hash,
         equal:func(@Key, @Key) bool = Hashing.equal,
-    ) {
-        self.hash = hash
-        self.equal = equal
-        self.buckets = []
-        self.hashes = []
-        self.keys = []
-        self.values = []
-        self.next = []
-    }
-
-    public init(
-        minimum_capacity:int,
-        hash:func(@Key) uint = Hashing.hash,
-        equal:func(@Key, @Key) bool = Hashing.equal,
+        minimum_capacity:int = 0,
     ) {
         if minimum_capacity < 0 {
             panic("Dictionary requires a non-negative minimum capacity")
@@ -49,25 +36,9 @@ public struct Dictionary<Key, Value> {
         self.keys = []
         self.values = []
         self.next = []
-        self.reserve(minimum_capacity)
-    }
-
-    public init(
-        hash:func(@Key) uint,
-        equal:func(@Key, @Key) bool,
-        minimum_capacity:int,
-    ) {
-        if minimum_capacity < 0 {
-            panic("Dictionary requires a non-negative minimum capacity")
+        if minimum_capacity > 0 {
+            self.reserve(minimum_capacity)
         }
-        self.hash = hash
-        self.equal = equal
-        self.buckets = []
-        self.hashes = []
-        self.keys = []
-        self.values = []
-        self.next = []
-        self.reserve(minimum_capacity)
     }
 
     public func count() int {

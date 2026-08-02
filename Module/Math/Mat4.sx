@@ -17,11 +17,11 @@ public struct Mat4 {
         self.w = Vec4(0.0, 0.0, 0.0, 1.0)
     }
 
-    init(diagonal:float) {
-        self.x = Vec4(diagonal, 0.0, 0.0, 0.0)
-        self.y = Vec4(0.0, diagonal, 0.0, 0.0)
-        self.z = Vec4(0.0, 0.0, diagonal, 0.0)
-        self.w = Vec4(0.0, 0.0, 0.0, diagonal)
+    init(value:float) {
+        self.x = Vec4(value, 0.0, 0.0, 0.0)
+        self.y = Vec4(0.0, value, 0.0, 0.0)
+        self.z = Vec4(0.0, 0.0, value, 0.0)
+        self.w = Vec4(0.0, 0.0, 0.0, value)
     }
 
     init(x:Vec4, y:Vec4, z:Vec4, w:Vec4) {
@@ -76,29 +76,29 @@ public struct Mat4 {
         )
     }
 
-    func multiply(scalar:float) Mat4 {
+    func multiply(value:float) Mat4 {
         return Mat4(
-            self.x.multiply(scalar),
-            self.y.multiply(scalar),
-            self.z.multiply(scalar),
-            self.w.multiply(scalar)
+            self.x.multiply(value),
+            self.y.multiply(value),
+            self.z.multiply(value),
+            self.w.multiply(value)
         )
     }
 
-    func multiply(vector:Vec4) Vec4 {
-        return self.x.multiply(vector.x).add(
-            self.y.multiply(vector.y)
+    func multiply(value:Vec4) Vec4 {
+        return self.x.multiply(value.x).add(
+            self.y.multiply(value.y)
         ).add(
-            self.z.multiply(vector.z)
-        ).add(self.w.multiply(vector.w))
+            self.z.multiply(value.z)
+        ).add(self.w.multiply(value.w))
     }
 
-    func multiply(other:Mat4) Mat4 {
+    func multiply(value:Mat4) Mat4 {
         return Mat4(
-            self.multiply(other.x),
-            self.multiply(other.y),
-            self.multiply(other.z),
-            self.multiply(other.w)
+            self.multiply(value.x),
+            self.multiply(value.y),
+            self.multiply(value.z),
+            self.multiply(value.w)
         )
     }
 

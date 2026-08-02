@@ -143,13 +143,13 @@ public func read_text(path:Path, maximum_bytes:int) Result<str, Error> {
     }
 }
 
-public func write_all(path:Path, bytes:@uint8[..]) Result<void, Error> {
+public func write_all(path:Path, value:@uint8[..]) Result<void, Error> {
     let options = OpenOptions(access:Access.write(), creation:Creation.create_or_truncate(), append:false)
     match open(path, options) {
         failure(error) => { return Result<void, Error>.failure(error) }
         success(var file) => {
-            let written = try file.write(bytes)
-            if written != bytes.count() {
+            let written = try file.write(value)
+            if written != value.count() {
                 let ignored = close(move file)
                 return Result<void, Error>.failure(file_error("file.write_all", path, "short write"))
             }
@@ -159,8 +159,8 @@ public func write_all(path:Path, bytes:@uint8[..]) Result<void, Error> {
     }
 }
 
-public func write_all(path:Path, text:str) Result<void, Error> {
-    let bytes = UTF8.bytes(text)
+public func write_all(path:Path, value:str) Result<void, Error> {
+    let bytes = UTF8.bytes(value)
     let view = @bytes[0:bytes.count()]
     return write_all(path, view)
 }

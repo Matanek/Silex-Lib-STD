@@ -40,6 +40,9 @@ test "dictionary operations" {
     assert(dictionary.remove(-7), "removed dictionary association")
     assert(!dictionary.remove(7), "missing dictionary association")
     assert(!dictionary.contains(7), "dictionary key removed")
+
+    let reserved = Dictionary<int, str>(minimum_capacity:16)
+    assert(reserved.capacity() >= 16, "named dictionary minimum capacity")
 }
 
 test "set operations" {
@@ -49,6 +52,9 @@ test "set operations" {
     assert(values.contains(42), "default hashing callbacks")
     assert(values.remove(42), "removed set value")
     assert(!values.contains(42), "set value removed")
+
+    let reserved = Set<int>(minimum_capacity:16)
+    assert(reserved.capacity() >= 16, "named set minimum capacity")
 }
 
 test "queue operations" {

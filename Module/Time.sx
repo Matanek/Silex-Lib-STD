@@ -1,8 +1,8 @@
-func monotonic_microseconds() int {
+internal func monotonic_microseconds() int {
     return Platform.monotonic_microseconds()
 }
 
-func seconds_between(start:int, end:int) float {
+internal func seconds_between(start:int, end:int) float {
     let elapsed = end - start
     let whole_seconds = elapsed / 1_000_000
     let remaining_microseconds = elapsed % 1_000_000

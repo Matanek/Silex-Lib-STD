@@ -1,0 +1,37 @@
+use Interop.C
+use Interop.MacOS
+
+let system_create = C.function<func(C.MutablePointer<uint>, C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"pthread_create")
+let system_join = C.function<func(uint, C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"pthread_join")
+let system_current_thread = C.function<func() uint>(library:MacOS.lib_system, name:"pthread_self")
+let semaphore_create = C.function<func(int) uint>(library:MacOS.lib_system, name:"dispatch_semaphore_create")
+let semaphore_wait = C.function<func(uint, uint) int>(library:MacOS.lib_system, name:"dispatch_semaphore_wait")
+let semaphore_signal = C.function<func(uint) int>(library:MacOS.lib_system, name:"dispatch_semaphore_signal")
+let object_release = C.function<func(uint) void>(library:MacOS.lib_system, name:"dispatch_release")
+let system_configuration = C.function<func(int32) int>(library:MacOS.lib_system, name:"sysconf")
+
+internal func spawn(entry:uint, context:uint) uint {
+    var handle:uint = 0
+    if system_create(C.mutable_pointer(handle), C.pointer_bits(0 as uint), C.pointer_bits(entry), C.pointer_bits(context)) != 0 { return 0 }
+    return handle
+}
+
+internal func join(thread:uint) bool {
+    return system_join(thread, C.pointer_bits(0 as uint)) == 0
+}
+
+internal func current_thread() uint { return system_current_thread() }
+
+internal func create_signal(initial:int) uint { return semaphore_create(initial) }
+internal func wait(signal:uint) { if semaphore_wait(signal, 0xffff_ffff_ffff_ffff) != 0 { panic("STD.Threading signal wait failed") } }
+internal func try_wait(signal:uint) bool { return semaphore_wait(signal, 0) == 0 }
+internal func signal(value:uint) { semaphore_signal(value) }
+internal func release_signal(value:uint) { object_release(value) }
+internal func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
+internal func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 16 as uint, 0) }
+
+internal func logical_processor_count() int {
+    let count = system_configuration(58)
+    if count < 1 { return 1 }
+    return count
+}

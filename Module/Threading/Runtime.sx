@@ -1,0 +1,748 @@
+use Interop.C
+use STD.Threading.Native
+use STD.Threading.Job
+use STD.Threading.State.PoolResource
+use STD.Threading.State.DependencyTarget
+use STD.Threading.State.CompletionState
+use STD.Threading.State.FenceOwner
+
+internal protocol WorkItem {
+    func execute()
+}
+
+internal class GraphState:CompletionState,DependencyTarget {
+    internal var runtime_address:uint
+    internal var completed:bool
+    internal var remaining:int
+    internal var completion_signal:uint
+    internal var continuations:DependencyTarget[]
+
+    internal init(runtime:Runtime, completion_signal:uint) {
+        self.runtime_address = C.object_address(runtime)
+        self.completed = false
+        self.remaining = 0
+        self.completion_signal = completion_signal
+        self.continuations = []
+    }
+
+    internal func recyclable(expected_roots:int) bool {
+        return self.completed && Native.class_root_count(C.object_address(self)) <= expected_roots
+    }
+
+    internal func prepare(remaining:int) {
+        while Native.try_wait(self.completion_signal) {}
+        self.completed = false
+        self.remaining = remaining
+    }
+
+    public func is_completed() bool { return self.completed }
+    public func wait_for_completion() { Native.wait(self.completion_signal) }
+    public func notify_waiter() { Native.signal(self.completion_signal) }
+    public func dependency_completed() {
+        var runtime = C.object_from_address<Runtime>(self.runtime_address)
+        runtime.resolve_graph(self)
+    }
+
+    internal func add_continuation(continuation:DependencyTarget) {
+        var runtime = C.object_from_address<Runtime>(self.runtime_address)
+        runtime.lock()
+        if self.completed {
+            runtime.unlock()
+            var ready = continuation
+            ready.dependency_completed()
+            return
+        }
+        self.continuations.append(continuation)
+        runtime.unlock()
+    }
+
+    internal func resolve_one() bool {
+        if self.completed { panic("STD.Threading combined fence was resolved more than once") }
+        self.remaining--
+        if self.remaining < 0 { panic("STD.Threading combined fence has an invalid counter") }
+        if self.remaining != 0 { return false }
+        self.completed = true
+        return true
+    }
+
+    internal func complete_locked() { self.completed = true }
+
+    internal func publish_continuations() {
+        while true {
+            var runtime = C.object_from_address<Runtime>(self.runtime_address)
+            runtime.lock()
+            if self.continuations.is_empty() {
+                runtime.unlock()
+                return
+            }
+            var continuation = self.continuations.take_last()
+            runtime.unlock()
+            continuation.dependency_completed()
+        }
+    }
+}
+
+internal class JobState<T:Job>:CompletionState,FenceOwner {
+    internal var job:T? = null
+    internal var completed:bool = false
+    internal var consumed:bool = false
+    internal var generation:int = 0
+    internal var completion_signal:uint
+    internal var graph_address:uint = 0
+
+    internal init(job:T, completion_signal:uint) {
+        self.job = job
+        self.completion_signal = completion_signal
+        if self.completion_signal == 0 { panic("STD.Threading could not create a job completion signal") }
+        self.generation = 1
+    }
+
+    internal func current_generation() int { return self.generation }
+
+    internal func require_generation(expected:int) {
+        if expected != self.generation { panic("STD.Threading job handle refers to a recycled submission") }
+    }
+
+    internal func generation_matches(expected:int) bool { return expected == self.generation }
+    internal func is_consumed() bool { return self.consumed }
+    internal func object_address() uint { return C.object_address(self) }
+
+    internal func recyclable(expected_roots:int) bool {
+        if self.graph_address != 0 {
+            var graph = self.graph_state()
+            if !graph.recyclable(2) { return false }
+        }
+        return self.completed && Native.class_root_count(C.object_address(self)) <= expected_roots
+    }
+
+    internal func consume(expected:int) T? { return take_completed<T>(self, expected) }
+    internal func graph_state() GraphState {
+        if self.graph_address == 0 { panic("STD.Threading job has no graph state") }
+        return C.object_from_address<GraphState>(self.graph_address)
+    }
+    public func is_completed() bool { return self.completed }
+    public func wait_for_completion() { Native.wait(self.completion_signal) }
+    public func notify_waiter() { Native.signal(self.completion_signal) }
+    public func graph_address_value() uint { return self.graph_address }
+    public func set_graph_address(value:uint) { self.graph_address = value }
+    public func graph_is_completed() bool { return self.completed }
+}
+
+internal func prepare_state<T:Job>(state:JobState<T>, job:T) {
+    Native.revive_class(C.object_address(state))
+    while Native.try_wait(state.completion_signal) {}
+    if state.graph_address != 0 {
+        var graph = state.graph_state()
+        graph.prepare(0)
+    }
+    state.generation++
+    replace_state_job<T>(state, job)
+    state.completed = false
+    state.consumed = false
+}
+
+internal func take_pending<T:Job>(state:JobState<T>) T? {
+    return state.job
+}
+
+internal func finish_state<T:Job>(state:JobState<T>, job:T) {
+    replace_state_job<T>(state, job)
+    state.completed = true
+    if state.graph_address != 0 {
+        var graph = state.graph_state()
+        graph.complete_locked()
+    }
+}
+
+internal func replace_state_job<T:Job>(state:JobState<T>, job:T) {
+    var previous = state.job
+    state.job = null
+    state.job = job
+}
+
+internal func take_completed<T:Job>(state:JobState<T>, expected:int) T? {
+    state.require_generation(expected)
+    if state.consumed { panic("STD.Threading job result was already consumed") }
+    var completed = state.job
+    state.job = null
+    state.consumed = true
+    return completed
+}
+
+internal func execute_work<T:Job>(state_address:uint, runtime_address:uint) uint {
+    var state = C.object_from_address<JobState<T>>(state_address)
+    var runtime = C.object_from_address<Runtime>(runtime_address)
+    var pending = take_pending<T>(state)
+    if var job = pending {
+        job.execute()
+        runtime.lock()
+        finish_state<T>(state, job)
+        runtime.unlock()
+        Native.signal(state.completion_signal)
+        if state.graph_address != 0 {
+            var graph = state.graph_state()
+            Native.signal(graph.completion_signal)
+            graph.publish_continuations()
+        }
+        return 0
+    }
+    panic("STD.Threading job state has no pending job")
+}
+
+internal class WorkEntry<T:Job>:WorkItem {
+    private var state_address:uint
+    private var runtime_address:uint
+    private var dependency_address:uint = 0
+
+    internal init(state:JobState<T>, runtime:Runtime) {
+        let address = C.object_address(state)
+        self.state_address = address
+        self.runtime_address = C.object_address(runtime)
+    }
+
+    public func execute() {
+        execute_work<T>(self.state_address, self.runtime_address)
+    }
+
+    internal func dependency_entry(runtime:Runtime) DependencyEntry<T> {
+        if self.dependency_address != 0 {
+            return C.object_from_address<DependencyEntry<T>>(self.dependency_address)
+        }
+        var dependency = DependencyEntry<T>(runtime, self)
+        self.dependency_address = C.object_address(dependency)
+        runtime.retain_dependency(dependency)
+        return dependency
+    }
+}
+
+internal class DependencyEntry<T:Job>:DependencyTarget {
+    private var runtime_address:uint
+    private var work_address:uint
+    private var remaining_dependencies:int
+    private var published:bool
+
+    internal init(runtime:Runtime, work:WorkEntry<T>) {
+        self.runtime_address = C.object_address(runtime)
+        self.work_address = C.object_address(work)
+        self.remaining_dependencies = 0
+        self.published = false
+    }
+
+    internal func prepare(count:int) {
+        self.remaining_dependencies = count
+        self.published = false
+    }
+
+    public func dependency_completed() {
+        var runtime = C.object_from_address<Runtime>(self.runtime_address)
+        runtime.lock()
+        if self.published { panic("STD.Threading dependent job was published more than once") }
+        self.remaining_dependencies--
+        if self.remaining_dependencies < 0 { panic("STD.Threading dependent job has an invalid counter") }
+        let ready = self.remaining_dependencies == 0
+        if ready {
+            self.published = true
+            var entry = C.object_from_address<WorkEntry<T>>(self.work_address)
+            var work:WorkItem = entry
+            runtime.publish_locked(work)
+        }
+        runtime.unlock()
+        if ready { runtime.signal_ready() }
+    }
+}
+
+internal class StatePool<T:Job>:PoolResource {
+    private var runtime:Runtime
+    private var states:JobState<T>[]
+    private var entries:WorkEntry<T>[]
+
+    private init(runtime:Runtime) {
+        self.runtime = runtime
+        self.states = []
+        self.entries = []
+    }
+
+    internal static func for_runtime(runtime:Runtime) StatePool<T> {
+        let key = state_pool_type_key<T>()
+        let address = runtime.pool_address(key)
+        if address != 0 {
+            return C.object_from_address<StatePool<T>>(address)
+        }
+        var created = StatePool<T>(runtime)
+        runtime.register_pool(key, C.object_address(created), created)
+        return created
+    }
+
+    internal func available_index() int {
+        var available = -1
+        var index = 0
+        while index < self.states.count() {
+            var state = C.object_from_address<JobState<T>>(C.object_address(self.states[index]))
+            if state.recyclable(2) {
+                available = index
+                break
+            }
+            index++
+        }
+        return available
+    }
+
+    internal func prepare(index:int, job:T) {
+        var state = C.object_from_address<JobState<T>>(C.object_address(self.states[index]))
+        prepare_state<T>(state, job)
+    }
+    internal func state_at(index:int) JobState<T> { return self.states[index] }
+    internal func entry_at(index:int) WorkEntry<T> { return self.entries[index] }
+    internal func add(state_address:uint, entry_address:uint) {
+        var state = C.object_from_address<JobState<T>>(state_address)
+        var entry = C.object_from_address<WorkEntry<T>>(entry_address)
+        self.states.append(state)
+        self.entries.append(entry)
+    }
+    public func slot_count() int { return self.states.count() }
+}
+
+internal func state_pool_type_key<T:Job>() uint { return C.function_address<T>(state_pool_type_marker) }
+internal func state_pool_type_marker<T:Job>(context:uint) uint { return context }
+
+internal class Runtime {
+    private var workers:uint[]
+    private var jobs:WorkItem[]
+    private var pools:PoolResource[]
+    private var pool_keys:uint[]
+    private var pool_addresses:uint[]
+    private var submission_signals:uint[]
+    private var graph_states:GraphState[]
+    private var combination_states:GraphState[]
+    private var parallel_graph_states:GraphState[]
+    private var dependency_targets:DependencyTarget[]
+    private var queue_guard:uint
+    private var jobs_ready:uint
+    private var jobs_completed:uint
+    private var accepted:int
+    private var stopping:bool
+    private var stopped:bool
+    private var submission_allocations:int
+    private var combination_allocations:int
+    private var parallel_allocations:int
+    private var parallel_work_items:int
+    private var owner_thread:uint
+
+    internal init() {
+        self.workers = []
+        self.jobs = []
+        self.pools = []
+        self.pool_keys = []
+        self.pool_addresses = []
+        self.submission_signals = []
+        self.graph_states = []
+        self.combination_states = []
+        self.parallel_graph_states = []
+        self.dependency_targets = []
+        self.queue_guard = Native.create_signal(1)
+        self.jobs_ready = Native.create_signal(0)
+        self.jobs_completed = Native.create_signal(0)
+        self.accepted = 0
+        self.stopping = false
+        self.stopped = false
+        self.submission_allocations = 0
+        self.combination_allocations = 0
+        self.parallel_allocations = 0
+        self.parallel_work_items = 0
+        self.owner_thread = Native.current_thread()
+        if self.queue_guard == 0 || self.jobs_ready == 0 || self.jobs_completed == 0 {
+            panic("STD.Threading could not create executor signals")
+        }
+    }
+
+    internal func start(worker_count:int) {
+        var index = 0
+        while index < worker_count {
+            let callback:func(uint) uint = run_worker
+            let thread = Native.spawn(C.function_address(callback), C.object_address(self))
+            if thread == 0 { panic("STD.Threading could not create an executor worker") }
+            self.workers.append(thread)
+            index++
+        }
+    }
+
+    internal func submit<T:Job>(job:T) JobState<T> {
+        self.lock()
+        if self.stopping {
+            self.unlock()
+            panic("STD.Threading cannot submit to a stopping executor")
+        }
+        var pool = StatePool<T>.for_runtime(self)
+        let reusable = pool.available_index()
+        if reusable >= 0 {
+            pool.prepare(reusable, job)
+            var state = pool.state_at(reusable)
+            var entry = pool.entry_at(reusable)
+            self.jobs.append(entry)
+            self.accepted++
+            self.unlock()
+            Native.signal(self.jobs_ready)
+            return state
+        }
+        let completion_signal = Native.create_signal(0)
+        if completion_signal == 0 {
+            self.unlock()
+            panic("STD.Threading could not create a job completion signal")
+        }
+        self.submission_signals.append(completion_signal)
+        var state = JobState<T>(job, completion_signal)
+        var entry = WorkEntry<T>(state, self)
+        pool.add(C.object_address(state), C.object_address(entry))
+        self.submission_allocations++
+        self.jobs.append(entry)
+        self.accepted++
+        self.unlock()
+        Native.signal(self.jobs_ready)
+        return state
+    }
+
+    internal func submit_after<T:Job>(job:T, dependencies:@GraphState[]) JobState<T> {
+        if dependencies.is_empty() { return self.submit(job) }
+        self.lock()
+        if self.stopping {
+            self.unlock()
+            panic("STD.Threading cannot submit to a stopping executor")
+        }
+        var pool = StatePool<T>.for_runtime(self)
+        let reusable = pool.available_index()
+        var selected_state:JobState<T>? = null
+        var selected_entry:WorkEntry<T>? = null
+        if reusable >= 0 {
+            pool.prepare(reusable, job)
+            selected_state = pool.state_at(reusable)
+            selected_entry = pool.entry_at(reusable)
+        } else {
+            let completion_signal = Native.create_signal(0)
+            if completion_signal == 0 {
+                self.unlock()
+                panic("STD.Threading could not create a job completion signal")
+            }
+            self.submission_signals.append(completion_signal)
+            var state = JobState<T>(job, completion_signal)
+            var entry = WorkEntry<T>(state, self)
+            pool.add(C.object_address(state), C.object_address(entry))
+            selected_state = state
+            selected_entry = entry
+            self.submission_allocations++
+        }
+        self.accepted++
+        if var state = selected_state {
+            if var entry = selected_entry {
+                var dependency = entry.dependency_entry(self)
+                dependency.prepare(dependencies.count())
+                self.unlock()
+                for source in dependencies {
+                    var observed = source
+                    observed.add_continuation(dependency)
+                }
+                return state
+            }
+        }
+        self.unlock()
+        panic("STD.Threading could not prepare a dependent submission")
+    }
+
+    internal func fence_for(state:FenceOwner) GraphState {
+        var owner = state
+        self.lock()
+        if owner.graph_address_value() != 0 {
+            var graph = C.object_from_address<GraphState>(owner.graph_address_value())
+            self.unlock()
+            return graph
+        }
+        let completion_signal = Native.create_signal(0)
+        if completion_signal == 0 {
+            self.unlock()
+            panic("STD.Threading could not create a fence completion signal")
+        }
+        self.submission_signals.append(completion_signal)
+        var graph = GraphState(self, completion_signal)
+        if owner.graph_is_completed() { graph.complete_locked() }
+        owner.set_graph_address(C.object_address(graph))
+        self.graph_states.append(graph)
+        self.unlock()
+        if graph.completed { Native.signal(graph.completion_signal) }
+        return graph
+    }
+
+    internal func retain_dependency(dependency:DependencyTarget) {
+        self.dependency_targets.append(dependency)
+    }
+
+    internal func combine(dependencies:@GraphState[]) GraphState {
+        self.lock()
+        var selected = -1
+        var index = 0
+        while index < self.combination_states.count() {
+            var candidate = self.combination_states[index]
+            if candidate.recyclable(2) {
+                selected = index
+                break
+            }
+            index++
+        }
+        var selected_state:GraphState? = null
+        if selected >= 0 {
+            var state = self.combination_states[selected]
+            state.prepare(dependencies.count())
+            selected_state = state
+        } else {
+            let completion_signal = Native.create_signal(0)
+            if completion_signal == 0 {
+                self.unlock()
+                panic("STD.Threading could not create a combined fence signal")
+            }
+            self.submission_signals.append(completion_signal)
+            var state = GraphState(self, completion_signal)
+            state.prepare(dependencies.count())
+            self.combination_states.append(state)
+            selected_state = state
+            self.combination_allocations++
+        }
+        if var state = selected_state {
+            if dependencies.is_empty() {
+                state.complete_locked()
+                self.unlock()
+                Native.signal(state.completion_signal)
+                return state
+            }
+            self.unlock()
+            for dependency in dependencies {
+                var observed = dependency
+                observed.add_continuation(state)
+            }
+            return state
+        }
+        self.unlock()
+        panic("STD.Threading could not prepare a combined fence")
+    }
+
+    internal func resolve_graph(state:GraphState) {
+        self.lock()
+        let completed = state.resolve_one()
+        self.unlock()
+        if completed {
+            Native.signal(state.completion_signal)
+            state.publish_continuations()
+        }
+    }
+
+    internal func create_parallel_graph(remaining:int) GraphState {
+        var selected = -1
+        var index = 0
+        while index < self.parallel_graph_states.count() {
+            var candidate = self.parallel_graph_states[index]
+            if candidate.recyclable(2) {
+                selected = index
+                break
+            }
+            index++
+        }
+        if selected >= 0 {
+            var graph = self.parallel_graph_states[selected]
+            graph.prepare(remaining)
+            return graph
+        }
+        let completion_signal = Native.create_signal(0)
+        if completion_signal == 0 { panic("STD.Threading could not create a parallel fence signal") }
+        self.submission_signals.append(completion_signal)
+        var graph = GraphState(self, completion_signal)
+        graph.prepare(remaining)
+        self.parallel_graph_states.append(graph)
+        return graph
+    }
+
+    internal func completed_graph() GraphState {
+        return self.combine([])
+    }
+
+    internal func require_accepting_locked() {
+        if self.stopping {
+            self.unlock()
+            panic("STD.Threading cannot submit to a stopping executor")
+        }
+    }
+
+    internal func accept_parallel_locked(count:int) {
+        self.accepted += count
+        self.parallel_work_items += count
+    }
+
+    internal func record_parallel_allocation() { self.parallel_allocations++ }
+
+    internal func record_completed() {
+        self.lock()
+        self.accepted--
+        self.unlock()
+        Native.signal(self.jobs_completed)
+    }
+
+    internal func wait_until_complete(state:CompletionState) {
+        var observed = state
+        while true {
+            self.lock()
+            if observed.is_completed() {
+                self.unlock()
+                observed.notify_waiter()
+                return
+            }
+            self.unlock()
+            if self.can_help() {
+                if !self.help_once() { observed.wait_for_completion() }
+            } else {
+                observed.wait_for_completion()
+            }
+        }
+    }
+
+    internal func completion_is_published(state:CompletionState) bool {
+        var observed = state
+        self.lock()
+        let completed = observed.is_completed()
+        self.unlock()
+        return completed
+    }
+
+    private func can_help() bool {
+        let current = Native.current_thread()
+        if current == self.owner_thread { return true }
+        for worker in self.workers { if worker == current { return true } }
+        return false
+    }
+
+    private func help_once() bool {
+        if !Native.try_wait(self.jobs_ready) { return false }
+        self.lock()
+        if self.jobs.is_empty() {
+            self.unlock()
+            panic("STD.Threading ready signal has no work item")
+        }
+        var work = self.jobs.take_last()
+        self.unlock()
+        work.execute()
+        self.record_completed()
+        return true
+    }
+
+    internal func worker_loop() {
+        while true {
+            Native.wait(self.jobs_ready)
+            self.lock()
+            if self.stopping && self.jobs.is_empty() {
+                self.unlock()
+                return
+            }
+            if self.jobs.is_empty() {
+                self.unlock()
+                panic("STD.Threading worker woke without work")
+            }
+            var work = self.jobs.take_last()
+            self.unlock()
+            work.execute()
+            self.record_completed()
+        }
+    }
+
+    private func pending() int {
+        self.lock()
+        let count = self.accepted
+        self.unlock()
+        return count
+    }
+
+    internal func worker_count() int { return self.workers.count() }
+
+    internal func wait_idle() {
+        while self.pending() > 0 { Native.wait(self.jobs_completed) }
+    }
+
+    internal func register_pool(key:uint, address:uint, pool:PoolResource) {
+        self.pool_keys.append(key)
+        self.pool_addresses.append(address)
+        self.pools.append(pool)
+    }
+    internal func pool_address(key:uint) uint {
+        var index = 0
+        while index < self.pool_keys.count() {
+            if self.pool_keys[index] == key { return self.pool_addresses[index] }
+            index++
+        }
+        return 0
+    }
+    internal func submission_allocation_count() int { return self.submission_allocations }
+    internal func combination_allocation_count() int { return self.combination_allocations }
+    internal func parallel_allocation_count() int { return self.parallel_allocations }
+    internal func parallel_work_count() int { return self.parallel_work_items }
+
+    internal func shutdown() {
+        if self.stopped { return }
+        self.lock()
+        if self.stopped {
+            self.unlock()
+            return
+        }
+        self.stopping = true
+        self.unlock()
+
+        while self.pending() > 0 {
+            Native.wait(self.jobs_completed)
+        }
+        for worker in self.workers { Native.signal(self.jobs_ready) }
+        for worker in self.workers {
+            if !Native.join(worker) { panic("STD.Threading could not join an executor worker") }
+        }
+        self.workers = []
+        while !self.dependency_targets.is_empty() { self.dependency_targets.take_last() }
+        while !self.pools.is_empty() {
+            self.pools.take_last()
+        }
+        while !self.pool_keys.is_empty() { self.pool_keys.take_last() }
+        while !self.pool_addresses.is_empty() { self.pool_addresses.take_last() }
+        while !self.graph_states.is_empty() { self.graph_states.take_last() }
+        while !self.combination_states.is_empty() { self.combination_states.take_last() }
+        while !self.parallel_graph_states.is_empty() { self.parallel_graph_states.take_last() }
+        while !self.submission_signals.is_empty() {
+            Native.release_signal(self.submission_signals.take_last())
+        }
+        self.stopped = true
+        Native.release_signal(self.jobs_completed)
+        Native.release_signal(self.jobs_ready)
+        Native.release_signal(self.queue_guard)
+        self.jobs_completed = 0
+        self.jobs_ready = 0
+        self.queue_guard = 0
+    }
+
+    internal func lock() { Native.wait(self.queue_guard) }
+    internal func unlock() { Native.signal(self.queue_guard) }
+    internal func publish_locked(work:WorkItem) { self.jobs.append(work) }
+    internal func signal_ready() { Native.signal(self.jobs_ready) }
+
+}
+
+internal func enqueue<T:Job>(runtime:Runtime, job:T) JobState<T> {
+    return runtime.submit(job)
+}
+
+internal func enqueue_after<T:Job>(runtime:Runtime, job:T, dependencies:@GraphState[]) JobState<T> {
+    return runtime.submit_after(job, dependencies)
+}
+
+internal func combine_states(runtime:Runtime, dependencies:@GraphState[]) GraphState {
+    return runtime.combine(dependencies)
+}
+
+internal func graph_for(runtime:Runtime, state:FenceOwner) GraphState {
+    return runtime.fence_for(state)
+}
+
+internal func run_worker(context:uint) uint {
+    var runtime = C.object_from_address<Runtime>(context)
+    runtime.worker_loop()
+    return 0
+}

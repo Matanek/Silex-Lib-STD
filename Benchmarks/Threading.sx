@@ -1,0 +1,79 @@
+use STD.Threading
+use STD.Time.Stopwatch
+
+class Samples {
+    public var source:int[]
+    public var destination:int[]
+
+    public func transform(start:int, end:int) {
+        var index = start
+        while index < end {
+            let value = self.source[index]
+            self.destination[index] = (value * 17 + 31) % 65521
+            index++
+        }
+    }
+}
+
+struct Transform:Threading.ParallelJob {
+    var samples:Samples
+    func execute(start:int, end:int) { self.samples.transform(start, end) }
+}
+
+struct Warmup:Threading.Job {
+    var marker:int
+    func execute() {}
+}
+
+func make_samples(count:int) Samples {
+    var source:int[] = []
+    var destination:int[] = []
+    for index in 0...count {
+        source.append(index)
+        destination.append(0)
+    }
+    return Samples(source:source, destination:destination)
+}
+
+func benchmark_case(executor:Threading.Executor, count:int, rounds:int) {
+    var samples = make_samples(count)
+
+    var sequential = Stopwatch()
+    sequential.start()
+    for round in 0...rounds { samples.transform(0, count) }
+    sequential.stop()
+
+    var shared = executor
+    shared.submit_parallel(count, Transform(samples:samples)).complete()
+    let warmed_allocations = shared.parallel_allocation_count()
+    let before_work = shared.parallel_work_count()
+
+    var parallel = Stopwatch()
+    parallel.start()
+    for round in 0...rounds {
+        shared.submit_parallel(count, Transform(samples:samples)).complete()
+    }
+    parallel.stop()
+
+    let submitted_work = shared.parallel_work_count() - before_work
+    let maximum_useful_work = rounds * shared.worker_count() * 4
+    if shared.parallel_allocation_count() != warmed_allocations {
+        panic("parallel benchmark regressed to allocating batch state after warmup")
+    }
+    if submitted_work > maximum_useful_work {
+        panic("parallel benchmark regressed toward one submission per element")
+    }
+
+    print(count, " indices x ", rounds)
+    print("  sequential: ", sequential.get_elapsed_milliseconds(), " ms")
+    print("  parallel:   ", parallel.get_elapsed_milliseconds(), " ms")
+    print("  ranges:     ", submitted_work)
+}
+
+test "sequential and parallel indexed batches" {
+    var executor = Threading.Executor()
+    executor.submit(Warmup(marker:0)).complete()
+    benchmark_case(executor, 1_024, 256)
+    benchmark_case(executor, 4_096, 64)
+    benchmark_case(executor, 16_384, 16)
+}

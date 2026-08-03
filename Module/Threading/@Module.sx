@@ -1,0 +1,168 @@
+use Interop.C
+use STD.Threading.Runtime.Runtime
+use STD.Threading.Runtime.JobState
+use STD.Threading.Runtime.GraphState
+use STD.Threading.Runtime.enqueue
+use STD.Threading.Runtime.enqueue_after
+use STD.Threading.Runtime.combine_states
+use STD.Threading.Runtime.graph_for
+use STD.Threading.Parallel.enqueue_parallel
+use STD.Threading.Parallel.enqueue_parallel_after
+use STD.Threading.Native
+public use STD.Threading.Job
+public use STD.Threading.ParallelJob
+
+public struct Fence {
+    private var state:GraphState? = null
+    private var runtime:Runtime? = null
+
+    internal init(state:GraphState, runtime:Runtime) {
+        self.state = state
+        self.runtime = runtime
+    }
+
+    public func is_complete() bool {
+        var state = self.shared_state()
+        var runtime = self.shared_runtime()
+        return runtime.completion_is_published(state)
+    }
+
+    public func complete() {
+        var state = self.shared_state()
+        var runtime = self.shared_runtime()
+        runtime.wait_until_complete(state)
+    }
+
+    internal func shared_state() GraphState {
+        if var state = self.state { return state }
+        panic("STD.Threading fence has no completion state")
+    }
+
+    internal func shared_runtime() Runtime {
+        if var runtime = self.runtime { return runtime }
+        panic("STD.Threading fence has no executor runtime")
+    }
+}
+
+public struct JobHandle<T:Job> {
+    private var state:JobState<T>? = null
+    private var runtime:Runtime? = null
+    private var state_pointer:uint = 0
+    private var runtime_pointer:uint = 0
+    private var generation:int = 0
+
+    internal init(state:JobState<T>, runtime:Runtime) {
+        self.state = state
+        self.runtime = runtime
+        self.state_pointer = C.object_address(state)
+        self.runtime_pointer = C.object_address(runtime)
+        self.generation = state.current_generation()
+    }
+
+    public func complete() T {
+        var state = self.shared_state()
+        var runtime = self.shared_runtime()
+        state.require_generation(self.generation)
+        runtime.wait_until_complete(state)
+        runtime.lock()
+        var completed = state.consume(self.generation)
+        runtime.unlock()
+        if var job = completed { return job }
+        panic("STD.Threading completed job has no result")
+    }
+
+    public func fence() Fence {
+        var runtime = self.shared_runtime()
+        var state = graph_for(runtime, self.shared_state())
+        return Fence(state, runtime)
+    }
+
+    internal func shared_state() JobState<T> {
+        if self.state_pointer == 0 { panic("STD.Threading job handle has no state") }
+        return C.object_from_address<JobState<T>>(self.state_pointer)
+    }
+
+    internal func shared_runtime() Runtime {
+        if self.runtime_pointer == 0 { panic("STD.Threading job handle has no executor runtime") }
+        return C.object_from_address<Runtime>(self.runtime_pointer)
+    }
+
+    internal func state_address() uint { return self.state_pointer }
+    internal func generation_value() int { return self.generation }
+    internal func is_consumed() bool { return self.shared_state().is_consumed() }
+}
+
+public class Executor {
+    private var runtime:Runtime
+
+    public init() {
+        self.runtime.start(default_worker_count())
+    }
+
+    public init(worker_count:int) {
+        self.runtime.start(validated_worker_count(worker_count))
+    }
+
+    public func submit<T:Job>(job:T) JobHandle<T> {
+        var state = enqueue(self.runtime, job)
+        var runtime = self.runtime
+        return JobHandle<T>(state, runtime)
+    }
+
+    public func submit<T:Job>(job:T, after:Fence) JobHandle<T> {
+        var dependencies:GraphState[] = [after.shared_state()]
+        var state = enqueue_after(self.runtime, job, dependencies)
+        var runtime = self.runtime
+        return JobHandle<T>(state, runtime)
+    }
+
+    public func submit<T:Job>(job:T, after:@Fence[]) JobHandle<T> {
+        var dependencies:GraphState[] = []
+        for fence in after { dependencies.append(fence.shared_state()) }
+        var state = enqueue_after(self.runtime, job, dependencies)
+        var runtime = self.runtime
+        return JobHandle<T>(state, runtime)
+    }
+
+    public func combine(fences:@Fence[]) Fence {
+        var dependencies:GraphState[] = []
+        for fence in fences { dependencies.append(fence.shared_state()) }
+        var state = combine_states(self.runtime, dependencies)
+        var runtime = self.runtime
+        return Fence(state, runtime)
+    }
+
+    public func submit_parallel<T:ParallelJob>(count:int, job:T) Fence {
+        var state = enqueue_parallel(self.runtime, count, job)
+        var runtime = self.runtime
+        return Fence(state, runtime)
+    }
+
+    public func submit_parallel<T:ParallelJob>(count:int, job:T, after:Fence) Fence {
+        var state = enqueue_parallel_after(self.runtime, count, job, after.shared_state())
+        var runtime = self.runtime
+        return Fence(state, runtime)
+    }
+
+    internal func worker_count() int { return self.runtime.worker_count() }
+    internal func submission_allocation_count() int { return self.runtime.submission_allocation_count() }
+    internal func combination_allocation_count() int { return self.runtime.combination_allocation_count() }
+    internal func parallel_allocation_count() int { return self.runtime.parallel_allocation_count() }
+    internal func parallel_work_count() int { return self.runtime.parallel_work_count() }
+    internal func wait_idle() { self.runtime.wait_idle() }
+
+    drop { self.runtime.shutdown() }
+}
+
+func default_worker_count() int {
+    let available = Native.logical_processor_count() - 1
+    if available < 1 { return 1 }
+    return available
+}
+
+func validated_worker_count(worker_count:int) int {
+    if worker_count < 1 {
+        panic("STD.Threading executor requires at least one worker")
+    }
+    return worker_count
+}

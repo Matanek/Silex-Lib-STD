@@ -1,8 +1,0 @@
-use Interop.C
-use Interop.Linux
-
-let system_spawn = C.function<func(uint, uint) uint>(library:Linux.kernel, name:"thread_spawn")
-let system_join = C.function<func(uint) int32>(library:Linux.kernel, name:"thread_join")
-
-func spawn(entry:uint, context:uint) uint { return system_spawn(entry, context) }
-func join(thread:uint) bool { return system_join(thread) != 0 }

@@ -1,0 +1,3 @@
+public protocol ParallelJob {
+    func execute(start:int, end:int)
+}

@@ -1,16 +1,48 @@
+use Interop.C
 use STD.Threading
+use STD.Threading.Native
+use STD.Threading.Runtime.JobState
 
-struct Counter:Threading.Task {
+struct Counter:Threading.Job {
     var value:int
     func execute() { self.value++ }
 }
 
-class SharedCounter:Threading.Task {
+struct WideJob:Threading.Job {
+    var first:int
+    var second:int
+    var third:int
+    var fourth:int
+    var fifth:int
+    var sixth:int
+    var seventh:int
+    var eighth:int
+    func execute() { self.eighth++ }
+}
+
+struct MixedJob:Threading.Job {
+    var small:uint8
+    var wide:float64
+    var tail:uint32
+    func execute() { self.tail++ }
+}
+
+class ReusableClassJob:Threading.Job {
     public var value:int
     public func execute() { mutex { self.value++ } }
 }
 
-class ContendedCounter:Threading.Task {
+struct StateSnapshot {
+    var address:uint
+    var generation:int
+}
+
+class SharedCounter:Threading.Job {
+    public var value:int
+    public func execute() { mutex { self.value++ } }
+}
+
+class ContendedCounter:Threading.Job {
     public var value:int
     public func execute() {
         for i in 0...2000 {
@@ -19,47 +51,623 @@ class ContendedCounter:Threading.Task {
     }
 }
 
-test "value tasks and completion callbacks" {
-    func record_completed(counter:Counter) {
-        if counter.value != 42 { panic("completion callback did not receive the completed task") }
+class DropTracker {
+    public var value:int
+}
+
+class OwnedDropJob:Threading.Job {
+    public var tracker:DropTracker
+    public func execute() {}
+    drop { mutex { self.tracker.value++ } }
+}
+
+class DependencyState {
+    public var published:int
+    public var starts:int
+
+    public func publish(value:int) { self.published = value }
+    public func observe(expected:int) {
+        if self.published != expected { panic("dependent job started before publication") }
+        mutex { self.starts++ }
+    }
+}
+
+struct PublishJob:Threading.Job {
+    var state:DependencyState
+    var value:int
+    func execute() { self.state.publish(self.value) }
+}
+
+struct ObserveJob:Threading.Job {
+    var state:DependencyState
+    var expected:int
+    func execute() { self.state.observe(self.expected) }
+}
+
+class PairState {
+    public var left:int
+    public var right:int
+    public var starts:int
+
+    public func observe() {
+        if self.left != 11 || self.right != 22 { panic("joined job started before its last dependency") }
+        mutex { self.starts++ }
+    }
+}
+
+struct PublishLeftJob:Threading.Job {
+    var state:PairState
+    func execute() { self.state.left = 11 }
+}
+
+struct PublishRightJob:Threading.Job {
+    var state:PairState
+    func execute() { self.state.right = 22 }
+}
+
+struct ObservePairJob:Threading.Job {
+    var state:PairState
+    func execute() { self.state.observe() }
+}
+
+class ManualGate {
+    public var entered:int
+    public var released:bool
+
+    public func wait_until_released() {
+        mutex { self.entered++ }
+        var waiting = true
+        while waiting { mutex { waiting = !self.released } }
     }
 
-    var handle = Threading.TaskManager.submit(Counter(value:41))
+    public func release() { mutex { self.released = true } }
+    public func entered_count() int {
+        var count = 0
+        mutex { count = self.entered }
+        return count
+    }
+}
+
+struct BlockingJob:Threading.Job {
+    var gate:ManualGate
+    func execute() { self.gate.wait_until_released() }
+}
+
+struct CooperativeWaitJob:Threading.Job {
+    var gate:ManualGate
+    var dependency:Threading.Fence
+
+    func execute() {
+        self.gate.wait_until_released()
+        self.dependency.complete()
+    }
+}
+
+class IndexedState {
+    public var visits:int[]
+    public var values:int[]
+    public var intervals:int
+
+    public func process(start:int, end:int) {
+        if start < 0 || end < start || end > self.visits.count() {
+            panic("parallel executor produced an invalid interval")
+        }
+        mutex { self.intervals++ }
+        var index = start
+        while index < end {
+            self.visits[index]++
+            self.values[index] = self.values[index] * 2 + 1
+            index++
+        }
+    }
+
+    public func verify() {
+        var index = 0
+        while index < self.visits.count() {
+            if self.visits[index] != 1 { panic("parallel index was lost or visited more than once") }
+            if self.values[index] != index * 2 + 1 { panic("parallel disjoint write produced an invalid value") }
+            index++
+        }
+    }
+}
+
+struct IndexedJob:Threading.ParallelJob {
+    var state:IndexedState
+    func execute(start:int, end:int) { self.state.process(start, end) }
+}
+
+class ReadState {
+    public var source:int[]
+    public var destination:int[]
+
+    public func copy_range(start:int, end:int) {
+        var index = start
+        while index < end {
+            self.destination[index] = self.source[index] + 1
+            index++
+        }
+    }
+}
+
+struct ReadJob:Threading.ParallelJob {
+    var state:ReadState
+    func execute(start:int, end:int) { self.state.copy_range(start, end) }
+}
+
+func make_indexed_state(count:int) IndexedState {
+    var visits:int[] = []
+    var values:int[] = []
+    for index in 0...count {
+        visits.append(0)
+        values.append(index)
+    }
+    return IndexedState(visits:visits, values:values, intervals:0)
+}
+
+func make_read_state(count:int) ReadState {
+    var source:int[] = []
+    var destination:int[] = []
+    for index in 0...count {
+        source.append(index * 3)
+        destination.append(0)
+    }
+    return ReadState(source:source, destination:destination)
+}
+
+class ProducerState {
+    internal var executor:Threading.Executor
+    internal var completed:int
+
+    internal init(executor:Threading.Executor) {
+        self.executor = executor
+        self.completed = 0
+    }
+}
+
+internal func produce(context:uint) uint {
+    var state = C.object_from_address<ProducerState>(context)
+    for i in 0...1000 {
+        if submit_counter(state.executor, i) != i + 1 { panic("concurrent producer received an invalid result") }
+        mutex { state.completed++ }
+    }
+    return 0
+}
+
+internal func submit_counter(executor:Threading.Executor, value:int) int {
+    var shared = executor
+    var handle = shared.submit(Counter(value:value))
+    return handle.complete().value
+}
+
+func run_counter_wave(executor:Threading.Executor, count:int) {
+    run_counter_stack(executor, 0, count)
+}
+
+func run_counter_stack(executor:Threading.Executor, index:int, count:int) {
+    if index == count { return }
+    var shared = executor
+    var handle = shared.submit(Counter(value:index))
+    run_counter_stack(shared, index + 1, count)
+    if handle.complete().value != index + 1 { panic("stable wave returned an invalid result") }
+}
+
+func run_wide(executor:Threading.Executor) {
+    var shared = executor
+    var wide = shared.submit(WideJob(first:1, second:2, third:3, fourth:4, fifth:5, sixth:6, seventh:7, eighth:8))
+    if wide.complete().eighth != 9 { panic("wide job result was invalid") }
+}
+
+func run_mixed(executor:Threading.Executor) {
+    var shared = executor
+    var mixed = shared.submit(MixedJob(small:3, wide:4.5, tail:8))
+    if mixed.complete().tail != 9 { panic("mixed-alignment job result was invalid") }
+}
+
+func run_class_job(executor:Threading.Executor) {
+    var shared = executor
+    var class_job = shared.submit(ReusableClassJob(value:11))
+    if class_job.complete().value != 12 { panic("class job result was invalid") }
+}
+
+func run_prepared_types(executor:Threading.Executor) {
+    run_wide(executor)
+    run_mixed(executor)
+    run_class_job(executor)
+}
+
+func abandon_one(executor:Threading.Executor, value:int) {
+    var shared = executor
+    var abandoned = shared.submit(Counter(value:value))
+}
+
+func abandon_wave(executor:Threading.Executor, count:int) {
+    for i in 0...count { abandon_one(executor, i) }
+}
+
+func consume_with_copy(executor:Threading.Executor) int {
+    var shared = executor
+    var first = shared.submit(Counter(value:1))
+    var alias = first
+    first.complete()
+    if !alias.is_consumed() { panic("a copied handle did not observe unique consumption") }
+    var second = shared.submit(Counter(value:2))
+    second.complete()
+    return shared.submission_allocation_count()
+}
+
+func consume_snapshot(executor:Threading.Executor) StateSnapshot {
+    var shared = executor
+    var handle = shared.submit(Counter(value:1))
+    let snapshot = StateSnapshot(address:handle.state_address(), generation:handle.generation_value())
+    handle.complete()
+    return snapshot
+}
+
+func submit_and_abandon(counter:SharedCounter) {
+    var executor = Threading.Executor(worker_count:1)
+    var handle = executor.submit(counter)
+}
+
+func submit_owned_drop(tracker:DropTracker) {
+    var executor = Threading.Executor(worker_count:1)
+    var handle = executor.submit(OwnedDropJob(tracker:tracker))
+}
+
+func detached_fence(executor:Threading.Executor, state:DependencyState) Threading.Fence {
+    var shared = executor
+    var handle = shared.submit(PublishJob(state:state, value:17))
+    return handle.fence()
+}
+
+func execute_indexed(executor:Threading.Executor, count:int) IndexedState {
+    var shared = executor
+    var state = make_indexed_state(count)
+    var done = shared.submit_parallel(count, IndexedJob(state:state))
+    done.complete()
+    state.verify()
+    return state
+}
+
+test "typed job result" {
+    var executor = Threading.Executor(worker_count:1)
+    var handle = executor.submit(Counter(value:41))
     let completed = handle.complete()
-    if completed.value != 42 { panic("thread did not execute task") }
-
-    var callback_handle = Threading.TaskManager.submit(Counter(value:41))
-    callback_handle.complete(record_completed)
+    if completed.value != 42 { panic("executor did not return the completed job") }
 }
 
-test "shared tasks and released handles" {
-    func record(counter:SharedCounter) { counter.value += 10 }
+test "automatic executor has workers" {
+    var executor = Threading.Executor()
+    if executor.worker_count() < 1 { panic("automatic executor did not create a worker") }
+    var handle = executor.submit(Counter(value:9))
+    if handle.complete().value != 10 { panic("automatic executor did not execute its job") }
+}
 
-    func submit_and_release(counter:SharedCounter) {
-        let callback:func(SharedCounter) = record
-        var waiting = Threading.TaskManager.submit(counter, callback)
+test "one worker is persistent under load" {
+    var executor = Threading.Executor(worker_count:1)
+    if executor.worker_count() != 1 { panic("explicit worker count was not preserved") }
+    var handles:Threading.JobHandle<Counter>[] = []
+    for i in 0...4000 { handles.append(executor.submit(Counter(value:i))) }
+    var index = 0
+    while index < handles.count() {
+        var handle = handles[index]
+        let completed = handle.complete()
+        if completed.value != index + 1 { panic("a queued job was lost or executed more than once") }
+        index++
     }
-
-    var shared = SharedCounter(value:9)
-    let callback:func(SharedCounter) = record
-    var waiting = Threading.TaskManager.submit(shared, callback)
-    waiting.complete()
-    if shared.value != 20 { panic("thread completion callback did not receive task") }
-
-    var released = SharedCounter(value:4)
-    submit_and_release(released)
-    if released.value != 15 { panic("dropping a task handle did not await its callback") }
 }
 
-test "mutex serializes contended tasks" {
+test "abandoned handles remain owned by the executor" {
+    var shared = SharedCounter(value:9)
+    submit_and_abandon(shared)
+    if shared.value != 10 { panic("executor destruction did not finish an abandoned job") }
+}
+
+test "last owned job state may be released by a worker" {
+    var tracker = DropTracker(value:0)
+    submit_owned_drop(tracker)
+    if tracker.value != 1 { panic("worker did not release the last owned job state exactly once") }
+}
+
+test "mutex serializes contended jobs" {
+    var executor = Threading.Executor(worker_count:4)
     var contended = ContendedCounter(value:0)
-    var first = Threading.TaskManager.submit(contended)
-    var second = Threading.TaskManager.submit(contended)
-    var third = Threading.TaskManager.submit(contended)
-    var fourth = Threading.TaskManager.submit(contended)
+    var first = executor.submit(contended)
+    var second = executor.submit(contended)
+    var third = executor.submit(contended)
+    var fourth = executor.submit(contended)
     first.complete()
     second.complete()
     third.complete()
     fourth.complete()
     if contended.value != 8000 { panic("mutex did not serialize concurrent updates") }
+}
+
+test "concurrent producers share one executor" {
+    var executor = Threading.Executor(worker_count:4)
+    var state = ProducerState(executor)
+    let callback:func(uint) uint = produce
+    var producers:uint[] = []
+    for i in 0...4 {
+        let producer = Native.spawn(C.function_address(callback), C.object_address(state))
+        if producer == 0 { panic("could not create a concurrent producer") }
+        producers.append(producer)
+    }
+    for producer in producers {
+        if !Native.join(producer) { panic("could not join a concurrent producer") }
+    }
+    if state.completed != 4000 { panic("concurrent submissions lost a job") }
+}
+
+test "warmed waves reuse submission memory" {
+    var executor = Threading.Executor(worker_count:4)
+    run_counter_wave(executor, 64)
+    let warmed = executor.submission_allocation_count()
+    if warmed != 64 { panic("warmup did not allocate one slot per live job") }
+    for wave in 0...8 { run_counter_wave(executor, 64) }
+    if executor.submission_allocation_count() != warmed { panic("stable waves allocated new submission slots") }
+}
+
+test "prepared job representations remain allocation stable" {
+    var executor = Threading.Executor(worker_count:2)
+    run_prepared_types(executor)
+    let prepared = executor.submission_allocation_count()
+    if prepared != 3 { panic("prepared job types did not establish three reusable slots") }
+    for wave in 0...32 { run_prepared_types(executor) }
+    if executor.submission_allocation_count() != prepared { panic("prepared job types allocated during a stable load") }
+}
+
+test "abandoned completed jobs recycle their slots" {
+    var executor = Threading.Executor(worker_count:4)
+    run_counter_wave(executor, 64)
+    let warmed = executor.submission_allocation_count()
+    abandon_wave(executor, 64)
+    executor.wait_idle()
+    if executor.submission_allocation_count() != warmed { panic("first abandoned wave exceeded the warmed capacity") }
+    abandon_wave(executor, 64)
+    executor.wait_idle()
+    if executor.submission_allocation_count() != warmed { panic("abandoned completed jobs did not recycle") }
+}
+
+test "handle copies delay recycling and share consumption" {
+    var executor = Threading.Executor(worker_count:1)
+    if consume_with_copy(executor) != 2 { panic("a live copied handle did not protect its submission slot") }
+    submit_counter(executor, 3)
+    if executor.submission_allocation_count() != 2 { panic("slots did not recycle after copied handles disappeared") }
+}
+
+test "recycled slots advance their generation" {
+    var executor = Threading.Executor(worker_count:1)
+    let previous = consume_snapshot(executor)
+    submit_counter(executor, 2)
+    if executor.submission_allocation_count() != 1 { panic("generation test did not reuse its submission slot") }
+    var state = C.object_from_address<JobState<Counter>>(previous.address)
+    if state.generation_matches(previous.generation) { panic("recycled submission kept its previous generation") }
+}
+
+test "fence observes completion without consuming the job" {
+    var executor = Threading.Executor(worker_count:1)
+    var gate = ManualGate(entered:0, released:false)
+    var handle = executor.submit(BlockingJob(gate:gate))
+    var fence = handle.fence()
+    while gate.entered_count() == 0 {}
+    if fence.is_complete() { panic("unfinished fence reported completion") }
+    gate.release()
+    fence.complete()
+    if !fence.is_complete() { panic("finished fence did not report completion") }
+    handle.complete()
+}
+
+test "simple dependency publishes predecessor writes" {
+    var executor = Threading.Executor(worker_count:2)
+    var state = DependencyState(published:0, starts:0)
+    var source = executor.submit(PublishJob(state:state, value:42))
+    var dependent = executor.submit(ObserveJob(state:state, expected:42), after:source.fence())
+    dependent.fence().complete()
+    if state.starts != 1 { panic("dependent job did not execute exactly once") }
+    source.complete()
+    dependent.complete()
+}
+
+test "one fence releases an entire fan out" {
+    var executor = Threading.Executor(worker_count:4)
+    var state = DependencyState(published:0, starts:0)
+    var source = executor.submit(PublishJob(state:state, value:7))
+    var source_fence = source.fence()
+    var first = executor.submit(ObserveJob(state:state, expected:7), after:source_fence)
+    var second = executor.submit(ObserveJob(state:state, expected:7), after:source_fence)
+    var third = executor.submit(ObserveJob(state:state, expected:7), after:source_fence)
+    executor.combine([first.fence(), second.fence(), third.fence()]).complete()
+    if state.starts != 3 { panic("fan out lost or duplicated a dependent job") }
+    source.complete()
+    first.complete()
+    second.complete()
+    third.complete()
+}
+
+test "multiple dependencies and combine wait for every branch" {
+    var executor = Threading.Executor(worker_count:3)
+    var left_state = DependencyState(published:0, starts:0)
+    var right_state = DependencyState(published:0, starts:0)
+    var joined_state = DependencyState(published:99, starts:0)
+    var left = executor.submit(PublishJob(state:left_state, value:11))
+    var right = executor.submit(PublishJob(state:right_state, value:22))
+    var ready = executor.combine([left.fence(), right.fence()])
+    var joined = executor.submit(ObserveJob(state:joined_state, expected:99), after:[left.fence(), right.fence()])
+    ready.complete()
+    joined.complete()
+    if left_state.published != 11 || right_state.published != 22 || joined_state.starts != 1 {
+        panic("joined dependency did not observe every branch")
+    }
+    left.complete()
+    right.complete()
+}
+
+test "empty combinations and dependency lists are immediately ready" {
+    var executor = Threading.Executor(worker_count:1)
+    var none:Threading.Fence[] = []
+    var ready = executor.combine(none)
+    if !ready.is_complete() { panic("empty combination was not complete") }
+    var handle = executor.submit(Counter(value:4), after:none)
+    if handle.complete().value != 5 { panic("empty dependency list did not publish its job") }
+}
+
+test "already completed dependency publishes once" {
+    var executor = Threading.Executor(worker_count:2)
+    var state = DependencyState(published:0, starts:0)
+    var source = executor.submit(PublishJob(state:state, value:31))
+    var completed = source.fence()
+    completed.complete()
+    var dependent = executor.submit(ObserveJob(state:state, expected:31), after:completed)
+    dependent.complete()
+    if state.starts != 1 { panic("completed dependency published its job more than once") }
+    source.complete()
+}
+
+test "concurrent dependency corpus publishes every job exactly once" {
+    var executor = Threading.Executor(worker_count:4)
+    var state = PairState(left:0, right:0, starts:0)
+    var left = executor.submit(PublishLeftJob(state:state))
+    var right = executor.submit(PublishRightJob(state:state))
+    var dependencies:Threading.Fence[] = [left.fence(), right.fence()]
+    var handles:Threading.JobHandle<ObservePairJob>[] = []
+    for i in 0...256 {
+        handles.append(executor.submit(ObservePairJob(state:state), after:dependencies))
+    }
+    for handle in handles {
+        var completed = handle
+        completed.complete()
+    }
+    if state.starts != 256 { panic("dependency corpus lost or duplicated a job") }
+    left.complete()
+    right.complete()
+}
+
+test "dependencies preserve executor isolation" {
+    var source_executor = Threading.Executor(worker_count:1)
+    var destination_executor = Threading.Executor(worker_count:1)
+    var state = DependencyState(published:0, starts:0)
+    var source = source_executor.submit(PublishJob(state:state, value:55))
+    var dependent = destination_executor.submit(ObserveJob(state:state, expected:55), after:source.fence())
+    dependent.complete()
+    if source_executor.worker_count() != 1 || destination_executor.worker_count() != 1 || state.starts != 1 {
+        panic("cross-executor dependency confused executor ownership")
+    }
+    source.complete()
+}
+
+test "fences and handles may be abandoned independently" {
+    var executor = Threading.Executor(worker_count:2)
+    var state = DependencyState(published:0, starts:0)
+    var fence = detached_fence(executor, state)
+    fence.complete()
+    if state.published != 17 { panic("fence did not retain abandoned handle state") }
+    var handle = executor.submit(PublishJob(state:state, value:23))
+    var abandoned = handle.fence()
+    handle.complete()
+    if state.published != 23 { panic("abandoned fence changed job lifetime") }
+}
+
+test "combined fence states are reused after warmup" {
+    var executor = Threading.Executor(worker_count:1)
+    var source = executor.submit(Counter(value:0))
+    var source_fence = source.fence()
+    source_fence.complete()
+    for wave in 0...32 {
+        var combined = executor.combine([source_fence])
+        combined.complete()
+    }
+    if executor.combination_allocation_count() != 1 || executor.worker_count() != 1 {
+        panic("stable combinations allocated new states or workers")
+    }
+    source.complete()
+}
+
+test "workers cooperatively complete ready descendants" {
+    var executor = Threading.Executor(worker_count:4)
+    var gate = ManualGate(entered:0, released:false)
+    var children:Threading.JobHandle<Counter>[] = []
+    var waiters:Threading.JobHandle<CooperativeWaitJob>[] = []
+    for i in 0...4 {
+        var child = executor.submit(Counter(value:i))
+        var waiter = executor.submit(CooperativeWaitJob(gate:gate, dependency:child.fence()))
+        children.append(child)
+        waiters.append(waiter)
+    }
+    while gate.entered_count() != 4 {}
+    gate.release()
+    for waiter in waiters { var completed = waiter; completed.complete() }
+    for child in children {
+        var completed = child
+        if completed.complete().value < 1 { panic("cooperative descendant was not executed") }
+    }
+}
+
+test "parallel zero and one element batches" {
+    var executor = Threading.Executor(worker_count:2)
+    var empty = make_indexed_state(0)
+    var before = executor.parallel_work_count()
+    var no_work = executor.submit_parallel(0, IndexedJob(state:empty))
+    if !no_work.is_complete() { panic("zero parallel batch did not return a completed fence") }
+    no_work.complete()
+    if empty.intervals != 0 || executor.parallel_work_count() != before {
+        panic("zero parallel batch published work")
+    }
+
+    var one = execute_indexed(executor, 1)
+    if one.intervals != 1 { panic("one parallel element was not kept in one interval") }
+}
+
+test "parallel partition covers small large and remainder sizes exactly once" {
+    var executor = Threading.Executor(worker_count:3)
+    var before = executor.parallel_work_count()
+    var small = execute_indexed(executor, 63)
+    if small.intervals != 1 { panic("small parallel batch ignored the minimum grain") }
+    if executor.parallel_work_count() - before != 1 { panic("small batch published an invalid work count") }
+
+    before = executor.parallel_work_count()
+    var remainder = execute_indexed(executor, 1000)
+    if remainder.intervals != 12 { panic("parallel remainder did not use the bounded worker partition") }
+    if executor.parallel_work_count() - before != 12 { panic("parallel instrumentation disagrees with executed intervals") }
+
+    before = executor.parallel_work_count()
+    var large = execute_indexed(executor, 100000)
+    if large.intervals != 12 || executor.parallel_work_count() - before != 12 {
+        panic("large parallel batch degenerated toward one job per element")
+    }
+}
+
+test "parallel batch waits for its prior fence without occupying workers" {
+    var executor = Threading.Executor(worker_count:2)
+    var gate = ManualGate(entered:0, released:false)
+    var source = executor.submit(BlockingJob(gate:gate))
+    while gate.entered_count() == 0 {}
+    var state = make_indexed_state(257)
+    var done = executor.submit_parallel(257, IndexedJob(state:state), after:source.fence())
+    if state.intervals != 0 || done.is_complete() { panic("parallel dependency published its ranges too early") }
+    gate.release()
+    done.complete()
+    state.verify()
+    source.complete()
+}
+
+test "parallel jobs share reads and write fixed disjoint elements" {
+    var executor = Threading.Executor(worker_count:4)
+    var state = make_read_state(4097)
+    executor.submit_parallel(4097, ReadJob(state:state)).complete()
+    var index = 0
+    while index < state.destination.count() {
+        if state.destination[index] != index * 3 + 1 { panic("parallel shared read was not published") }
+        index++
+    }
+}
+
+test "warmed parallel batches reuse bounded submission state" {
+    var executor = Threading.Executor(worker_count:4)
+    execute_indexed(executor, 4096)
+    let warmed = executor.parallel_allocation_count()
+    if warmed != 1 { panic("parallel warmup allocated more than one batch state") }
+    for wave in 0...64 { execute_indexed(executor, 4096) }
+    if executor.parallel_allocation_count() != warmed {
+        panic("stable parallel submissions did not reuse their batch state")
+    }
 }

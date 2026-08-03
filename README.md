@@ -138,6 +138,34 @@ and supports containment, intersection, translation and scaling.
 The complete right-handed coordinate, column-vector, projection-depth and
 semi-open rectangle contract is documented in [Docs/Math.md](Docs/Math.md).
 
+CPU jobs use the persistent executor exposed by `STD.Threading`:
+
+```sx
+use STD.Threading
+
+var executor = Threading.Executor(worker_count:1)
+var handle = executor.submit(MyJob())
+let completed = handle.complete()
+```
+
+Les phases se composent avec des fences sans occuper un worker pour attendre :
+
+```sx
+var prepare = executor.submit(PrepareJob(), after:handle.fence())
+prepare.fence().complete()
+```
+
+Un traitement homogène se soumet comme un lot de plages indexées, avec une
+seule fence collective :
+
+```sx
+var done = executor.submit_parallel(values.count(), Transform(values:values))
+done.complete()
+```
+
+The typed result, lifetime, synchronization and shutdown guarantees are
+documented in [Docs/Threading.md](Docs/Threading.md).
+
 Text files use UTF-8 without a byte-order mark or newline conversion. The text
 helpers keep encoding details out of ordinary file operations:
 

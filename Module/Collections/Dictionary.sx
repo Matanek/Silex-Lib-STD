@@ -76,6 +76,14 @@ public struct Dictionary<Key, Value> {
         return &self.values[index]
     }
 
+    public func get_keys() Key[] {
+        return copy self.keys
+    }
+
+    public func get_values() Value[] {
+        return copy self.values
+    }
+
     public func set(key:Key, value:Value) Value? {
         let existing = self.search(key).index
         if existing >= 0 {

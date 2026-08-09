@@ -1,5 +1,21 @@
 use STD.Text
 
+struct TextHolder {
+    let value:str
+}
+
+class TextConfiguration {
+    public var value:str
+}
+
+func contains_from_borrow(text:@str, expected:@str) bool {
+    return Text.contains(text, expected)
+}
+
+func transform_borrowed(text:@str, transform:func(@str) str) str {
+    return transform(text)
+}
+
 test "Unicode text operations" {
     func check(condition:bool, detail:str) { if !condition { panic(detail) } }
 
@@ -10,4 +26,101 @@ test "Unicode text operations" {
     check(Text.lowercase("ΟΣ") == "ος", "final sigma")
     check(Text.case_fold("Straße") == "strasse", "full case folding")
     check(Text.unicode_version() == "17.0.0", "Unicode version")
+}
+
+test "common text queries" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+
+    check(Text.is_empty(""), "empty text")
+    check(!Text.is_empty("Silex"), "non-empty text")
+    check(Text.contains("Silex language", "language"), "contained text")
+    check(!Text.contains("Silex language", "Language"), "case-sensitive containment")
+    check(Text.contains("Silex", ""), "empty text is contained")
+    check(!Text.contains("short", "longer text"), "longer text is not contained")
+    check(Text.starts_with("Silex language", "Silex"), "text prefix")
+    check(Text.starts_with("Silex", ""), "empty prefix")
+    check(!Text.starts_with("Silex", "Silex language"), "longer prefix")
+    check(Text.ends_with("Silex language", "language"), "text suffix")
+    check(Text.ends_with("Silex", ""), "empty suffix")
+    check(!Text.ends_with("Silex", "Silex language"), "longer suffix")
+}
+
+test "common text transformations" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+
+    check(Text.trim(" \tSilex\n") == "Silex", "ASCII whitespace trim")
+    check(Text.trim("\u{2003}\u{A0}Silex\u{3000}") == "Silex", "Unicode whitespace trim")
+    check(Text.trim("\t\u{2003}\n") == "", "entirely whitespace text")
+    check(Text.trim("Silex") == "Silex", "unchanged trim")
+    check(Text.trim_start("  Silex  ") == "Silex  ", "starting whitespace trim")
+    check(Text.trim_end("  Silex  ") == "  Silex", "ending whitespace trim")
+    check(Text.replace("one two two", "two", "three") == "one three three", "replace all occurrences")
+    check(Text.replace("aaaa", "aa", "b") == "bb", "replace non-overlapping occurrences")
+    check(Text.replace("Silex", "", "ignored") == "Silex", "empty replacement target")
+    check(Text.replace("Silex", "missing", "ignored") == "Silex", "missing replacement target")
+    check(Text.replace("Silex language", " language", "") == "Silex", "empty replacement")
+    check(Text.replace("été", "é", "e") == "ete", "Unicode scalar replacement")
+}
+
+test "text composition" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+
+    check(Text.slice("aé🙂z", 1, 3) == "é🙂", "slice uses Unicode scalar positions")
+    check(Text.slice("Silex", 2, 2) == "", "empty slice")
+
+    let parts = Text.split("one::two::", "::")
+    check(parts.count() == 3, "split part count")
+    check(parts[0] == "one" && parts[1] == "two" && parts[2] == "", "split preserves empty parts")
+    let unchanged = Text.split("Silex", "")
+    check(unchanged.count() == 1 && unchanged[0] == "Silex", "empty separator keeps the text whole")
+
+    check(Text.join(parts, "|") == "one|two|", "join text parts")
+    let no_parts:str[] = []
+    check(Text.join(no_parts, ",") == "", "join empty collection")
+    check(Text.join(["é", "🙂"], " + ") == "é + 🙂", "join Unicode text")
+}
+
+test "Unicode title casing" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+
+    check(Text.titlecase("silex LANGUAGE") == "Silex Language", "title case words")
+    check(Text.titlecase("hello, SILEX-world") == "Hello, Silex-World", "punctuation creates word boundaries")
+    check(Text.titlecase("l'ÉTÉ") == "L'été", "apostrophe remains inside a word")
+    check(Text.titlecase("e\u{301}COLE") == "E\u{301}cole", "combining marks remain inside a word")
+    check(Text.titlecase("ǆUNGLE") == "ǅungle", "Unicode titlecase mapping")
+    check(Text.titlecase("ΟΣ ΟΣ") == "Ος Ος", "contextual final sigma")
+}
+
+test "text indexes use Unicode scalar positions" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+    func found(text:str, expected:str) int {
+        if index = Text.index_of(text, expected) { return index }
+        return -1
+    }
+
+    check(found("aé🙂z", "a") == 0, "first scalar index")
+    check(found("aé🙂z", "é") == 1, "multibyte scalar index")
+    check(found("aé🙂z", "🙂") == 2, "emoji scalar index")
+    check(found("aé🙂z", "🙂z") == 2, "scalar sequence index")
+    check(found("aé🙂z", "z") == 3, "last scalar index")
+    check(found("Silex", "") == 0, "empty search index")
+    check(Text.index_of("Silex", "missing") == null, "missing search index")
+    check(Text.index_of("e\u{301}", "é") == null, "exact scalar sequence index")
+}
+
+test "text operations accept ordinary value positions" {
+    func check(condition:bool, detail:str) { if !condition { panic(detail) } }
+
+    let local_text = "  local  "
+    let holder = TextHolder(value:"  structure  ")
+    var configuration = TextConfiguration(value:"  class  ")
+    let values = ["  collection  "]
+
+    check(Text.trim("  literal  ") == "literal", "literal position")
+    check(Text.trim(local_text) == "local", "local position")
+    check(Text.trim(holder.value) == "structure", "structure field position")
+    check(Text.trim(configuration.value) == "class", "class field position")
+    check(Text.trim(values[0]) == "collection", "collection element position")
+    check(contains_from_borrow(local_text, "local"), "read-reference position")
+    check(transform_borrowed(local_text, Text.trim) == "local", "callback position")
 }

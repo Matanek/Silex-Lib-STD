@@ -5,7 +5,7 @@ use STD.Text.UTF8
 public enum Normalization { nfc; nfd; nfkc; nfkd }
 
 public func normalize(text:str, form:Normalization) str {
-    let input = UTF8.scalars(text)
+    let input = UTF8.read_scalars(text)
     var decomposed:uint32[] = []
     let compatible = match form { nfc => false; nfd => false; nfkc => true; nfkd => true }
     for scalar in input { append_decomposed(decomposed, scalar, compatible) }
@@ -18,6 +18,188 @@ public func lowercase(text:str) str { return map_case(text, 1) }
 public func uppercase(text:str) str { return map_case(text, 2) }
 public func case_fold(text:str) str { return map_case(text, 3) }
 public func unicode_version() str { return "17.0.0" }
+
+public func is_empty(text:@str) bool { return text == "" }
+
+public func index_of(text:@str, expected:@str) int? {
+    let values = UTF8.read_scalars(text)
+    let searched = UTF8.read_scalars(expected)
+    if searched.is_empty() { return 0 }
+    if searched.count() > values.count() { return null }
+    var index = 0
+    while index <= values.count() - searched.count() {
+        if matches_at(values, searched, index) { return index }
+        index++
+    }
+    return null
+}
+
+public func contains(text:@str, expected:@str) bool {
+    return index_of(text, expected) != null
+}
+
+public func starts_with(text:@str, prefix:@str) bool {
+    let values = UTF8.read_scalars(text)
+    let expected = UTF8.read_scalars(prefix)
+    if expected.count() > values.count() { return false }
+    return matches_at(values, expected, 0)
+}
+
+public func ends_with(text:@str, suffix:@str) bool {
+    let values = UTF8.read_scalars(text)
+    let expected = UTF8.read_scalars(suffix)
+    if expected.count() > values.count() { return false }
+    return matches_at(values, expected, values.count() - expected.count())
+}
+
+public func trim(text:@str) str {
+    let values = UTF8.read_scalars(text)
+    var first = 0
+    while first < values.count() && is_whitespace(values[first]) { first++ }
+    var last = values.count()
+    while last > first && is_whitespace(values[last - 1]) { last-- }
+    return encoded(values[first:last])
+}
+
+public func trim_start(text:@str) str {
+    let values = UTF8.read_scalars(text)
+    var first = 0
+    while first < values.count() && is_whitespace(values[first]) { first++ }
+    return encoded(values[first:values.count()])
+}
+
+public func trim_end(text:@str) str {
+    let values = UTF8.read_scalars(text)
+    var last = values.count()
+    while last > 0 && is_whitespace(values[last - 1]) { last-- }
+    return encoded(values[0:last])
+}
+
+public func replace(text:@str, expected:@str, replacement:@str) str {
+    let values = UTF8.read_scalars(text)
+    let searched = UTF8.read_scalars(expected)
+    if searched.is_empty() { return "" + text }
+    let inserted = UTF8.read_scalars(replacement)
+    var result:uint32[] = []
+    var index = 0
+    while index < values.count() {
+        if index <= values.count() - searched.count() && matches_at(values, searched, index) {
+            for scalar in inserted { result.append(scalar) }
+            index += searched.count()
+        } else {
+            result.append(values[index])
+            index++
+        }
+    }
+    return encoded(result)
+}
+
+public func slice(text:@str, start:int, end:int) str {
+    let values = UTF8.read_scalars(text)
+    if start < 0 || end < start || end > values.count() { panic("text slice is outside its Unicode scalar bounds") }
+    return encoded(values[start:end])
+}
+
+public func split(text:@str, separator:@str) str[] {
+    let values = UTF8.read_scalars(text)
+    let searched = UTF8.read_scalars(separator)
+    if searched.is_empty() { return ["" + text] }
+    var result:str[] = []
+    var start = 0
+    var index = 0
+    while index <= values.count() - searched.count() {
+        if matches_at(values, searched, index) {
+            result.append(encoded(values[start:index]))
+            index += searched.count()
+            start = index
+        } else { index++ }
+    }
+    result.append(encoded(values[start:values.count()]))
+    return result
+}
+
+public func join(values:@str[], separator:@str) str {
+    var result:uint32[] = []
+    let inserted = UTF8.read_scalars(separator)
+    var index = 0
+    while index < values.count() {
+        if index > 0 { for scalar in inserted { result.append(scalar) } }
+        for scalar in UTF8.read_scalars(values[index]) { result.append(scalar) }
+        index++
+    }
+    return encoded(result)
+}
+
+public func titlecase(text:@str) str {
+    let input = UTF8.read_scalars(text)
+    var output:uint32[] = []
+    var inside_word = false
+    var index = 0
+    while index < input.count() {
+        let scalar = input[index]
+        if in_plain_ranges(Data.cased_ranges(), scalar) {
+            if inside_word && scalar == 0x03A3 && final_sigma(input, index) { output.append(0x03C2 as uint32) }
+            else {
+                var kind = 4
+                if inside_word { kind = 1 }
+                append_case(output, scalar, kind)
+            }
+            inside_word = true
+        } else {
+            output.append(scalar)
+            if !in_plain_ranges(Data.case_ignorable_ranges(), scalar) { inside_word = false }
+        }
+        index++
+    }
+    return encoded(output)
+}
+
+func matches_at(values:@uint32[], expected:@uint32[], index:int) bool {
+    if index < 0 || index + expected.count() > values.count() { return false }
+    var offset = 0
+    while offset < expected.count() {
+        if values[index + offset] != expected[offset] { return false }
+        offset++
+    }
+    return true
+}
+
+func append_case(output:&uint32[], scalar:uint32, kind:int) {
+    if kind == 4 {
+        let title = titlecase_scalar(scalar)
+        if title != 0 { output.append(title); return }
+    }
+    var keys = Data.lowercase_keys()
+    var metadata = Data.lowercase_metadata()
+    var values = Data.lowercase_values()
+    if kind == 2 || kind == 4 {
+        keys = Data.uppercase_keys()
+        metadata = Data.uppercase_metadata()
+        values = Data.uppercase_values()
+    }
+    if kind == 3 {
+        keys = Data.fold_keys()
+        metadata = Data.fold_metadata()
+        values = Data.fold_values()
+    }
+    if mapped = case_mapping(keys, metadata, values, scalar) { for value in mapped { output.append(value) } }
+    else { output.append(scalar) }
+}
+
+func titlecase_scalar(scalar:uint32) uint32 {
+    if scalar >= 0x01C4 && scalar <= 0x01C6 { return 0x01C5 }
+    if scalar >= 0x01C7 && scalar <= 0x01C9 { return 0x01C8 }
+    if scalar >= 0x01CA && scalar <= 0x01CC { return 0x01CB }
+    if scalar >= 0x01F1 && scalar <= 0x01F3 { return 0x01F2 }
+    return 0
+}
+
+func is_whitespace(scalar:uint32) bool {
+    if scalar >= 0x09 && scalar <= 0x0D { return true }
+    if scalar == 0x20 || scalar == 0x85 || scalar == 0xA0 || scalar == 0x1680 { return true }
+    if scalar >= 0x2000 && scalar <= 0x200A { return true }
+    return scalar == 0x2028 || scalar == 0x2029 || scalar == 0x202F || scalar == 0x205F || scalar == 0x3000
+}
 
 func append_decomposed(output:&uint32[], scalar:uint32, compatible:bool) {
     if scalar >= 0xAC00 && scalar <= 0xD7A3 {
@@ -109,7 +291,7 @@ func combining_class(scalar:uint32) uint32 {
 }
 
 func map_case(text:str, kind:int) str {
-    let input = UTF8.scalars(text)
+    let input = UTF8.read_scalars(text)
     var output:uint32[] = []
     var index = 0
     while index < input.count() {

@@ -179,6 +179,37 @@ let content = try File.read_text(path, 1024)
 `File.read_all` and the byte-view overload of `File.write_all` remain available
 for binary data.
 
+Common immutable string operations live under `STD.Text`:
+
+```sx
+use STD.Text
+
+let clean = Text.trim("  Silex language  ")
+if Text.contains(clean, "Silex") {
+    print(Text.replace(clean, "language", "program"))
+}
+
+let title = Text.titlecase("a practical SILEX application")
+let words = Text.split(title, " ")
+print(Text.join(words, " · "))
+```
+
+`trim`, `trim_start`, and `trim_end` recognize Unicode whitespace.
+`contains`, `starts_with`, `ends_with`, and `replace` compare exact Unicode
+scalar sequences and remain case-sensitive. `replace` processes every
+non-overlapping occurrence from left to right; an empty search leaves the text
+unchanged. `index_of` returns `int?` and measures its result in Unicode scalar
+positions, consistently with the language's `str.count()`.
+`slice` uses the same scalar indexes and an invalid range is a programming
+error. `split` preserves empty parts; an empty separator keeps the original
+text as one part. `join` accepts an empty collection and returns an empty
+string.
+
+`titlecase` is Unicode-aware and locale-independent. It uppercases the first
+cased character of each word and lowercases the remaining cased characters.
+Case-ignorable characters such as combining marks and apostrophes remain in
+the current word; other uncased characters start a new word.
+
 Cryptographic hashes and system entropy are available through `STD.Crypto`:
 
 ```sx

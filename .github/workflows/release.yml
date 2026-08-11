@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing package tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -15,16 +21,20 @@ jobs:
     steps:
       - name: Check out the tagged package
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Verify package identity and tag
         id: package
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
           package_name=$(python3 -c 'import json; print(json.load(open("Package.json"))["name"])')
           package_version=$(python3 -c 'import json; print(json.load(open("Package.json"))["version"])')
           required_silex=$(python3 -c 'import json; print(json.load(open("Package.json"))["requires"]["silex"])')
-          tag_version=${GITHUB_REF_NAME#v}
+          tag_version=${RELEASE_TAG#v}
           test -n "$package_name"
           test -n "$required_silex"
           test "$package_version" = "$tag_version"
@@ -35,11 +45,16 @@ jobs:
         env:
           PACKAGE_NAME: ${{ steps.package.outputs.name }}
           PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
           archive="$PACKAGE_NAME-$PACKAGE_VERSION.tar.gz"
-          git archive             --format=tar.gz             --prefix="$PACKAGE_NAME-$PACKAGE_VERSION/"             --output="$archive"             HEAD
+          git archive \
+            --format=tar.gz \
+            --prefix="$PACKAGE_NAME-$PACKAGE_VERSION/" \
+            --output="$archive" \
+            HEAD
           shasum -a 256 "$archive" > "$archive.sha256"
 
       - name: Publish the GitHub release
@@ -51,5 +66,9 @@ jobs:
         run: |
           set -euo pipefail
           archive="$PACKAGE_NAME-$PACKAGE_VERSION.tar.gz"
-          gh release create "$GITHUB_REF_NAME"             "$archive"             "$archive.sha256"             --verify-tag             --title "$PACKAGE_NAME $PACKAGE_VERSION"             --generate-notes
-
+          gh release create "$RELEASE_TAG" \
+            "$archive" \
+            "$archive.sha256" \
+            --verify-tag \
+            --title "$PACKAGE_NAME $PACKAGE_VERSION" \
+            --generate-notes

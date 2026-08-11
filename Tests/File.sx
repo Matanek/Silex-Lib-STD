@@ -1,4 +1,5 @@
 use STD.File
+use STD.FileSystem
 use STD.Error
 
 test "text and binary file IO" {
@@ -31,5 +32,48 @@ test "text and binary file IO" {
     match File.read_text(path, 3) {
         failure(error) => { assert(is_invalid_data(error.kind), "invalid UTF-8 file error") }
         success(content) => { panic("invalid UTF-8 file was accepted as text") }
+    }
+}
+
+test "open creation and append modes" {
+    func run() Result<void, Error> {
+        let path = "/private/tmp/silex-std-file-open-modes.txt"
+        let ignored = FileSystem.remove_file(path)
+
+        var created = try File.open(path, File.OpenOptions(
+            access:File.Access.read_write(),
+            creation:File.Creation.create_new(),
+            append:false
+        ))
+        let first:uint8[1] = [65]
+        let first_count = try created.write(@first[0:1])
+        assert(first_count == 1, "create-new write")
+        try File.close(move created)
+
+        var existing = try File.open(path, File.OpenOptions(
+            access:File.Access.read_write(),
+            creation:File.Creation.open_or_create(),
+            append:true
+        ))
+        let second:uint8[1] = [66]
+        let second_count = try existing.write(@second[0:1])
+        assert(second_count == 1, "append write")
+        try File.close(move existing)
+        assert((try File.read_text(path, 2)) == "AB", "appended contents")
+
+        var truncated = try File.open(path, File.OpenOptions(
+            access:File.Access.write(),
+            creation:File.Creation.truncate_existing(),
+            append:false
+        ))
+        assert((try truncated.length()) == 0, "truncate-existing length")
+        try File.close(move truncated)
+        try FileSystem.remove_file(path)
+        return Result<void, Error>.success()
+    }
+
+    match run() {
+        failure(error) => { panic(error.operation + ": " + error.detail) }
+        success => {}
     }
 }

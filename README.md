@@ -8,6 +8,11 @@ reserved `STD` module root:
 use STD.Console
 ```
 
+Start with [Docs/README.md](Docs/README.md) to choose a capability, then use the
+focused programs in [Examples/README.md](Examples/README.md) as executable
+starting points. Examples are organized by application intent rather than by
+the internal platform implementation.
+
 The repository root is the `STD` package root. `Package.json` declares the
 package, `Module/` contains its portable Silex API and `Platform/` supplies the
 system boundary selected by the compiler. Platform implementations remain
@@ -138,6 +143,26 @@ and supports containment, intersection, translation and scaling.
 The complete right-handed coordinate, column-vector, projection-depth and
 semi-open rectangle contract is documented in [Docs/Math.md](Docs/Math.md).
 
+Associative and ordered collections expose one consistent traversal model:
+
+```sx
+use STD.Collections.Dictionary
+
+var scores = Dictionary<str, int>()
+scores.set("Ada", 12)
+scores.set("Linus", 9)
+
+var entries = scores.iterator()
+while entry = entries.next() {
+    print("$(entry.key): $(entry.value)")
+}
+```
+
+`Dictionary`, `Set`, `Queue` and `Stack`, their traversal order, snapshot
+operations and iteration algorithms are documented in
+[Docs/Collections.md](Docs/Collections.md). Focused executable walkthroughs
+live under [Examples/Collections](Examples/Collections/).
+
 CPU jobs use the persistent executor exposed by `STD.Threading`:
 
 ```sx
@@ -267,11 +292,17 @@ func retryable(kind:Error.Kind) bool {
 ```
 
 `Tests/` groups each capability in one focused program. The workspace helper
-rebuilds the compiler and runs every test natively without reusing compilation
-cache entries:
+rebuilds the compiler, runs every test natively, then compiles every example
+without reusing compilation cache entries:
 
 ```sh
 ./silex-dev test-std
+```
+
+During documentation work, compile only the executable catalogue with:
+
+```sh
+./silex-dev examples-std
 ```
 
 The Silex sources are the primary API reference. Usage guides belong under

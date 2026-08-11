@@ -1,0 +1,27 @@
+use STD.Threading
+
+class ParallelValues {
+    public var items:int[]
+
+    public func double_range(start:int, end:int) {
+        var index = start
+        while index < end {
+            self.items[index] *= 2
+            index++
+        }
+    }
+}
+
+struct DoubleValues:Threading.ParallelJob {
+    var values:ParallelValues
+    func execute(start:int, end:int) { self.values.double_range(start, end) }
+}
+
+test "parallel jobs do not require a concrete ordinary job" {
+    var values = ParallelValues(items:[1, 2, 3, 4])
+    var executor = Threading.Executor(worker_count:2)
+    var done = executor.submit_parallel(4, DoubleValues(values:values))
+    done.complete()
+    assert(values.items[0] == 2, "first parallel value")
+    assert(values.items[3] == 8, "last parallel value")
+}

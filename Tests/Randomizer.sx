@@ -13,6 +13,12 @@ test "generated values stay in their ranges" {
 
     let fractional = randomizer.get_float()
     assert(fractional >= 0.0 && fractional < 1.0)
+
+    let ranged_fractional = randomizer.get_float(-2.0, 3.0)
+    assert(ranged_fractional >= -2.0 && ranged_fractional < 3.0)
+
+    let decision = randomizer.get_bool()
+    assert(decision || !decision)
 }
 
 test "system seed" {

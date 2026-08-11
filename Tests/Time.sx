@@ -11,6 +11,12 @@ test "stopwatch state and monotonic time" {
     assert(first >= 0.0 && second >= first, "stopwatch is monotonic")
     stopwatch.stop()
     assert(!stopwatch.is_running(), "stopped stopwatch is stopped")
+    assert(stopwatch.get_elapsed_milliseconds() >= 0.0, "stopwatch milliseconds")
+    stopwatch.restart()
+    assert(stopwatch.is_running(), "restarted stopwatch is running")
+    stopwatch.reset()
+    assert(!stopwatch.is_running(), "reset stopwatch is stopped")
+    assert(stopwatch.get_elapsed_seconds() == 0.0, "reset stopwatch is empty")
 }
 
 test "clock state and time scale" {
@@ -24,4 +30,9 @@ test "clock state and time scale" {
     assert(clock.tick() == 0.0, "paused clock does not advance")
     clock.resume()
     assert(!clock.is_paused(), "clock resumes")
+    assert(clock.get_total_seconds() >= 0.0, "clock total seconds")
+    assert(clock.get_total_milliseconds() >= 0.0, "clock total milliseconds")
+    clock.reset()
+    assert(clock.get_total_seconds() == 0.0, "reset clock is empty")
+    assert(clock.get_time_scale() == 2.0, "clock reset preserves configured scale")
 }

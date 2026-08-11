@@ -10,4 +10,7 @@ test "Unicode grapheme clusters" {
     check(Grapheme.count("\u{915}\u{94d}\u{937}") == 1, "Indic conjunct")
     let parts = Grapheme.split("a👩‍🚀b")
     check(parts.count() == 3 && parts[1] == "👩‍🚀", "grapheme split")
+    let boundaries = Grapheme.boundaries("a👩‍🚀b")
+    check(boundaries.count() == 4, "grapheme boundary count")
+    check(boundaries[0] == 0 && boundaries[3] == 13, "grapheme byte boundaries")
 }

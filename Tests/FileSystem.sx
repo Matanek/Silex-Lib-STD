@@ -18,13 +18,17 @@ test "filesystem operations" {
         let source = nested + "/source.txt"
         let copied = nested + "/copied.txt"
         let renamed = nested + "/renamed.txt"
+        let empty = root + "/empty"
         let ignored_copy = FileSystem.remove_file(copied)
         let ignored_renamed = FileSystem.remove_file(renamed)
         try FileSystem.create_directories(nested)
+        try FileSystem.create_directory(empty)
         try File.write_all(source, "filesystem")
 
         let information = try FileSystem.metadata(source)
+        let direct_information = try FileSystem.symbolic_link_metadata(source)
         assert(is_file(information.kind), "file kind")
+        assert(is_file(direct_information.kind), "direct file kind")
         assert(information.size == 10, "file size")
 
         try FileSystem.copy_file(source, copied, true)
@@ -41,6 +45,7 @@ test "filesystem operations" {
 
         try FileSystem.remove_file(source)
         try FileSystem.remove_file(renamed)
+        try FileSystem.remove_directory(empty)
         try FileSystem.remove_directory(nested)
         try FileSystem.remove_directory(root + "/a")
         try FileSystem.remove_directory(root)

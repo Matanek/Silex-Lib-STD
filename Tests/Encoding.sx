@@ -1,0 +1,46 @@
+use STD.Text.Encoding
+
+test "encode, detect and decode every supported encoding" {
+    let encodings:Encoding.Kind[] = [
+        Encoding.Kind.utf8(),
+        Encoding.Kind.utf16_little_endian(),
+        Encoding.Kind.utf16_big_endian(),
+        Encoding.Kind.utf32_little_endian(),
+        Encoding.Kind.utf32_big_endian()
+    ]
+    for encoding in encodings {
+        let encoded = Encoding.encode_with_bom("Silex 🙂", encoding)
+        if detected = Encoding.detect_bom(@encoded[0:encoded.count()]) {
+            assert(detected == encoding, "detected encoding")
+        } else { panic("byte order mark was not detected") }
+        match Encoding.decode(@encoded[0:encoded.count()], encoding) {
+            failure(error) => { panic("encoded text was rejected") }
+            success(text) => { assert(text == "Silex 🙂", "encoding round trip") }
+        }
+        let payload = Encoding.encode("Silex 🙂", encoding)
+        match Encoding.decode(@payload[0:payload.count()], encoding) {
+            failure(error) => { panic("BOM-free encoded text was rejected") }
+            success(text) => { assert(text == "Silex 🙂", "BOM-free round trip") }
+        }
+    }
+}
+
+test "encoding errors identify their kind and byte offset" {
+    let invalid_length:uint8[1] = [65]
+    match Encoding.decode(@invalid_length[0:1], Encoding.Kind.utf16_little_endian()) {
+        success(text) => { panic("odd UTF-16 payload was accepted") }
+        failure(error) => {
+            assert(error.kind == Encoding.ErrorKind.invalid_length(), "invalid length kind")
+            assert(error.byte_offset == 0, "invalid length offset")
+        }
+    }
+
+    let utf8_with_bom = Encoding.encode_with_bom("Silex", Encoding.Kind.utf8())
+    match Encoding.decode(@utf8_with_bom[0:utf8_with_bom.count()], Encoding.Kind.utf16_little_endian()) {
+        success(text) => { panic("unexpected BOM was accepted") }
+        failure(error) => {
+            assert(error.kind == Encoding.ErrorKind.unexpected_bom(), "unexpected BOM kind")
+            assert(error.byte_offset == 0, "unexpected BOM offset")
+        }
+    }
+}

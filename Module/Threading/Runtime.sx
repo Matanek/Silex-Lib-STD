@@ -4,7 +4,6 @@ use STD.Threading.Job
 use STD.Threading.State.PoolResource
 use STD.Threading.State.DependencyTarget
 use STD.Threading.State.CompletionState
-use STD.Threading.State.FenceOwner
 
 internal protocol WorkItem {
     func execute()
@@ -82,7 +81,7 @@ internal class GraphState:CompletionState,DependencyTarget {
     }
 }
 
-internal class JobState<T:Job>:CompletionState,FenceOwner {
+internal class JobState<T:Job>:CompletionState {
     internal var job:T? = null
     internal var completed:bool = false
     internal var consumed:bool = false
@@ -120,12 +119,22 @@ internal class JobState<T:Job>:CompletionState,FenceOwner {
         if self.graph_address == 0 { panic("STD.Threading job has no graph state") }
         return C.object_from_address<GraphState>(self.graph_address)
     }
+    internal func fence_state(runtime:Runtime) GraphState {
+        runtime.lock()
+        if self.graph_address != 0 {
+            var existing = self.graph_state()
+            runtime.unlock()
+            return existing
+        }
+        var graph = runtime.create_fence_graph_locked(self.completed)
+        self.graph_address = C.object_address(graph)
+        runtime.unlock()
+        if graph.completed { Native.signal(graph.completion_signal) }
+        return graph
+    }
     public func is_completed() bool { return self.completed }
     public func wait_for_completion() { Native.wait(self.completion_signal) }
     public func notify_waiter() { Native.signal(self.completion_signal) }
-    public func graph_address_value() uint { return self.graph_address }
-    public func set_graph_address(value:uint) { self.graph_address = value }
-    public func graph_is_completed() bool { return self.completed }
 }
 
 internal func prepare_state<T:Job>(state:JobState<T>, job:T) {
@@ -447,14 +456,7 @@ internal class Runtime {
         panic("STD.Threading could not prepare a dependent submission")
     }
 
-    internal func fence_for(state:FenceOwner) GraphState {
-        var owner = state
-        self.lock()
-        if owner.graph_address_value() != 0 {
-            var graph = C.object_from_address<GraphState>(owner.graph_address_value())
-            self.unlock()
-            return graph
-        }
+    internal func create_fence_graph_locked(completed:bool) GraphState {
         let completion_signal = Native.create_signal(0)
         if completion_signal == 0 {
             self.unlock()
@@ -462,11 +464,8 @@ internal class Runtime {
         }
         self.submission_signals.append(completion_signal)
         var graph = GraphState(self, completion_signal)
-        if owner.graph_is_completed() { graph.complete_locked() }
-        owner.set_graph_address(C.object_address(graph))
+        if completed { graph.complete_locked() }
         self.graph_states.append(graph)
-        self.unlock()
-        if graph.completed { Native.signal(graph.completion_signal) }
         return graph
     }
 
@@ -736,10 +735,6 @@ internal func enqueue_after<T:Job>(runtime:Runtime, job:T, dependencies:@GraphSt
 
 internal func combine_states(runtime:Runtime, dependencies:@GraphState[]) GraphState {
     return runtime.combine(dependencies)
-}
-
-internal func graph_for(runtime:Runtime, state:FenceOwner) GraphState {
-    return runtime.fence_for(state)
 }
 
 internal func run_worker(context:uint) uint {

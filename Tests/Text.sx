@@ -20,6 +20,8 @@ test "Unicode text operations" {
     func check(condition:bool, detail:str) { if !condition { panic(detail) } }
 
     check(Text.normalize("e\u{301}", Text.Normalization.nfc()) == "é", "NFC composition")
+    check(Text.is_normalized("é", Text.Normalization.nfc()), "NFC detection")
+    check(!Text.is_normalized("e\u{301}", Text.Normalization.nfc()), "non-NFC detection")
     check(Text.normalize("é", Text.Normalization.nfd()) == "e\u{301}", "NFD decomposition")
     check(Text.normalize("①", Text.Normalization.nfkc()) == "1", "NFKC compatibility")
     check(Text.uppercase("Straße") == "STRASSE", "full uppercase mapping")

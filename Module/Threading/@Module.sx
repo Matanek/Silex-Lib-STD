@@ -5,8 +5,6 @@ use STD.Threading.Runtime.GraphState
 use STD.Threading.Runtime.enqueue
 use STD.Threading.Runtime.enqueue_after
 use STD.Threading.Runtime.combine_states
-use STD.Threading.Runtime.graph_for
-use STD.Threading.State.FenceOwner
 use STD.Threading.Parallel.enqueue_parallel
 use STD.Threading.Parallel.enqueue_parallel_after
 use STD.Threading.Native
@@ -75,8 +73,7 @@ public struct JobHandle<T:Job> {
     public func fence() Fence {
         var runtime = self.shared_runtime()
         var shared = self.shared_state()
-        var owner:FenceOwner = shared
-        var state = graph_for(runtime, owner)
+        var state = shared.fence_state(runtime)
         return Fence(state, runtime)
     }
 

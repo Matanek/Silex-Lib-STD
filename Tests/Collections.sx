@@ -10,6 +10,15 @@ class Token {
 
 test "portable hashing" {
     assert(Hashing.hash("hello") == 11831194018420276491, "portable string hash")
+    assert(Hashing.hash_bool(true) == 1, "boolean hash")
+    assert(Hashing.hash_int(-7) == 13, "integer hash")
+    assert(Hashing.hash_uint(7 as uint) == 7, "unsigned integer hash")
+    assert(Hashing.hash_str("hello") == Hashing.hash("hello"), "string hash helper")
+    assert(Hashing.equal_bool(true, true), "boolean equality")
+    assert(Hashing.equal_int(-7, -7), "integer equality")
+    assert(Hashing.equal_uint(7 as uint, 7 as uint), "unsigned integer equality")
+    assert(Hashing.equal_str("Silex", "Silex"), "string equality")
+    assert(Hashing.equal("Silex", "Silex"), "overloaded equality")
 }
 
 test "dictionary operations" {
@@ -45,6 +54,33 @@ test "dictionary operations" {
     assert(reserved.capacity() >= 16, "named dictionary minimum capacity")
 }
 
+test "dictionary traversal" {
+    var dictionary = Dictionary<str, int>()
+    dictionary.set("Ada", 12)
+    dictionary.set("Linus", 9)
+    dictionary.set("Grace", 15)
+
+    var entries = dictionary.iterator()
+    var entry_count = 0
+    var total = 0
+    while entry = entries.next() {
+        assert(dictionary.get(entry.key) == entry.value, "entry preserves its association")
+        entry_count++
+        total += entry.value
+    }
+    assert(entry_count == 3, "iterator visits every dictionary entry")
+    assert(total == 36, "iterator visits every dictionary value")
+    assert(entries.is_empty(), "dictionary iterator is exhausted")
+
+    var keys = dictionary.get_keys()
+    var values = dictionary.get_values()
+    assert(keys.count() == dictionary.count(), "key snapshot contains every key")
+    assert(values.count() == dictionary.count(), "value snapshot contains every value")
+    keys.clear()
+    values.clear()
+    assert(dictionary.count() == 3, "dictionary snapshots are independent copies")
+}
+
 test "set operations" {
     var values = Set<int>()
     assert(values.add(42), "new set value")
@@ -55,6 +91,13 @@ test "set operations" {
 
     let reserved = Set<int>(minimum_capacity:16)
     assert(reserved.capacity() >= 16, "named set minimum capacity")
+
+    values.add(4)
+    values.add(8)
+    var iterator = values.iterator()
+    var total = 0
+    while value = iterator.next() { total += value }
+    assert(total == 12, "set iterator visits every value")
 }
 
 test "queue operations" {
@@ -79,6 +122,22 @@ test "queue operations" {
     }
     assert(queue.remove(2), "queue removes remaining value")
     assert(!queue.remove(2), "queue removal reports absence")
+
+    queue.add(4)
+    queue.add(5)
+    var iterator = queue.iterator()
+    if first = iterator.next() {
+        assert(first == 4, "queue iterator starts at the front")
+    } else {
+        assert(false, "queue iterator first value")
+    }
+    if second = iterator.next() {
+        assert(second == 5, "queue iterator follows insertion order")
+    } else {
+        assert(false, "queue iterator second value")
+    }
+    assert(iterator.next() == null, "queue iterator is exhausted")
+    assert(queue.count() == 2, "queue iteration does not consume the queue")
 }
 
 test "stack operations" {
@@ -98,6 +157,27 @@ test "stack operations" {
     }
     assert(stack.remove(2), "stack removes remaining value")
     assert(!stack.remove(2), "stack removal reports absence")
+
+    stack.add(4)
+    stack.add(5)
+    var iterator = stack.iterator()
+    if first = iterator.next() {
+        assert(first == 5, "stack iterator starts at the top")
+    } else {
+        assert(false, "stack iterator first value")
+    }
+    if second = iterator.next() {
+        assert(second == 4, "stack iterator follows removal order")
+    } else {
+        assert(false, "stack iterator second value")
+    }
+    if third = iterator.next() {
+        assert(third == 1, "stack iterator reaches the bottom")
+    } else {
+        assert(false, "stack iterator third value")
+    }
+    assert(iterator.next() == null, "stack iterator is exhausted")
+    assert(stack.count() == 3, "stack iteration does not consume the stack")
 }
 
 test "class identity in collections" {
@@ -125,4 +205,34 @@ test "class identity in collections" {
     assert(token_stack.contains(alias), "stack contains a shared class identity")
     assert(!token_stack.contains(distinct), "stack rejects a distinct class identity")
     assert(token_stack.remove(alias), "stack removes a shared class identity")
+}
+
+test "collection reservation and clearing" {
+    var dictionary = Dictionary<int, str>()
+    dictionary.reserve(12)
+    assert(dictionary.capacity() >= 12, "dictionary reserve")
+    dictionary.set(1, "one")
+    dictionary.clear()
+    assert(dictionary.is_empty(), "dictionary clear")
+
+    var set = Set<int>()
+    set.reserve(12)
+    assert(set.capacity() >= 12, "set reserve")
+    set.add(1)
+    set.clear()
+    assert(set.is_empty(), "set clear")
+
+    var queue = Queue<int>()
+    queue.reserve(12)
+    assert(queue.capacity() >= 12, "queue reserve")
+    queue.add(1)
+    queue.clear()
+    assert(queue.is_empty(), "queue clear")
+
+    var stack = Stack<int>()
+    stack.reserve(12)
+    assert(stack.capacity() >= 12, "stack reserve")
+    stack.add(1)
+    stack.clear()
+    assert(stack.is_empty(), "stack clear")
 }

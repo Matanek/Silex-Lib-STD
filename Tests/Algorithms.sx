@@ -51,6 +51,19 @@ test "iteration algorithms" {
     }
 }
 
+test "build an iterator incrementally" {
+    var values = Iterator<int>.empty()
+    assert(values.is_empty(), "new iterator is empty")
+    values.push(7)
+    values.push(9)
+    assert(values.remaining() == 2, "pushed iterator values")
+    if first = values.next() { assert(first == 7, "first pushed value") }
+    else { panic("first pushed value was absent") }
+    if second = values.next() { assert(second == 9, "second pushed value") }
+    else { panic("second pushed value was absent") }
+    assert(values.next() == null, "pushed iterator exhausted")
+}
+
 test "random choice and shuffle" {
     func before(left:@int, right:@int) bool { return left < right }
 

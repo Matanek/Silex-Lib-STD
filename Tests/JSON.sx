@@ -27,3 +27,41 @@ test "reject an invalid number" {
         failure(error) => {}
     }
 }
+
+test "construct and project every JSON value kind" {
+    var null_value = Value.null_value()
+    var boolean_value = Value.boolean(true)
+    var string_value = Value.string("Silex")
+    var integer_value = Value.number(42)
+    var unsigned_value = Value.number(7 as uint)
+    var items:Value[] = [null_value, boolean_value, string_value, integer_value, unsigned_value]
+    var array_value = Value.array(items)
+
+    assert(null_value.kind() == JSON.Kind.null_value(), "null kind")
+    if actual = boolean_value.as_boolean() { assert(actual, "boolean projection") }
+    else { panic("boolean projection was absent") }
+    if actual = string_value.as_string() { assert(actual == "Silex", "string projection") }
+    else { panic("string projection was absent") }
+    if actual = integer_value.as_number_text() { assert(actual == "42", "integer projection") }
+    else { panic("integer projection was absent") }
+    if values = array_value.as_array() {
+        assert(values.count() == 5, "array projection")
+    } else { panic("array projection was absent") }
+    assert(array_value.encoded(false) == "[null,true,\"Silex\",42,7]", "direct compact encoding")
+
+    match Value.number(1.5 as float64) {
+        failure(error) => { panic("finite floating-point number was rejected") }
+        success(var value) => { assert(value.kind() == JSON.Kind.number(), "floating-point kind") }
+    }
+}
+
+test "explicit parse depth is enforced" {
+    match Value.parse_text("[[1]]", 1) {
+        success(var value) => { panic("value exceeded explicit depth") }
+        failure(error) => { assert(error.kind == JSON.ParseErrorKind.depth_limit(), "depth error kind") }
+    }
+    match JSON.parse("[1]", 1) {
+        failure(error) => { panic("value within explicit depth was rejected") }
+        success(var value) => {}
+    }
+}

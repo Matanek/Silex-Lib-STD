@@ -8,12 +8,6 @@ internal protocol DependencyTarget {
     func dependency_completed()
 }
 
-internal protocol FenceOwner {
-    func graph_address_value() uint
-    func set_graph_address(value:uint)
-    func graph_is_completed() bool
-}
-
 internal protocol PoolResource {
     func slot_count() int
 }

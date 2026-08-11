@@ -1,0 +1,18 @@
+use STD.JSON
+use STD.JSON.Format
+use STD.JSON.Member
+use STD.JSON.Value
+
+func main() {
+    var checks:Value[] = [Value.string("compile"), Value.string("test")]
+    var members:Member[] = [
+        Member(name:"project", value:Value.string("Silex")),
+        Member(name:"passed", value:Value.boolean(true)),
+        Member(name:"checks", value:Value.array(checks)),
+    ]
+
+    match Value.object(members) {
+        failure(error) => { panic("Could not build the JSON report") }
+        success(report) => { print(JSON.stringify(report, Format.pretty())) }
+    }
+}

@@ -61,6 +61,8 @@ test "scalar IEEE 754 contract in both precisions" {
     let pi_lower_bound:float64 = 3.14159265358979
     assert(Math.nearly_equal(precise_root, expected_root, root_tolerance), "float64 square root")
     assert(Math.pi<float64>() > pi_lower_bound, "float64 pi precision")
+    assert(Math.epsilon() == 0.000001, "compatibility epsilon")
+    assert(Math.epsilon<float32>() == 0.000001, "typed compatibility epsilon")
     assert(Math.machine_epsilon<float32>() == 1.1920929e-7, "float32 machine epsilon")
     let expected_epsilon:float64 = 2.220446049250313e-16
     assert(Math.machine_epsilon<float64>() == expected_epsilon, "float64 machine epsilon")
@@ -358,6 +360,13 @@ test "Vec2" {
     assert(vector.length() == 5.0, "Vec2 length")
     assert(vector.normalized().nearly_equal(Math.Vec2(0.6, 0.8), 0.00001), "Vec2 normalized")
     assert(vector.add(Math.Vec2.one()).nearly_equal(Math.Vec2(4.0, 5.0)), "Vec2 addition")
+    assert(vector.subtract(Math.Vec2.one()) == Math.Vec2(2.0, 3.0), "Vec2 subtraction")
+    assert(vector.divide(Math.Vec2(3.0, 2.0)) == Math.Vec2(1.0, 2.0), "Vec2 component division")
+    assert(vector.divide(2.0) == Math.Vec2(1.5, 2.0), "Vec2 scalar division")
+    assert(vector.negated() == Math.Vec2(-3.0, -4.0), "Vec2 negation")
+    assert(vector.minimum(Math.Vec2(4.0, 2.0)) == Math.Vec2(3.0, 2.0), "Vec2 minimum")
+    assert(vector.maximum(Math.Vec2(4.0, 2.0)) == Math.Vec2(4.0, 4.0), "Vec2 maximum")
+    assert(vector.clamped(Math.Vec2(0.0, 0.0), Math.Vec2(2.0, 3.0)) == Math.Vec2(2.0, 3.0), "Vec2 clamp")
     assert(vector.lerp(Math.Vec2(5.0, 8.0), 0.5).nearly_equal(Math.Vec2(4.0, 6.0)), "Vec2 lerp")
     assert(Math.Vec2(1.25, -1.75).floor() == Math.Vec2(1.0, -2.0), "Vec2 floor")
     assert(Math.Vec2(1.25, -1.75).ceil() == Math.Vec2(2.0, -1.0), "Vec2 ceil")
@@ -374,6 +383,14 @@ test "Vec3" {
     assert(right.dot(up) == 0.0, "Vec3 orthogonal dot product")
     assert(Math.Vec3(2.0, 0.0, 0.0).normalized().nearly_equal(right), "Vec3 normalized")
     assert(Math.Vec3(1.0, 2.0, 3.0).distance(Math.Vec3(1.0, 2.0, 6.0)) == 3.0, "Vec3 distance")
+    let vector = Math.Vec3(2.0, 4.0, 8.0)
+    assert(vector.subtract(Math.Vec3.one()) == Math.Vec3(1.0, 3.0, 7.0), "Vec3 subtraction")
+    assert(vector.divide(Math.Vec3(2.0, 2.0, 4.0)) == Math.Vec3(1.0, 2.0, 2.0), "Vec3 component division")
+    assert(vector.divide(2.0) == Math.Vec3(1.0, 2.0, 4.0), "Vec3 scalar division")
+    assert(vector.negated() == Math.Vec3(-2.0, -4.0, -8.0), "Vec3 negation")
+    assert(vector.minimum(Math.Vec3(3.0, 3.0, 9.0)) == Math.Vec3(2.0, 3.0, 8.0), "Vec3 minimum")
+    assert(vector.maximum(Math.Vec3(3.0, 3.0, 9.0)) == Math.Vec3(3.0, 4.0, 9.0), "Vec3 maximum")
+    assert(vector.clamped(Math.Vec3.zero(), Math.Vec3(1.0, 3.0, 7.0)) == Math.Vec3(1.0, 3.0, 7.0), "Vec3 clamp")
     assert(Math.Vec3(1.25, -1.75, 2.5).floor() == Math.Vec3(1.0, -2.0, 2.0), "Vec3 floor")
     assert(Math.Vec3(1.25, -1.75, 2.5).ceil() == Math.Vec3(2.0, -1.0, 3.0), "Vec3 ceil")
     assert(Math.Vec3(1.5, -1.5, 2.5).round() == Math.Vec3(2.0, -2.0, 3.0), "Vec3 round")
@@ -385,6 +402,13 @@ test "Vec4" {
     let vector = Math.Vec4(Math.Vec3(1.0, 2.0, 3.0), 4.0)
     assert(vector.xyz().nearly_equal(Math.Vec3(1.0, 2.0, 3.0)), "Vec4 xyz")
     assert(vector.multiply(2.0).nearly_equal(Math.Vec4(2.0, 4.0, 6.0, 8.0)), "Vec4 scalar multiply")
+    assert(vector.subtract(Math.Vec4.one()) == Math.Vec4(0.0, 1.0, 2.0, 3.0), "Vec4 subtraction")
+    assert(vector.divide(Math.Vec4(1.0, 2.0, 3.0, 4.0)) == Math.Vec4.one(), "Vec4 component division")
+    assert(vector.divide(2.0) == Math.Vec4(0.5, 1.0, 1.5, 2.0), "Vec4 scalar division")
+    assert(vector.negated() == Math.Vec4(-1.0, -2.0, -3.0, -4.0), "Vec4 negation")
+    assert(vector.minimum(Math.Vec4(2.0, 1.0, 4.0, 3.0)) == Math.Vec4(1.0, 1.0, 3.0, 3.0), "Vec4 minimum")
+    assert(vector.maximum(Math.Vec4(2.0, 1.0, 4.0, 3.0)) == Math.Vec4(2.0, 2.0, 4.0, 4.0), "Vec4 maximum")
+    assert(vector.clamped(Math.Vec4.zero(), Math.Vec4(0.5, 1.5, 2.5, 3.5)) == Math.Vec4(0.5, 1.5, 2.5, 3.5), "Vec4 clamp")
     assert(Math.Vec4.unit_w().dot(vector) == 4.0, "Vec4 unit w")
     assert(Math.Vec4.zero().normalized().nearly_equal(Math.Vec4.zero()), "Vec4 zero normalized")
     assert(Math.Vec4(1.25, -1.75, 2.5, -2.5).floor() == Math.Vec4(1.0, -2.0, 2.0, -3.0), "Vec4 floor")
@@ -398,6 +422,8 @@ test "Rect" {
     assert(area.position() == Math.Vec2(10.0, 20.0), "Rect position")
     assert(area.size() == Math.Vec2(100.0, 50.0), "Rect size")
     assert(area.center() == Math.Vec2(60.0, 45.0), "Rect center")
+    assert(area.minimum() == Math.Vec2(10.0, 20.0), "Rect minimum")
+    assert(area.maximum() == Math.Vec2(110.0, 70.0), "Rect maximum")
     assert(area.contains(Math.Vec2(10.0, 20.0)), "Rect contains minimum")
     assert(!area.contains(Math.Vec2(110.0, 70.0)), "Rect excludes maximum")
     let overlap = Math.Rect(80.0, 40.0, 50.0, 50.0)
@@ -418,6 +444,8 @@ test "Quat" {
     assert(rotation.inverted().rotate(rotated).nearly_equal(Math.Vec3.right(), 0.00001), "Quat inverse")
     assert(rotation.to_mat3().multiply(Math.Vec3.right()).nearly_equal(Math.Vec3.up(), 0.00001), "Quat Mat3")
     assert(Math.Quat().length_squared() == 1.0, "Quat identity")
+    assert(Math.Quat().subtract(Math.Quat()) == Math.Quat(0.0, 0.0, 0.0, 0.0), "Quat subtraction")
+    assert(rotation.conjugated().rotate(rotated).nearly_equal(Math.Vec3.right(), 0.00001), "Quat conjugate")
 }
 
 test "Mat3" {
@@ -432,6 +460,8 @@ test "Mat3" {
     assert(diagonal.inverted().multiply(diagonal.multiply(vector)).nearly_equal(vector, 0.00001), "Mat3 inverse")
     assert(Math.Mat3.identity().multiply(vector).nearly_equal(vector), "Mat3 identity")
     assert(Math.Mat3.zero().add(diagonal).x.nearly_equal(diagonal.x), "Mat3 extensions")
+    assert(diagonal.subtract(diagonal) == Math.Mat3.zero(), "Mat3 subtraction")
+    assert(diagonal.transposed() == diagonal, "Mat3 transpose")
 }
 
 test "Mat4" {
@@ -450,4 +480,6 @@ test "Mat4" {
     let view = Math.Mat4.look_at(Math.Vec3.zero(), Math.Vec3.front(), Math.Vec3.up())
     assert(view.multiply(point).nearly_equal(point, 0.00001), "Mat4 look at")
     assert(Math.Mat4.identity().multiply(point).nearly_equal(point), "Mat4 identity")
+    assert(translation.subtract(translation) == Math.Mat4.zero(), "Mat4 subtraction")
+    assert(Math.Mat4.identity().transposed() == Math.Mat4.identity(), "Mat4 transpose")
 }

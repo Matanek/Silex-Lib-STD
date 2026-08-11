@@ -1,0 +1,15 @@
+use STD.Algorithms.Iteration
+use STD.Collections.Dictionary
+use STD.Collections.Dictionary.Entry
+
+func passing(entry:@Entry<str, int>) bool { return entry.value >= 10 }
+
+test "iterate dictionary entries through an explicit nested specialization" {
+    var scores = Dictionary<str, int>()
+    scores.set("Ada", 12)
+    scores.set("Linus", 9)
+    let explicit_count = Iteration.count_where<Entry<str, int>>(scores.iterator(), passing)
+    let inferred_count = Iteration.count_where(scores.iterator(), passing)
+    assert(explicit_count == 1, "explicit nested entry specialization")
+    assert(inferred_count == 1, "inferred nested entry specialization")
+}

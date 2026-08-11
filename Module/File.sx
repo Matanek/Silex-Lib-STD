@@ -3,7 +3,7 @@ use STD.Error
 use STD.IO
 use STD.Text.UTF8
 
-public class File {
+public class File : IO.Reader, IO.Writer {
     private var descriptor:int
     private var closed:bool
 
@@ -72,8 +72,6 @@ public class File {
         return Platform.close(self.descriptor)
     }
 }
-
-extend File : IO.Reader, IO.Writer {}
 
 public enum Access { read; write; read_write }
 public enum Creation { open_existing; create_new; open_or_create; truncate_existing; create_or_truncate }

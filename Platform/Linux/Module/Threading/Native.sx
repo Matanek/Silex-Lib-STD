@@ -17,5 +17,5 @@ internal func try_wait(signal:uint) bool { panic("STD.Threading.Executor is not 
 internal func signal(value:uint) { panic("STD.Threading.Executor is not implemented natively on linux-x64 yet") }
 internal func release_signal(value:uint) {}
 internal func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
-internal func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 16 as uint, 0) }
+internal func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 24 as uint, 0) }
 internal func logical_processor_count() int { return 1 }

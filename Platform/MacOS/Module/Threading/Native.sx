@@ -28,7 +28,7 @@ internal func try_wait(signal:uint) bool { return semaphore_wait(signal, 0) == 0
 internal func signal(value:uint) { semaphore_signal(value) }
 internal func release_signal(value:uint) { object_release(value) }
 internal func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
-internal func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 16 as uint, 0) }
+internal func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 24 as uint, 0) }
 
 internal func logical_processor_count() int {
     let count = system_configuration(58)

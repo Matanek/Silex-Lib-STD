@@ -6,6 +6,7 @@ use STD.Threading.Runtime.enqueue
 use STD.Threading.Runtime.enqueue_after
 use STD.Threading.Runtime.combine_states
 use STD.Threading.Runtime.graph_for
+use STD.Threading.State.FenceOwner
 use STD.Threading.Parallel.enqueue_parallel
 use STD.Threading.Parallel.enqueue_parallel_after
 use STD.Threading.Native
@@ -73,7 +74,9 @@ public struct JobHandle<T:Job> {
 
     public func fence() Fence {
         var runtime = self.shared_runtime()
-        var state = graph_for(runtime, self.shared_state())
+        var shared = self.shared_state()
+        var owner:FenceOwner = shared
+        var state = graph_for(runtime, owner)
         return Fence(state, runtime)
     }
 
@@ -149,7 +152,7 @@ public class Executor {
     internal func combination_allocation_count() int { return self.runtime.combination_allocation_count() }
     internal func parallel_allocation_count() int { return self.runtime.parallel_allocation_count() }
     internal func parallel_work_count() int { return self.runtime.parallel_work_count() }
-    internal func wait_idle() { self.runtime.wait_idle() }
+    public func wait_idle() { self.runtime.wait_idle() }
 
     drop { self.runtime.shutdown() }
 }

@@ -308,3 +308,12 @@ During documentation work, compile only the executable catalogue with:
 The Silex sources are the primary API reference. Usage guides belong under
 `Docs/` and explain developer intentions rather than duplicating every public
 declaration.
+
+## License
+
+Silex STD is licensed under the Apache License 2.0 with LLVM Exceptions
+(`Apache-2.0 WITH LLVM-exception`). See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Applications using STD may be distributed under the license of their authors'
+choice. Unicode-derived data remains subject to the terms listed in
+[Licenses/README.md](Licenses/README.md).

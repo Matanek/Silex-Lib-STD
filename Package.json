@@ -1,6 +1,7 @@
 {
   "name": "STD",
-  "version": "0.16.2",
+  "version": "0.16.3",
+  "extensions": [],
   "requires": {
     "silex": ">=0.38.0"
   }

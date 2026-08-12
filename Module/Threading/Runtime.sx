@@ -86,6 +86,7 @@ internal class JobState<T:Job>:CompletionState {
     internal var completed:bool = false
     internal var consumed:bool = false
     internal var generation:int = 0
+    internal var handle_published:bool = false
     internal var completion_signal:uint
     internal var graph_address:uint = 0
 
@@ -103,6 +104,7 @@ internal class JobState<T:Job>:CompletionState {
     }
 
     internal func generation_matches(expected:int) bool { return expected == self.generation }
+    internal func publish_handle() { self.handle_published = true }
     internal func is_consumed() bool { return self.consumed }
     internal func object_address() uint { return C.object_address(self) }
 
@@ -111,7 +113,7 @@ internal class JobState<T:Job>:CompletionState {
             var graph = self.graph_state()
             if !graph.recyclable(2) { return false }
         }
-        return self.completed && Native.class_root_count(C.object_address(self)) <= expected_roots
+        return self.handle_published && self.completed && Native.class_root_count(C.object_address(self)) <= expected_roots
     }
 
     internal func consume(expected:int) T? { return take_completed<T>(self, expected) }
@@ -145,6 +147,7 @@ internal func prepare_state<T:Job>(state:JobState<T>, job:T) {
         graph.prepare(0)
     }
     state.generation++
+    state.handle_published = false
     replace_state_job<T>(state, job)
     state.completed = false
     state.consumed = false

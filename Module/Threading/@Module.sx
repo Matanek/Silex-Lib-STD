@@ -56,6 +56,10 @@ public struct JobHandle<T:Job> {
         self.state_pointer = C.object_address(state)
         self.runtime_pointer = C.object_address(runtime)
         self.generation = state.current_generation()
+        var shared_runtime = runtime
+        shared_runtime.lock()
+        state.publish_handle()
+        shared_runtime.unlock()
     }
 
     public func complete() T {

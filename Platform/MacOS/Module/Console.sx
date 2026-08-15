@@ -1,20 +1,20 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
 let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"write"
 )
 
 let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"read"
 )
 
-let isatty = C.function<func(int32) int32>(library:MacOS.lib_system, name:"isatty")
+let isatty = C.function<func(int32) int32>(library:Boundary.System, name:"isatty")
 
 let ioctl = C.function<func(int32, uint, C.MutablePointer<uint32>) int32>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"__ioctl"
 )
 

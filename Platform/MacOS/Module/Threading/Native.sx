@@ -1,14 +1,14 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
-let system_create = C.function<func(C.MutablePointer<uint>, C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"pthread_create")
-let system_join = C.function<func(uint, C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"pthread_join")
-let system_current_thread = C.function<func() uint>(library:MacOS.lib_system, name:"pthread_self")
-let semaphore_create = C.function<func(int) uint>(library:MacOS.lib_system, name:"dispatch_semaphore_create")
-let semaphore_wait = C.function<func(uint, uint) int>(library:MacOS.lib_system, name:"dispatch_semaphore_wait")
-let semaphore_signal = C.function<func(uint) int>(library:MacOS.lib_system, name:"dispatch_semaphore_signal")
-let object_release = C.function<func(uint) void>(library:MacOS.lib_system, name:"dispatch_release")
-let system_configuration = C.function<func(int32) int>(library:MacOS.lib_system, name:"sysconf")
+let system_create = C.function<func(C.MutablePointer<uint>, C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"pthread_create")
+let system_join = C.function<func(uint, C.Pointer<uint8>) int32>(library:Boundary.System, name:"pthread_join")
+let system_current_thread = C.function<func() uint>(library:Boundary.System, name:"pthread_self")
+let semaphore_create = C.function<func(int) uint>(library:Boundary.System, name:"dispatch_semaphore_create")
+let semaphore_wait = C.function<func(uint, uint) int>(library:Boundary.System, name:"dispatch_semaphore_wait")
+let semaphore_signal = C.function<func(uint) int>(library:Boundary.System, name:"dispatch_semaphore_signal")
+let object_release = C.function<func(uint) void>(library:Boundary.System, name:"dispatch_release")
+let system_configuration = C.function<func(int32) int>(library:Boundary.System, name:"sysconf")
 
 internal func spawn(entry:uint, context:uint) uint {
     var handle:uint = 0

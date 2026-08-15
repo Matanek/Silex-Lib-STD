@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 use STD.File
 use STD.Text.UTF8
 
@@ -15,12 +15,12 @@ func endpoint_port(value:RawEndpoint) uint16 { return value.port }
 func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
 func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
 
-let system_socket = C.function<func(int32, int32, int32) int32>(library:Linux.kernel, name:"socket")
-let system_connect = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"connect")
-let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
-let system_read = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
-let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
-let system_poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(library:Linux.kernel, name:"poll")
+let system_socket = C.function<func(int32, int32, int32) int32>(library:Boundary.System, name:"socket")
+let system_connect = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"connect")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+let system_read = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
+let system_poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(library:Boundary.System, name:"poll")
 
 func resolve(host:str, service:str, family:int, transport:int) RawEndpoint[]? {
     let port = parse_port(service)

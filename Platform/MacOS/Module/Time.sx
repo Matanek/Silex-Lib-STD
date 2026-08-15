@@ -1,13 +1,13 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
 let clock_gettime_nsec_np = C.function<func(uint32) uint>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"clock_gettime_nsec_np"
 )
 
 let localtime_r = C.function<func(C.MutablePointer<int>, C.MutablePointer<uint>) C.Pointer<uint8> >(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"localtime_r"
 )
 

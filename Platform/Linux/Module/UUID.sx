@@ -1,8 +1,8 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 
 let clock_gettime = C.function<func(int32, C.MutablePointer<int>) int32>(
-    library:Linux.kernel,
+    library:Boundary.System,
     name:"clock_gettime"
 )
 

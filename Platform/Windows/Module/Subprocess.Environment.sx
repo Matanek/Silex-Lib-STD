@@ -1,9 +1,9 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 use STD.Text.Encoding
 
-let system_entries = C.function<func() C.Pointer<uint8> >(library:Windows.kernel32, name:"GetEnvironmentStringsW")
-let system_free_entries = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"FreeEnvironmentStringsW")
+let system_entries = C.function<func() C.Pointer<uint8> >(library:Boundary.System, name:"GetEnvironmentStringsW")
+let system_free_entries = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"FreeEnvironmentStringsW")
 
 func entries() str[] {
     var result:str[] = []

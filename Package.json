@@ -1,8 +1,56 @@
 {
   "name": "STD",
-  "version": "0.16.3",
+  "version": "0.16.4",
   "extensions": [],
   "requires": {
-    "silex": ">=0.38.0"
+    "silex": ">=0.38.20"
+  },
+  "boundary": {
+    "macos-arm64": {
+      "providers": {
+        "System": {
+          "libraries": ["System"]
+        }
+      }
+    },
+    "linux-x64": {
+      "providers": {
+        "System": {
+          "libraries": ["c", "m", "pthread"]
+        }
+      }
+    },
+    "windows-x64": {
+      "providers": {
+        "System": {
+          "libraries": ["kernel32"]
+        },
+        "Runtime": {
+          "libraries": ["ucrtbase"]
+        },
+        "Crypto": {
+          "libraries": ["bcryptprimitives"]
+        },
+        "Network": {
+          "libraries": ["ws2_32"]
+        }
+      }
+    },
+    "windows-arm64": {
+      "providers": {
+        "System": {
+          "libraries": ["kernel32"]
+        },
+        "Runtime": {
+          "libraries": ["ucrtbase"]
+        },
+        "Crypto": {
+          "libraries": ["bcryptprimitives"]
+        },
+        "Network": {
+          "libraries": ["ws2_32"]
+        }
+      }
+    }
   }
 }

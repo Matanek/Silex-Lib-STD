@@ -1,9 +1,9 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 
-let ioctl = C.function<func(int32, uint, C.MutablePointer<int>) int32>(library:Linux.kernel, name:"ioctl")
-let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
-let poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(library:Linux.kernel, name:"poll")
+let ioctl = C.function<func(int32, uint, C.MutablePointer<int>) int32>(library:Boundary.System, name:"ioctl")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(library:Boundary.System, name:"poll")
 
 func activate() int[9]? {
     var original:int[9] = [0, 0, 0, 0, 0, 0, 0, 0, 0]

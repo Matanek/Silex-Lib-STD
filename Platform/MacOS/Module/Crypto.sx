@@ -1,8 +1,8 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
 let system_random = C.function<func() uint32>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"arc4random"
 )
 

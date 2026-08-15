@@ -1,18 +1,18 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 
 let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(
-    library:Linux.kernel,
+    library:Boundary.System,
     name:"write"
 )
 
 let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(
-    library:Linux.kernel,
+    library:Boundary.System,
     name:"read"
 )
 
 let ioctl = C.function<func(int32, uint, C.MutablePointer<uint32>) int32>(
-    library:Linux.kernel,
+    library:Boundary.System,
     name:"ioctl"
 )
 

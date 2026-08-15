@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 use STD.Text.Encoding
 
 internal struct RawMetadata { public let kind:int; public let size:int; public let readonly:bool }
@@ -11,17 +11,17 @@ func metadata_readonly(value:RawMetadata) bool { return value.readonly }
 func entry_name(value:RawEntry) str { return value.name }
 func entry_kind(value:RawEntry) int { return value.kind }
 
-let system_attributes = C.function<func(C.Pointer<uint8>, int32, C.MutablePointer<int>) int32>(library:Windows.kernel32, name:"GetFileAttributesExW")
-let system_find_first = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) uint>(library:Windows.kernel32, name:"FindFirstFileW")
-let system_find_next = C.function<func(uint, C.MutablePointer<int>) int32>(library:Windows.kernel32, name:"FindNextFileW")
-let system_find_close = C.function<func(uint) int32>(library:Windows.kernel32, name:"FindClose")
-let system_create_directory = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"CreateDirectoryW")
-let system_delete_file = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"DeleteFileW")
-let system_remove_directory = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"RemoveDirectoryW")
-let system_move = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, uint32) int32>(library:Windows.kernel32, name:"MoveFileExW")
-let system_copy = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Windows.kernel32, name:"CopyFileW")
-let system_set_attributes = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Windows.kernel32, name:"SetFileAttributesW")
-let system_full_path = C.function<func(C.Pointer<uint8>, uint32, C.MutablePointer<int>, C.MutablePointer<int>) uint32>(library:Windows.kernel32, name:"GetFullPathNameW")
+let system_attributes = C.function<func(C.Pointer<uint8>, int32, C.MutablePointer<int>) int32>(library:Boundary.System, name:"GetFileAttributesExW")
+let system_find_first = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) uint>(library:Boundary.System, name:"FindFirstFileW")
+let system_find_next = C.function<func(uint, C.MutablePointer<int>) int32>(library:Boundary.System, name:"FindNextFileW")
+let system_find_close = C.function<func(uint) int32>(library:Boundary.System, name:"FindClose")
+let system_create_directory = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"CreateDirectoryW")
+let system_delete_file = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"DeleteFileW")
+let system_remove_directory = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"RemoveDirectoryW")
+let system_move = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"MoveFileExW")
+let system_copy = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.System, name:"CopyFileW")
+let system_set_attributes = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"SetFileAttributesW")
+let system_full_path = C.function<func(C.Pointer<uint8>, uint32, C.MutablePointer<int>, C.MutablePointer<int>) uint32>(library:Boundary.System, name:"GetFullPathNameW")
 
 func metadata(path:str, follow:bool) RawMetadata? {
     var data:int[5]

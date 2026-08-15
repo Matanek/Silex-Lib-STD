@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 use STD.Text.UTF8
 
 internal struct RawMetadata { public let kind:int; public let size:int; public let readonly:bool }
@@ -11,18 +11,18 @@ func metadata_readonly(value:RawMetadata) bool { return value.readonly }
 func entry_name(value:RawEntry) str { return value.name }
 func entry_kind(value:RawEntry) int { return value.kind }
 
-let system_openat = C.function<func(int32, C.Pointer<uint8>, int32, uint32) int32>(library:Linux.kernel, name:"openat")
-let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
-let system_read = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
-let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
-let system_newfstatat = C.function<func(int32, C.Pointer<uint8>, C.MutablePointer<int>, int32) int32>(library:Linux.kernel, name:"newfstatat")
-let system_getdents = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"getdents64")
-let system_mkdir = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"mkdir")
-let system_unlink = C.function<func(C.Pointer<uint8>) int32>(library:Linux.kernel, name:"unlink")
-let system_rmdir = C.function<func(C.Pointer<uint8>) int32>(library:Linux.kernel, name:"rmdir")
-let system_rename = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Linux.kernel, name:"rename")
-let system_chmod = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"chmod")
-let system_readlink = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"readlink")
+let system_openat = C.function<func(int32, C.Pointer<uint8>, int32, uint32) int32>(library:Boundary.System, name:"openat")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+let system_read = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
+let system_newfstatat = C.function<func(int32, C.Pointer<uint8>, C.MutablePointer<int>, int32) int32>(library:Boundary.System, name:"newfstatat")
+let system_getdents = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Boundary.System, name:"getdents64")
+let system_mkdir = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"mkdir")
+let system_unlink = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"unlink")
+let system_rmdir = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"rmdir")
+let system_rename = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"rename")
+let system_chmod = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"chmod")
+let system_readlink = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Boundary.System, name:"readlink")
 
 func metadata(path:str, follow:bool) RawMetadata? {
     var status:int[18]

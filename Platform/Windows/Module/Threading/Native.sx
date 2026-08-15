@@ -1,9 +1,9 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 
-let system_create = C.function<func(C.Pointer<uint8>, C.Size, C.Pointer<uint8>, C.Pointer<uint8>, uint32, C.Pointer<uint8>) uint>(library:Windows.kernel32, name:"CreateThread")
-let system_wait = C.function<func(uint, uint32) uint32>(library:Windows.kernel32, name:"WaitForSingleObject")
-let system_close = C.function<func(uint) int32>(library:Windows.kernel32, name:"CloseHandle")
+let system_create = C.function<func(C.Pointer<uint8>, C.Size, C.Pointer<uint8>, C.Pointer<uint8>, uint32, C.Pointer<uint8>) uint>(library:Boundary.System, name:"CreateThread")
+let system_wait = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
+let system_close = C.function<func(uint) int32>(library:Boundary.System, name:"CloseHandle")
 
 internal func spawn(entry:uint, context:uint) uint {
     return system_create(C.pointer_bits(0 as uint), 0 as C.Size, C.pointer_bits(entry), C.pointer_bits(context), 0, C.pointer_bits(0 as uint))

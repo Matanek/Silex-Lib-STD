@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
 internal struct RawOutput { let status:int; let signaled:bool; let stdout:uint8[]; let stderr:uint8[]; let limited:bool; let error:int }
 struct Pipe { let read:int32; let write:int32 }
@@ -10,18 +10,18 @@ func output_stderr(value:RawOutput) uint8[] { return value.stderr }
 func output_limited(value:RawOutput) bool { return value.limited }
 func output_error(value:RawOutput) int { return value.error }
 
-let system_pipe = C.function<func(C.MutablePointer<int>) int32>(library:MacOS.lib_system, name:"pipe")
-let system_fork = C.function<func() int32>(library:MacOS.lib_system, name:"fork")
-let system_dup2 = C.function<func(int32, int32) int32>(library:MacOS.lib_system, name:"dup2")
-let system_close = C.function<func(int32) int32>(library:MacOS.lib_system, name:"close")
-let system_chdir = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"chdir")
-let system_execve = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"execve")
-let system_exit = C.function<func(int32) void>(library:MacOS.lib_system, name:"_exit")
-let system_waitpid = C.function<func(int32, C.MutablePointer<int>, int32) int32>(library:MacOS.lib_system, name:"waitpid")
-let system_kill = C.function<func(int32, int32) int32>(library:MacOS.lib_system, name:"kill")
-let system_poll = C.function<func(C.MutablePointer<int>, C.Size, int32) int32>(library:MacOS.lib_system, name:"poll")
-let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:MacOS.lib_system, name:"read")
-let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:MacOS.lib_system, name:"write")
+let system_pipe = C.function<func(C.MutablePointer<int>) int32>(library:Boundary.System, name:"pipe")
+let system_fork = C.function<func() int32>(library:Boundary.System, name:"fork")
+let system_dup2 = C.function<func(int32, int32) int32>(library:Boundary.System, name:"dup2")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+let system_chdir = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"chdir")
+let system_execve = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"execve")
+let system_exit = C.function<func(int32) void>(library:Boundary.System, name:"_exit")
+let system_waitpid = C.function<func(int32, C.MutablePointer<int>, int32) int32>(library:Boundary.System, name:"waitpid")
+let system_kill = C.function<func(int32, int32) int32>(library:Boundary.System, name:"kill")
+let system_poll = C.function<func(C.MutablePointer<int>, C.Size, int32) int32>(library:Boundary.System, name:"poll")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
 
 func run(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], input:@uint8[..], maximum:int) RawOutput? {
     if arguments.count() + 2 > 128 || environment.count() + 1 > 128 { return RawOutput(status:0, signaled:false, stdout:[], stderr:[], limited:true, error:0) }

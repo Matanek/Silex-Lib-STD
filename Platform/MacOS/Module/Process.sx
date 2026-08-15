@@ -1,13 +1,13 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 use STD.Text.UTF8
 
-let system_argc = C.function<func() C.Pointer<uint8> >(library:MacOS.lib_system, name:"_NSGetArgc")
-let system_argv = C.function<func() C.Pointer<uint8> >(library:MacOS.lib_system, name:"_NSGetArgv")
-let system_getcwd = C.function<func(C.MutablePointer<int>, C.Size) C.Pointer<uint8> >(library:MacOS.lib_system, name:"getcwd")
-let system_chdir = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"chdir")
-let system_executable_path = C.function<func(C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:MacOS.lib_system, name:"_NSGetExecutablePath")
-let system_getpid = C.function<func() int32>(library:MacOS.lib_system, name:"getpid")
+let system_argc = C.function<func() C.Pointer<uint8> >(library:Boundary.System, name:"_NSGetArgc")
+let system_argv = C.function<func() C.Pointer<uint8> >(library:Boundary.System, name:"_NSGetArgv")
+let system_getcwd = C.function<func(C.MutablePointer<int>, C.Size) C.Pointer<uint8> >(library:Boundary.System, name:"getcwd")
+let system_chdir = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"chdir")
+let system_executable_path = C.function<func(C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"_NSGetExecutablePath")
+let system_getpid = C.function<func() int32>(library:Boundary.System, name:"getpid")
 
 func arguments() str[]? {
     var result:str[] = []

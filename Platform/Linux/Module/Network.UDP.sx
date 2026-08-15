@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 
 internal struct RawEndpoint { let family:int; let port:uint16; let scope:uint32; let bytes:uint8[16] }
 internal struct RawReceive { let count:int; let endpoint:RawEndpoint; let truncated:bool }
@@ -11,13 +11,13 @@ func receive_count(value:RawReceive) int { return value.count }
 func receive_endpoint(value:RawReceive) RawEndpoint { return value.endpoint }
 func receive_truncated(value:RawReceive) bool { return value.truncated }
 
-let system_socket = C.function<func(int32, int32, int32) int32>(library:Linux.kernel, name:"socket")
-let system_bind = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"bind")
-let system_sendto = C.function<func(int32, C.Pointer<uint8>, C.Size, int32, C.Pointer<uint8>, uint32) C.SignedSize>(library:Linux.kernel, name:"sendto")
-let system_recvfrom = C.function<func(int32, C.MutablePointer<uint8>, C.Size, int32, C.MutablePointer<int>, C.MutablePointer<uint32>) C.SignedSize>(library:Linux.kernel, name:"recvfrom")
-let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
-let system_getsockname = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Linux.kernel, name:"getsockname")
-let system_setsockopt = C.function<func(int32, int32, int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"setsockopt")
+let system_socket = C.function<func(int32, int32, int32) int32>(library:Boundary.System, name:"socket")
+let system_bind = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"bind")
+let system_sendto = C.function<func(int32, C.Pointer<uint8>, C.Size, int32, C.Pointer<uint8>, uint32) C.SignedSize>(library:Boundary.System, name:"sendto")
+let system_recvfrom = C.function<func(int32, C.MutablePointer<uint8>, C.Size, int32, C.MutablePointer<int>, C.MutablePointer<uint32>) C.SignedSize>(library:Boundary.System, name:"recvfrom")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+let system_getsockname = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"getsockname")
+let system_setsockopt = C.function<func(int32, int32, int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"setsockopt")
 
 func bind(family:int, address:@uint8[..], port:uint16, scope:uint32, read_timeout:int, write_timeout:int) int {
     let descriptor = open(family, read_timeout, write_timeout)

@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 
 internal struct RawEndpoint {
     let family:int
@@ -13,18 +13,18 @@ func endpoint_port(value:RawEndpoint) uint16 { return value.port }
 func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
 func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
 
-let system_socket = C.function<func(int32, int32, int32) int32>(library:Linux.kernel, name:"socket")
-let system_connect = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"connect")
-let system_bind = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"bind")
-let system_listen = C.function<func(int32, int32) int32>(library:Linux.kernel, name:"listen")
-let system_accept = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Linux.kernel, name:"accept")
-let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
-let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
-let system_shutdown = C.function<func(int32, int32) int32>(library:Linux.kernel, name:"shutdown")
-let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
-let system_getsockname = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Linux.kernel, name:"getsockname")
-let system_getpeername = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Linux.kernel, name:"getpeername")
-let system_setsockopt = C.function<func(int32, int32, int32, C.Pointer<uint8>, uint32) int32>(library:Linux.kernel, name:"setsockopt")
+let system_socket = C.function<func(int32, int32, int32) int32>(library:Boundary.System, name:"socket")
+let system_connect = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"connect")
+let system_bind = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"bind")
+let system_listen = C.function<func(int32, int32) int32>(library:Boundary.System, name:"listen")
+let system_accept = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"accept")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
+let system_shutdown = C.function<func(int32, int32) int32>(library:Boundary.System, name:"shutdown")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+let system_getsockname = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"getsockname")
+let system_getpeername = C.function<func(int32, C.MutablePointer<int>, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"getpeername")
+let system_setsockopt = C.function<func(int32, int32, int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"setsockopt")
 
 func connect(family:int, address:@uint8[..], port:uint16, scope:uint32, connect_timeout:int, read_timeout:int, write_timeout:int) int {
     let descriptor = system_socket(native_family(family), 0x8_0001, 6)

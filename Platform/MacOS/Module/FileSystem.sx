@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 use STD.Text.UTF8
 
 internal struct RawMetadata { public let kind:int; public let size:int; public let readonly:bool }
@@ -11,18 +11,18 @@ func metadata_readonly(value:RawMetadata) bool { return value.readonly }
 func entry_name(value:RawEntry) str { return value.name }
 func entry_kind(value:RawEntry) int { return value.kind }
 
-let system_stat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:MacOS.lib_system, name:"stat")
-let system_lstat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:MacOS.lib_system, name:"lstat")
-let system_opendir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:MacOS.lib_system, name:"opendir")
-let system_readdir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:MacOS.lib_system, name:"readdir")
-let system_closedir = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"closedir")
-let system_mkdir = C.function<func(C.Pointer<uint8>, uint32) int32>(library:MacOS.lib_system, name:"mkdir")
-let system_unlink = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"unlink")
-let system_rmdir = C.function<func(C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"rmdir")
-let system_rename = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:MacOS.lib_system, name:"rename")
-let system_copyfile = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, uint32) int32>(library:MacOS.lib_system, name:"copyfile")
-let system_chmod = C.function<func(C.Pointer<uint8>, uint32) int32>(library:MacOS.lib_system, name:"chmod")
-let system_realpath = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) C.Pointer<uint8> >(library:MacOS.lib_system, name:"realpath")
+let system_stat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:Boundary.System, name:"stat")
+let system_lstat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:Boundary.System, name:"lstat")
+let system_opendir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.System, name:"opendir")
+let system_readdir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.System, name:"readdir")
+let system_closedir = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"closedir")
+let system_mkdir = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"mkdir")
+let system_unlink = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"unlink")
+let system_rmdir = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"rmdir")
+let system_rename = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"rename")
+let system_copyfile = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"copyfile")
+let system_chmod = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"chmod")
+let system_realpath = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) C.Pointer<uint8> >(library:Boundary.System, name:"realpath")
 
 func metadata(path:str, follow:bool) RawMetadata? {
     var status:int[18]

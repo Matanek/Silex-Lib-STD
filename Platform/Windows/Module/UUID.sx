@@ -1,8 +1,8 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 
 let get_system_time_as_file_time = C.function<func(C.MutablePointer<int>) void>(
-    library:Windows.kernel32,
+    library:Boundary.System,
     name:"GetSystemTimeAsFileTime"
 )
 

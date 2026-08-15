@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 use STD.Text.Encoding
 use STD.Text.UTF8
 
@@ -12,17 +12,17 @@ func output_stderr(value:RawOutput) uint8[] { return value.stderr }
 func output_limited(value:RawOutput) bool { return value.limited }
 func output_error(value:RawOutput) int { return value.error }
 
-let system_create_pipe = C.function<func(C.MutablePointer<uint>, C.MutablePointer<uint>, C.Pointer<uint8>, uint32) int32>(library:Windows.kernel32, name:"CreatePipe")
-let system_set_handle = C.function<func(uint, uint32, uint32) int32>(library:Windows.kernel32, name:"SetHandleInformation")
-let system_create_process = C.function<func(C.Pointer<uint8>, C.MutablePointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, int32, uint32, C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:Windows.kernel32, name:"CreateProcessW")
-let system_read = C.function<func(uint, C.MutablePointer<uint32>, uint32, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"ReadFile")
-let system_write = C.function<func(uint, C.Pointer<uint8>, uint32, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"WriteFile")
-let system_peek = C.function<func(uint, C.Pointer<uint8>, uint32, C.Pointer<uint8>, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"PeekNamedPipe")
-let system_close = C.function<func(uint) int32>(library:Windows.kernel32, name:"CloseHandle")
-let system_terminate = C.function<func(uint, uint32) int32>(library:Windows.kernel32, name:"TerminateProcess")
-let system_exit_code = C.function<func(uint, C.MutablePointer<uint32>) int32>(library:Windows.kernel32, name:"GetExitCodeProcess")
-let system_wait = C.function<func(uint, uint32) uint32>(library:Windows.kernel32, name:"WaitForSingleObject")
-let system_error = C.function<func() uint32>(library:Windows.kernel32, name:"GetLastError")
+let system_create_pipe = C.function<func(C.MutablePointer<uint>, C.MutablePointer<uint>, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"CreatePipe")
+let system_set_handle = C.function<func(uint, uint32, uint32) int32>(library:Boundary.System, name:"SetHandleInformation")
+let system_create_process = C.function<func(C.Pointer<uint8>, C.MutablePointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, int32, uint32, C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:Boundary.System, name:"CreateProcessW")
+let system_read = C.function<func(uint, C.MutablePointer<uint32>, uint32, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"ReadFile")
+let system_write = C.function<func(uint, C.Pointer<uint8>, uint32, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"WriteFile")
+let system_peek = C.function<func(uint, C.Pointer<uint8>, uint32, C.Pointer<uint8>, C.MutablePointer<uint32>, C.Pointer<uint8>) int32>(library:Boundary.System, name:"PeekNamedPipe")
+let system_close = C.function<func(uint) int32>(library:Boundary.System, name:"CloseHandle")
+let system_terminate = C.function<func(uint, uint32) int32>(library:Boundary.System, name:"TerminateProcess")
+let system_exit_code = C.function<func(uint, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"GetExitCodeProcess")
+let system_wait = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
+let system_error = C.function<func() uint32>(library:Boundary.System, name:"GetLastError")
 
 func run(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], input:@uint8[..], maximum:int) RawOutput? {
     var line = quote(executable)

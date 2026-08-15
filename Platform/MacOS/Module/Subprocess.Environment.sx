@@ -1,8 +1,8 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 use STD.Text.UTF8
 
-let system_environ = C.function<func() C.Pointer<uint8> >(library:MacOS.lib_system, name:"_NSGetEnviron")
+let system_environ = C.function<func() C.Pointer<uint8> >(library:Boundary.System, name:"_NSGetEnviron")
 
 func entries() str[] {
     var result:str[] = []

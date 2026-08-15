@@ -1,15 +1,15 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
 // __open is libSystem's fixed three-argument syscall veneer. The public C
 // `open` function is variadic and therefore has a different Apple ARM64 ABI.
-let system_open = C.function<func(C.Pointer<uint8>, int32, uint32) int32>(library:MacOS.lib_system, name:"__open")
-let system_close = C.function<func(int32) int32>(library:MacOS.lib_system, name:"close")
-let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:MacOS.lib_system, name:"read")
-let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:MacOS.lib_system, name:"write")
-let system_fsync = C.function<func(int32) int32>(library:MacOS.lib_system, name:"fsync")
-let system_lseek = C.function<func(int32, int, int32) int>(library:MacOS.lib_system, name:"lseek")
-let system_ftruncate = C.function<func(int32, int) int32>(library:MacOS.lib_system, name:"ftruncate")
+let system_open = C.function<func(C.Pointer<uint8>, int32, uint32) int32>(library:Boundary.System, name:"__open")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
+let system_fsync = C.function<func(int32) int32>(library:Boundary.System, name:"fsync")
+let system_lseek = C.function<func(int32, int, int32) int>(library:Boundary.System, name:"lseek")
+let system_ftruncate = C.function<func(int32, int) int32>(library:Boundary.System, name:"ftruncate")
 
 func open(path:str, access:int, creation:int, append:bool) int {
     var flags = access - 1

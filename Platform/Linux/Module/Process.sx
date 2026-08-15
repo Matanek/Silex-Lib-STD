@@ -1,12 +1,12 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 use STD.File
 use STD.Text.UTF8
 
-let system_getcwd = C.function<func(C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"getcwd")
-let system_chdir = C.function<func(C.Pointer<uint8>) C.SignedSize>(library:Linux.kernel, name:"chdir")
-let system_readlink = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Linux.kernel, name:"readlink")
-let system_getpid = C.function<func() C.SignedSize>(library:Linux.kernel, name:"getpid")
+let system_getcwd = C.function<func(C.MutablePointer<int>, C.Size) C.SignedSize>(library:Boundary.System, name:"getcwd")
+let system_chdir = C.function<func(C.Pointer<uint8>) C.SignedSize>(library:Boundary.System, name:"chdir")
+let system_readlink = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Boundary.System, name:"readlink")
+let system_getpid = C.function<func() C.SignedSize>(library:Boundary.System, name:"getpid")
 
 func arguments() str[]? {
     match File.read_all("/proc/self/cmdline", 0x10_0000) {

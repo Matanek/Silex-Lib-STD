@@ -1,17 +1,17 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 use STD.Text.Encoding
 
 // `_wopen` receives UTF-16LE code units. C.Pointer<uint8> describes the
 // address-sized ABI value here; the pointed storage is deliberately encoded
 // below and terminated by two zero bytes.
-let system_open = C.function<func(C.Pointer<uint8>, int32, int32) int32>(library:Windows.ucrtbase, name:"_wopen")
-let system_close = C.function<func(int32) int32>(library:Windows.ucrtbase, name:"_close")
-let system_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(library:Windows.ucrtbase, name:"_read")
-let system_write = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Windows.ucrtbase, name:"_write")
-let system_flush = C.function<func(int32) int32>(library:Windows.ucrtbase, name:"_commit")
-let system_seek = C.function<func(int32, int, int32) int>(library:Windows.ucrtbase, name:"_lseeki64")
-let system_set_length = C.function<func(int32, int) int32>(library:Windows.ucrtbase, name:"_chsize_s")
+let system_open = C.function<func(C.Pointer<uint8>, int32, int32) int32>(library:Boundary.Runtime, name:"_wopen")
+let system_close = C.function<func(int32) int32>(library:Boundary.Runtime, name:"_close")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(library:Boundary.Runtime, name:"_read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.Runtime, name:"_write")
+let system_flush = C.function<func(int32) int32>(library:Boundary.Runtime, name:"_commit")
+let system_seek = C.function<func(int32, int, int32) int>(library:Boundary.Runtime, name:"_lseeki64")
+let system_set_length = C.function<func(int32, int) int32>(library:Boundary.Runtime, name:"_chsize_s")
 
 func open(path:str, access:int, creation:int, append:bool) int {
     var flags = access - 1

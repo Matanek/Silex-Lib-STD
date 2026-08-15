@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 use STD.Text.Encoding
 
 internal struct RawEndpoint {
@@ -14,10 +14,10 @@ func endpoint_port(value:RawEndpoint) uint16 { return value.port }
 func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
 func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
 
-let system_getaddrinfo = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<uint>) int32>(library:Windows.ws2_32, name:"GetAddrInfoW")
-let system_freeaddrinfo = C.function<func(C.Pointer<uint8>) void>(library:Windows.ws2_32, name:"FreeAddrInfoW")
-let system_startup = C.function<func(uint32, C.MutablePointer<int>) int32>(library:Windows.ws2_32, name:"WSAStartup")
-let system_cleanup = C.function<func() int32>(library:Windows.ws2_32, name:"WSACleanup")
+let system_getaddrinfo = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<uint>) int32>(library:Boundary.Network, name:"GetAddrInfoW")
+let system_freeaddrinfo = C.function<func(C.Pointer<uint8>) void>(library:Boundary.Network, name:"FreeAddrInfoW")
+let system_startup = C.function<func(uint32, C.MutablePointer<int>) int32>(library:Boundary.Network, name:"WSAStartup")
+let system_cleanup = C.function<func() int32>(library:Boundary.Network, name:"WSACleanup")
 
 func resolve(host:str, service:str, family:int, transport:int) RawEndpoint[]? {
     var startup_data:int[64]

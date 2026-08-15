@@ -1,13 +1,13 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 
-let crt_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(library:Windows.ucrtbase, name:"_read")
-let get_std_handle = C.function<func(int32) uint>(library:Windows.kernel32, name:"GetStdHandle")
-let get_console_mode = C.function<func(uint, C.MutablePointer<uint32>) int32>(library:Windows.kernel32, name:"GetConsoleMode")
-let set_console_mode = C.function<func(uint, uint32) int32>(library:Windows.kernel32, name:"SetConsoleMode")
-let get_console_cp = C.function<func() uint32>(library:Windows.kernel32, name:"GetConsoleCP")
-let set_console_cp = C.function<func(uint32) int32>(library:Windows.kernel32, name:"SetConsoleCP")
-let wait_for_single_object = C.function<func(uint, uint32) uint32>(library:Windows.kernel32, name:"WaitForSingleObject")
+let crt_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(library:Boundary.Runtime, name:"_read")
+let get_std_handle = C.function<func(int32) uint>(library:Boundary.System, name:"GetStdHandle")
+let get_console_mode = C.function<func(uint, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"GetConsoleMode")
+let set_console_mode = C.function<func(uint, uint32) int32>(library:Boundary.System, name:"SetConsoleMode")
+let get_console_cp = C.function<func() uint32>(library:Boundary.System, name:"GetConsoleCP")
+let set_console_cp = C.function<func(uint32) int32>(library:Boundary.System, name:"SetConsoleCP")
+let wait_for_single_object = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
 
 func activate() int[9]? {
     let input = get_std_handle(-10)

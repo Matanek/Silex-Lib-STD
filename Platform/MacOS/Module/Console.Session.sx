@@ -1,18 +1,18 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
 let ioctl = C.function<func(int32, uint, C.MutablePointer<int>) int32>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"__ioctl"
 )
 
 let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"read"
 )
 
 let poll = C.function<func(C.MutablePointer<uint>, C.Size, int32) int32>(
-    library:MacOS.lib_system,
+    library:Boundary.System,
     name:"poll"
 )
 

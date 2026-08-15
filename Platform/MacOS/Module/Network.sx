@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.MacOS
+use Interop.Boundary
 
 internal struct RawEndpoint {
     let family:int
@@ -13,8 +13,8 @@ func endpoint_port(value:RawEndpoint) uint16 { return value.port }
 func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
 func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
 
-let system_getaddrinfo = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<uint>) int32>(library:MacOS.lib_system, name:"getaddrinfo")
-let system_freeaddrinfo = C.function<func(C.Pointer<uint8>) void>(library:MacOS.lib_system, name:"freeaddrinfo")
+let system_getaddrinfo = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<uint>) int32>(library:Boundary.System, name:"getaddrinfo")
+let system_freeaddrinfo = C.function<func(C.Pointer<uint8>) void>(library:Boundary.System, name:"freeaddrinfo")
 
 func resolve(host:str, service:str, family:int, transport:int) RawEndpoint[]? {
     var root:uint = 0

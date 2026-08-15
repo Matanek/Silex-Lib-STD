@@ -1,13 +1,13 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 use STD.Text.Encoding
 
-let system_argc = C.function<func() C.Pointer<uint8> >(library:Windows.ucrtbase, name:"__p___argc")
-let system_wargv = C.function<func() C.Pointer<uint8> >(library:Windows.ucrtbase, name:"__p___wargv")
-let system_get_current_directory = C.function<func(uint32, C.MutablePointer<int>) uint32>(library:Windows.kernel32, name:"GetCurrentDirectoryW")
-let system_set_current_directory = C.function<func(C.Pointer<uint8>) int32>(library:Windows.kernel32, name:"SetCurrentDirectoryW")
-let system_get_module_file_name = C.function<func(uint, C.MutablePointer<int>, uint32) uint32>(library:Windows.kernel32, name:"GetModuleFileNameW")
-let system_get_process_id = C.function<func() uint32>(library:Windows.kernel32, name:"GetCurrentProcessId")
+let system_argc = C.function<func() C.Pointer<uint8> >(library:Boundary.Runtime, name:"__p___argc")
+let system_wargv = C.function<func() C.Pointer<uint8> >(library:Boundary.Runtime, name:"__p___wargv")
+let system_get_current_directory = C.function<func(uint32, C.MutablePointer<int>) uint32>(library:Boundary.System, name:"GetCurrentDirectoryW")
+let system_set_current_directory = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"SetCurrentDirectoryW")
+let system_get_module_file_name = C.function<func(uint, C.MutablePointer<int>, uint32) uint32>(library:Boundary.System, name:"GetModuleFileNameW")
+let system_get_process_id = C.function<func() uint32>(library:Boundary.System, name:"GetCurrentProcessId")
 
 func arguments() str[]? {
     var result:str[] = []

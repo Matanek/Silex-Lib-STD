@@ -1,5 +1,5 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 
 internal struct RawEndpoint { let family:int; let port:uint16; let scope:uint32; let bytes:uint8[16] }
 func endpoint_family(value:RawEndpoint) int { return value.family }
@@ -7,20 +7,20 @@ func endpoint_port(value:RawEndpoint) uint16 { return value.port }
 func endpoint_scope(value:RawEndpoint) uint32 { return value.scope }
 func endpoint_bytes(value:RawEndpoint) uint8[16] { return value.bytes }
 
-let system_startup = C.function<func(uint32, C.MutablePointer<int>) int32>(library:Windows.ws2_32, name:"WSAStartup")
-let system_cleanup = C.function<func() int32>(library:Windows.ws2_32, name:"WSACleanup")
-let system_socket = C.function<func(int32, int32, int32) int>(library:Windows.ws2_32, name:"socket")
-let system_connect = C.function<func(int, C.Pointer<uint8>, int32) int32>(library:Windows.ws2_32, name:"connect")
-let system_bind = C.function<func(int, C.Pointer<uint8>, int32) int32>(library:Windows.ws2_32, name:"bind")
-let system_listen = C.function<func(int, int32) int32>(library:Windows.ws2_32, name:"listen")
-let system_accept = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int>(library:Windows.ws2_32, name:"accept")
-let system_recv = C.function<func(int, C.MutablePointer<uint8>, int32, int32) int32>(library:Windows.ws2_32, name:"recv")
-let system_send = C.function<func(int, C.Pointer<uint8>, int32, int32) int32>(library:Windows.ws2_32, name:"send")
-let system_shutdown = C.function<func(int, int32) int32>(library:Windows.ws2_32, name:"shutdown")
-let system_close = C.function<func(int) int32>(library:Windows.ws2_32, name:"closesocket")
-let system_getsockname = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int32>(library:Windows.ws2_32, name:"getsockname")
-let system_getpeername = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int32>(library:Windows.ws2_32, name:"getpeername")
-let system_setsockopt = C.function<func(int, int32, int32, C.Pointer<uint8>, int32) int32>(library:Windows.ws2_32, name:"setsockopt")
+let system_startup = C.function<func(uint32, C.MutablePointer<int>) int32>(library:Boundary.Network, name:"WSAStartup")
+let system_cleanup = C.function<func() int32>(library:Boundary.Network, name:"WSACleanup")
+let system_socket = C.function<func(int32, int32, int32) int>(library:Boundary.Network, name:"socket")
+let system_connect = C.function<func(int, C.Pointer<uint8>, int32) int32>(library:Boundary.Network, name:"connect")
+let system_bind = C.function<func(int, C.Pointer<uint8>, int32) int32>(library:Boundary.Network, name:"bind")
+let system_listen = C.function<func(int, int32) int32>(library:Boundary.Network, name:"listen")
+let system_accept = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int>(library:Boundary.Network, name:"accept")
+let system_recv = C.function<func(int, C.MutablePointer<uint8>, int32, int32) int32>(library:Boundary.Network, name:"recv")
+let system_send = C.function<func(int, C.Pointer<uint8>, int32, int32) int32>(library:Boundary.Network, name:"send")
+let system_shutdown = C.function<func(int, int32) int32>(library:Boundary.Network, name:"shutdown")
+let system_close = C.function<func(int) int32>(library:Boundary.Network, name:"closesocket")
+let system_getsockname = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int32>(library:Boundary.Network, name:"getsockname")
+let system_getpeername = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int32>(library:Boundary.Network, name:"getpeername")
+let system_setsockopt = C.function<func(int, int32, int32, C.Pointer<uint8>, int32) int32>(library:Boundary.Network, name:"setsockopt")
 
 func connect(family:int, address:@uint8[..], port:uint16, scope:uint32, connect_timeout:int, read_timeout:int, write_timeout:int) int {
     if connect_timeout >= 0 || !startup() { return -1 }

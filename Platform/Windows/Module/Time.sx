@@ -1,18 +1,18 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 
 let query_performance_counter = C.function<func(C.MutablePointer<int>) int32>(
-    library:Windows.kernel32,
+    library:Boundary.System,
     name:"QueryPerformanceCounter"
 )
 
 let query_performance_frequency = C.function<func(C.MutablePointer<int>) int32>(
-    library:Windows.kernel32,
+    library:Boundary.System,
     name:"QueryPerformanceFrequency"
 )
 
 let get_local_time = C.function<func(C.MutablePointer<uint>) void>(
-    library:Windows.kernel32,
+    library:Boundary.System,
     name:"GetLocalTime"
 )
 

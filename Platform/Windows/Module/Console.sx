@@ -1,20 +1,20 @@
 use Interop.C
-use Interop.Windows
+use Interop.Boundary
 
 let crt_write = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(
-    library:Windows.ucrtbase,
+    library:Boundary.Runtime,
     name:"_write"
 )
 
 let crt_read = C.function<func(int32, C.MutablePointer<uint32>, uint32) int32>(
-    library:Windows.ucrtbase,
+    library:Boundary.Runtime,
     name:"_read"
 )
 
-let crt_isatty = C.function<func(int32) int32>(library:Windows.ucrtbase, name:"_isatty")
-let get_std_handle = C.function<func(int32) uint>(library:Windows.kernel32, name:"GetStdHandle")
+let crt_isatty = C.function<func(int32) int32>(library:Boundary.Runtime, name:"_isatty")
+let get_std_handle = C.function<func(int32) uint>(library:Boundary.System, name:"GetStdHandle")
 let get_console_screen_buffer_info = C.function<func(uint, C.MutablePointer<int>) int32>(
-    library:Windows.kernel32,
+    library:Boundary.System,
     name:"GetConsoleScreenBufferInfo"
 )
 

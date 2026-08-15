@@ -1,13 +1,13 @@
 use Interop.C
-use Interop.Linux
+use Interop.Boundary
 
-let system_openat = C.function<func(int32, C.Pointer<uint8>, int32, uint32) int32>(library:Linux.kernel, name:"openat")
-let system_close = C.function<func(int32) int32>(library:Linux.kernel, name:"close")
-let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Linux.kernel, name:"read")
-let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Linux.kernel, name:"write")
-let system_fsync = C.function<func(int32) int32>(library:Linux.kernel, name:"fsync")
-let system_lseek = C.function<func(int32, int, int32) int>(library:Linux.kernel, name:"lseek")
-let system_ftruncate = C.function<func(int32, int) int32>(library:Linux.kernel, name:"ftruncate")
+let system_openat = C.function<func(int32, C.Pointer<uint8>, int32, uint32) int32>(library:Boundary.System, name:"openat")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
+let system_fsync = C.function<func(int32) int32>(library:Boundary.System, name:"fsync")
+let system_lseek = C.function<func(int32, int, int32) int>(library:Boundary.System, name:"lseek")
+let system_ftruncate = C.function<func(int32, int) int32>(library:Boundary.System, name:"ftruncate")
 
 func open(path:str, access:int, creation:int, append:bool) int {
     var flags = access - 1

@@ -1,3 +1,20 @@
+public struct LocalTime {
+    let hour:int
+    let minute:int
+    let second:int
+    let nanosecond:int
+
+    public static func now() LocalTime {
+        let components = Platform.local_time_components()
+        return LocalTime(
+            hour:components[0],
+            minute:components[1],
+            second:components[2],
+            nanosecond:components[3]
+        )
+    }
+}
+
 internal func monotonic_microseconds() int {
     return Platform.monotonic_microseconds()
 }

@@ -6,7 +6,28 @@ let clock_gettime_nsec_np = C.function<func(uint32) uint>(
     name:"clock_gettime_nsec_np"
 )
 
+let localtime_r = C.function<func(C.MutablePointer<int>, C.MutablePointer<uint>) C.Pointer<uint8> >(
+    library:MacOS.lib_system,
+    name:"localtime_r"
+)
+
 func monotonic_microseconds() int {
     let clock_uptime_raw:uint32 = 8
     return (clock_gettime_nsec_np(clock_uptime_raw) / 1_000) as int
+}
+
+func local_time_components() int[4] {
+    let clock_realtime:uint32 = 0
+    let nanoseconds = clock_gettime_nsec_np(clock_realtime)
+    var seconds = (nanoseconds / 1_000_000_000) as int
+    var calendar:uint[7]
+    let result = C.address_bits(localtime_r(C.mutable_pointer(seconds), C.mutable_pointer(calendar)))
+    if result == 0 { panic("macOS localtime_r failed") }
+    let address = C.address_bits(C.mutable_pointer(calendar))
+    return [
+        C.load<int32>(address, 8 as uint) as int,
+        C.load<int32>(address, 4 as uint) as int,
+        C.load<int32>(address, 0 as uint) as int,
+        (nanoseconds % 1_000_000_000) as int
+    ]
 }

@@ -1,0 +1,55 @@
+use STD.Time.LocalTime
+use STD.SystemTimeZone
+
+func append_i32(data:&uint8[], value:int) {
+    data.append((value / 16_777_216 % 256) as uint8)
+    data.append((value / 65_536 % 256) as uint8)
+    data.append((value / 256 % 256) as uint8)
+    data.append((value % 256) as uint8)
+}
+
+func sample_tzif() uint8[] {
+    var data:uint8[] = []
+    while data.count() < 44 { data.append(0 as uint8) }
+    data[0] = 84
+    data[1] = 90
+    data[2] = 105
+    data[3] = 102
+    data[35] = 2
+    data[39] = 2
+    append_i32(data, 0)
+    append_i32(data, 1_000)
+    data.append(0 as uint8)
+    data.append(1 as uint8)
+    append_i32(data, 3_600)
+    data.append(0 as uint8)
+    data.append(0 as uint8)
+    append_i32(data, 7_200)
+    data.append(1 as uint8)
+    data.append(0 as uint8)
+    return data
+}
+
+test "read the current local time" {
+    let time = LocalTime.now()
+    assert(time.hour >= 0 && time.hour <= 23)
+    assert(time.minute >= 0 && time.minute <= 59)
+    assert(time.second >= 0 && time.second <= 60)
+    assert(time.nanosecond >= 0 && time.nanosecond < 1_000_000_000)
+}
+
+test "select the Linux TZif offset active at an epoch" {
+    let data = sample_tzif()
+    let view = @data[0:data.count()]
+    assert(SystemTimeZone.offset_from_tzif(view, -1) == 3_600)
+    assert(SystemTimeZone.offset_from_tzif(view, 999) == 3_600)
+    assert(SystemTimeZone.offset_from_tzif(view, 1_000) == 7_200)
+}
+
+test "normalize local time across the Unix epoch" {
+    let components = SystemTimeZone.local_time_components(-1, 500, 0)
+    assert(components[0] == 23)
+    assert(components[1] == 59)
+    assert(components[2] == 59)
+    assert(components[3] == 500)
+}

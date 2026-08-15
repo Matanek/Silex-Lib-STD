@@ -11,6 +11,11 @@ let query_performance_frequency = C.function<func(C.MutablePointer<int>) int32>(
     name:"QueryPerformanceFrequency"
 )
 
+let get_local_time = C.function<func(C.MutablePointer<uint>) void>(
+    library:Windows.kernel32,
+    name:"GetLocalTime"
+)
+
 func monotonic_microseconds() int {
     var counter:int = 0
     var frequency:int = 0
@@ -21,4 +26,16 @@ func monotonic_microseconds() int {
         panic("Windows QueryPerformanceFrequency failed")
     }
     return (counter / frequency) * 1_000_000 + ((counter % frequency) * 1_000_000) / frequency
+}
+
+func local_time_components() int[4] {
+    var time:uint[2]
+    get_local_time(C.mutable_pointer(time))
+    let address = C.address_bits(C.mutable_pointer(time))
+    return [
+        C.load<uint16>(address, 8 as uint) as int,
+        C.load<uint16>(address, 10 as uint) as int,
+        C.load<uint16>(address, 12 as uint) as int,
+        C.load<uint16>(address, 14 as uint) as int * 1_000_000
+    ]
 }

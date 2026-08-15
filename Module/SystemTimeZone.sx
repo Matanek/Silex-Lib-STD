@@ -1,0 +1,107 @@
+use STD.File
+
+internal func linux_offset_at(unix_seconds:int) int {
+    match File.read_all("/etc/localtime", 1_048_576) {
+        success(bytes) => {
+            return offset_from_tzif(@bytes[0:bytes.count()], unix_seconds)
+        }
+        failure(error) => {
+            panic("STD.Time could not read the Linux system time zone")
+        }
+    }
+}
+
+internal func local_time_components(
+    unix_seconds:int,
+    nanosecond:int,
+    utc_offset:int
+) int[4] {
+    var seconds = (unix_seconds + utc_offset) % 86_400
+    if seconds < 0 { seconds += 86_400 }
+    return [
+        seconds / 3_600,
+        (seconds % 3_600) / 60,
+        seconds % 60,
+        nanosecond
+    ]
+}
+
+internal func offset_from_tzif(data:@uint8[..], unix_seconds:int) int {
+    var header = 0
+    require_header(data, header)
+    let version = data[4]
+    var time_size = 4
+    if version == 50 || version == 51 || version == 52 {
+        header = block_end(data, header, 4)
+        require_header(data, header)
+        time_size = 8
+    }
+
+    let time_count = count_at(data, header, 32)
+    let type_count = count_at(data, header, 36)
+    if type_count <= 0 { panic("STD.Time found no types in the Linux time zone") }
+    let transitions = header + 44
+    let indexes = transitions + time_count * time_size
+    let types = indexes + time_count
+    let end = types + type_count * 6
+    if transitions < 0 || indexes < transitions || types < indexes || end < types || end > data.count() {
+        panic("STD.Time found a truncated Linux time zone")
+    }
+
+    var selected = 0
+    var transition = 0
+    while transition < time_count {
+        let timestamp = read_signed(data, transitions + transition * time_size, time_size)
+        if timestamp > unix_seconds { break }
+        selected = data[indexes + transition] as int
+        transition++
+    }
+    if selected < 0 || selected >= type_count {
+        panic("STD.Time found an invalid Linux time-zone type")
+    }
+    return read_signed(data, types + selected * 6, 4)
+}
+
+func require_header(data:@uint8[..], offset:int) {
+    if offset < 0 || offset + 44 > data.count() ||
+        data[offset] != 84 || data[offset + 1] != 90 ||
+        data[offset + 2] != 105 || data[offset + 3] != 102
+    {
+        panic("STD.Time found an invalid Linux TZif header")
+    }
+}
+
+func count_at(data:@uint8[..], header:int, relative:int) int {
+    let value = read_signed(data, header + relative, 4)
+    if value < 0 { panic("STD.Time found a negative Linux TZif count") }
+    return value
+}
+
+func block_end(data:@uint8[..], header:int, time_size:int) int {
+    let gmt_count = count_at(data, header, 20)
+    let standard_count = count_at(data, header, 24)
+    let leap_count = count_at(data, header, 28)
+    let time_count = count_at(data, header, 32)
+    let type_count = count_at(data, header, 36)
+    let abbreviation_count = count_at(data, header, 40)
+    let end = header + 44 + time_count * time_size + time_count + type_count * 6 +
+        abbreviation_count + leap_count * (time_size + 4) + standard_count + gmt_count
+    if end < header + 44 || end > data.count() {
+        panic("STD.Time found a truncated Linux TZif block")
+    }
+    return end
+}
+
+func read_signed(data:@uint8[..], offset:int, width:int) int {
+    if offset < 0 || width <= 0 || offset + width > data.count() {
+        panic("STD.Time read outside the Linux TZif data")
+    }
+    var value = data[offset] as int
+    if data[offset] >= 128 { value -= 256 }
+    var index = 1
+    while index < width {
+        value = value * 256 + data[offset + index] as int
+        index++
+    }
+    return value
+}

@@ -1,0 +1,7 @@
+public use STD.Regex.Types.CompileErrorKind
+public use STD.Regex.Types.CompileError
+public use STD.Regex.Types.Options
+public use STD.Regex.Regex.Capture
+public use STD.Regex.Regex.Match
+public use STD.Regex.Regex.Regex
+public use STD.Regex.Regex.Cursor

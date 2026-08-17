@@ -1,0 +1,468 @@
+use Interop.C
+use STD.Text
+use STD.Regex.Compiler.Program
+use STD.Regex.Unicode.in_ranges
+
+struct Thread {
+    let state:int
+    let first:int
+    let first_byte:int
+    let starts:int[]
+    let ends:int[]
+    let counters:int[]
+
+    internal init(
+        state:int, first:int, first_byte:int, starts:int[], ends:int[], counters:int[] = []
+    ) {
+        self.state = state
+        self.first = first
+        self.first_byte = first_byte
+        self.starts = starts
+        self.ends = ends
+        self.counters = counters
+    }
+}
+
+class ThreadSet {
+    internal var values:Thread[]
+    internal var seen:bool[]
+    internal var pending:Thread[]
+
+    internal init(state_count:int) {
+        self.values = []
+        self.seen = seen_states(state_count)
+        self.pending = []
+    }
+
+    internal func clear() {
+        self.values.clear()
+        var index = 0
+        while index < self.seen.count() {
+            self.seen[index] = false
+            index++
+        }
+        self.pending.clear()
+    }
+
+    internal func begin(initial:Thread) {
+        self.pending.clear()
+        self.pending.append(initial)
+    }
+
+    internal func has_pending() bool { return self.pending.count() > 0 }
+    internal func take_pending() Thread { return self.pending.take_last() }
+    internal func was_seen(state:int) bool { return self.seen[state] }
+    internal func mark_seen(state:int) { self.seen[state] = true }
+    internal func schedule(thread:Thread) { self.pending.append(thread) }
+    internal func append(thread:Thread) { self.values.append(thread) }
+}
+
+internal struct RawMatch {
+    let first:int
+    let last:int
+    let first_byte:int
+    let last_byte:int
+    let starts:int[]
+    let ends:int[]
+}
+
+internal struct Decoded {
+    let scalar:uint32
+    let next_byte:int
+}
+
+internal func find_in(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
+    return search(program, source, first, first_byte, true)
+}
+
+internal func run_from(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
+    return search(program, source, first, first_byte, false)
+}
+
+func search(program:@Program, source:@str, first:int, first_byte:int, unanchored:bool) RawMatch? {
+    var starts:int[] = []
+    var ends:int[] = []
+    var counters:int[] = []
+    var index = 0
+    var capture_slots = 0
+    if program.capture_count > 0 { capture_slots = (program.capture_count + 1) * 2 }
+    while index < capture_slots {
+        starts.append(-1)
+        ends.append(-1)
+        index++
+    }
+    index = 0
+    while index < program.counter_count { counters.append(0); index++ }
+    var current = ThreadSet(program.states.count())
+    var following = ThreadSet(program.states.count())
+    var position = first
+    var byte_position = first_byte
+    var previous = previous_scalar(source, byte_position)
+    var best:RawMatch?
+    var started = false
+    while true {
+        let decoded = decode_at(source, byte_position)
+        if best == null && (unanchored || !started) {
+            var candidate = true
+            if expected = program.prefix {
+                if value = decoded {
+                    candidate = literal_matches(program, expected, value.scalar)
+                } else { candidate = false }
+            }
+            if candidate {
+                add_thread(
+                    current,
+                    program,
+                    Thread(
+                        state:program.start,
+                        first:position,
+                        first_byte:byte_position,
+                        starts:starts,
+                        ends:ends,
+                        counters:counters
+                    ),
+                    position,
+                    byte_position,
+                    previous,
+                    decoded
+                )
+                started = true
+            }
+        }
+        if current.values.count() == 0 {
+            if value = decoded {
+                previous = value.scalar
+                byte_position = value.next_byte
+                position++
+                continue
+            }
+            return best
+        }
+        for thread in current.values {
+            if program.states[thread.state].kind == 10 {
+                var accepted_starts = thread.starts
+                var accepted_ends = thread.ends
+                if accepted_starts.count() == 0 {
+                    accepted_starts.append(-1)
+                    accepted_starts.append(-1)
+                    accepted_ends.append(-1)
+                    accepted_ends.append(-1)
+                }
+                accepted_starts[0] = thread.first
+                accepted_starts[1] = thread.first_byte
+                accepted_ends[0] = position
+                accepted_ends[1] = byte_position
+                best = RawMatch(
+                    first:thread.first,
+                    last:position,
+                    first_byte:thread.first_byte,
+                    last_byte:byte_position,
+                    starts:accepted_starts,
+                    ends:accepted_ends
+                )
+                break
+            }
+            if value = decoded {
+                if consumes(program, thread.state, value.scalar) {
+                    let after = decode_at(source, value.next_byte)
+                    add_thread(
+                        following,
+                        program,
+                        Thread(
+                            state:program.states[thread.state].first,
+                            first:thread.first,
+                            first_byte:thread.first_byte,
+                            starts:thread.starts,
+                            ends:thread.ends,
+                            counters:thread.counters
+                        ),
+                        position + 1,
+                        value.next_byte,
+                        value.scalar,
+                        after
+                    )
+                }
+            }
+        }
+        if following.values.count() == 0 {
+            if result = best { return result }
+            if decoded == null { return null }
+        }
+        if value = decoded {
+            var consumed = current
+            current = following
+            following = consumed
+            following.clear()
+            previous = value.scalar
+            byte_position = value.next_byte
+            position++
+        } else { return best }
+    }
+    return null
+}
+
+func add_thread(
+    output:ThreadSet,
+    program:@Program,
+    initial:Thread,
+    position:int,
+    byte_position:int,
+    previous:uint32?,
+    next:Decoded?
+) {
+    output.begin(initial)
+    while output.has_pending() {
+        let thread = output.take_pending()
+        if thread.state < 0 || output.was_seen(thread.state) { continue }
+        output.mark_seen(thread.state)
+        let kind = program.states[thread.state].kind
+        if kind == 4 {
+            output.schedule(Thread(
+                state:program.states[thread.state].second,
+                first:thread.first,
+                first_byte:thread.first_byte,
+                starts:thread.starts,
+                ends:thread.ends,
+                counters:thread.counters
+            ))
+            output.schedule(Thread(
+                state:program.states[thread.state].first,
+                first:thread.first,
+                first_byte:thread.first_byte,
+                starts:thread.starts,
+                ends:thread.ends,
+                counters:thread.counters
+            ))
+            continue
+        }
+        if kind == 5 {
+            output.schedule(Thread(
+                state:program.states[thread.state].first,
+                first:thread.first,
+                first_byte:thread.first_byte,
+                starts:thread.starts,
+                ends:thread.ends,
+                counters:thread.counters
+            ))
+            continue
+        }
+        if kind == 6 {
+            var allowed = position == 0
+            if program.options.multi_line {
+                if scalar = previous { allowed = line_terminator(scalar) }
+            }
+            if allowed {
+                output.schedule(Thread(
+                    state:program.states[thread.state].first,
+                    first:thread.first,
+                    first_byte:thread.first_byte,
+                    starts:thread.starts,
+                    ends:thread.ends,
+                    counters:thread.counters
+                ))
+            }
+            continue
+        }
+        if kind == 7 {
+            var allowed = next == null
+            if program.options.multi_line {
+                if value = next { allowed = line_terminator(value.scalar) }
+            }
+            if allowed {
+                output.schedule(Thread(
+                    state:program.states[thread.state].first,
+                    first:thread.first,
+                    first_byte:thread.first_byte,
+                    starts:thread.starts,
+                    ends:thread.ends,
+                    counters:thread.counters
+                ))
+            }
+            continue
+        }
+        if kind == 8 {
+            var next_starts = thread.starts
+            let capture = program.states[thread.state].capture_index * 2
+            next_starts[capture] = position
+            next_starts[capture + 1] = byte_position
+            output.schedule(Thread(
+                state:program.states[thread.state].first,
+                first:thread.first,
+                first_byte:thread.first_byte,
+                starts:next_starts,
+                ends:thread.ends,
+                counters:thread.counters
+            ))
+            continue
+        }
+        if kind == 9 {
+            var next_ends = thread.ends
+            let capture = program.states[thread.state].capture_index * 2
+            next_ends[capture] = position
+            next_ends[capture + 1] = byte_position
+            output.schedule(Thread(
+                state:program.states[thread.state].first,
+                first:thread.first,
+                first_byte:thread.first_byte,
+                starts:thread.starts,
+                ends:next_ends,
+                counters:thread.counters
+            ))
+            continue
+        }
+        if kind == 11 || kind == 12 {
+            var left_word = false
+            var right_word = false
+            let ranges = program.states[thread.state].ranges
+            if scalar = previous { left_word = in_ranges(ranges, scalar) }
+            if value = next { right_word = in_ranges(ranges, value.scalar) }
+            var allowed = left_word != right_word
+            if kind == 12 { allowed = !allowed }
+            if allowed {
+                output.schedule(Thread(
+                    state:program.states[thread.state].first,
+                    first:thread.first,
+                    first_byte:thread.first_byte,
+                    starts:thread.starts,
+                    ends:thread.ends,
+                    counters:thread.counters
+                ))
+            }
+            continue
+        }
+        if kind == 13 {
+            var next_counters = thread.counters
+            next_counters[program.states[thread.state].counter_index] = 0
+            output.schedule(Thread(
+                state:program.states[thread.state].first,
+                first:thread.first, first_byte:thread.first_byte,
+                starts:thread.starts, ends:thread.ends, counters:next_counters
+            ))
+            continue
+        }
+        if kind == 14 {
+            let state = program.states[thread.state]
+            let count = thread.counters[state.counter_index]
+            if count >= state.maximum {
+                output.schedule(Thread(
+                    state:state.second, first:thread.first, first_byte:thread.first_byte,
+                    starts:thread.starts, ends:thread.ends, counters:thread.counters
+                ))
+            } elif count < state.minimum {
+                output.schedule(Thread(
+                    state:state.first, first:thread.first, first_byte:thread.first_byte,
+                    starts:thread.starts, ends:thread.ends, counters:thread.counters
+                ))
+            } else {
+                if state.greedy {
+                    output.schedule(Thread(
+                        state:state.second, first:thread.first, first_byte:thread.first_byte,
+                        starts:thread.starts, ends:thread.ends, counters:thread.counters
+                    ))
+                    output.schedule(Thread(
+                        state:state.first, first:thread.first, first_byte:thread.first_byte,
+                        starts:thread.starts, ends:thread.ends, counters:thread.counters
+                    ))
+                } else {
+                    output.schedule(Thread(
+                        state:state.first, first:thread.first, first_byte:thread.first_byte,
+                        starts:thread.starts, ends:thread.ends, counters:thread.counters
+                    ))
+                    output.schedule(Thread(
+                        state:state.second, first:thread.first, first_byte:thread.first_byte,
+                        starts:thread.starts, ends:thread.ends, counters:thread.counters
+                    ))
+                }
+            }
+            continue
+        }
+        if kind == 15 {
+            var next_counters = thread.counters
+            let counter = program.states[thread.state].counter_index
+            next_counters[counter] = next_counters[counter] + 1
+            output.schedule(Thread(
+                state:program.states[thread.state].first,
+                first:thread.first, first_byte:thread.first_byte,
+                starts:thread.starts, ends:thread.ends, counters:next_counters
+            ))
+            continue
+        }
+        output.append(thread)
+    }
+}
+
+func consumes(program:@Program, state_index:int, scalar:uint32) bool {
+    let kind = program.states[state_index].kind
+    if kind == 1 {
+        if program.options.case_insensitive {
+            return simple_fold(program.states[state_index].scalar) == simple_fold(scalar)
+        }
+        return program.states[state_index].scalar == scalar
+    }
+    if kind == 2 { return program.options.dot_matches_newline || !line_terminator(scalar) }
+    if kind != 3 { return false }
+    let ranges = program.states[state_index].ranges
+    var first = 0
+    var last = ranges.count()
+    while first < last {
+        let middle = first + (last - first) / 2
+        if ranges[middle].last < scalar { first = middle + 1 }
+        else { last = middle }
+    }
+    var included = first < ranges.count() && ranges[first].first <= scalar
+    if !included && program.options.case_insensitive {
+        included = in_ranges(ranges, simple_fold(scalar)) || in_ranges(ranges, Text.upper_scalar(scalar))
+    }
+    if program.states[state_index].negated { return !included }
+    return included
+}
+
+func literal_matches(program:@Program, expected:uint32, scalar:uint32) bool {
+    if program.options.case_insensitive { return simple_fold(expected) == simple_fold(scalar) }
+    return expected == scalar
+}
+
+internal func decode_at(source:@str, byte_offset:int) Decoded? {
+    let byte_count = C.byte_count(source) as int
+    if byte_offset >= byte_count { return null }
+    let first = C.byte_at(source, byte_offset as uint) as uint32
+    if first <= 127 { return Decoded(scalar:first, next_byte:byte_offset + 1) }
+    let second = C.byte_at(source, (byte_offset + 1) as uint) as uint32
+    if first <= 223 {
+        return Decoded(scalar:((first & 31) << 6) + (second & 63), next_byte:byte_offset + 2)
+    }
+    let third = C.byte_at(source, (byte_offset + 2) as uint) as uint32
+    if first <= 239 {
+        return Decoded(
+            scalar:((first & 15) << 12) + ((second & 63) << 6) + (third & 63),
+            next_byte:byte_offset + 3
+        )
+    }
+    let fourth = C.byte_at(source, (byte_offset + 3) as uint) as uint32
+    return Decoded(
+        scalar:((first & 7) << 18) + ((second & 63) << 12) +
+            ((third & 63) << 6) + (fourth & 63),
+        next_byte:byte_offset + 4
+    )
+}
+
+func previous_scalar(source:@str, byte_offset:int) uint32? {
+    if byte_offset <= 0 { return null }
+    var first = byte_offset - 1
+    while first > 0 && (C.byte_at(source, first as uint) & 192) == 128 { first-- }
+    if decoded = decode_at(source, first) { return decoded.scalar }
+    return null
+}
+
+func simple_fold(scalar:uint32) uint32 { return Text.fold_scalar(scalar) }
+
+func seen_states(count:int) bool[] {
+    var result:bool[] = []
+    var index = 0
+    while index < count { result.append(false); index++ }
+    return result
+}
+
+func line_terminator(scalar:uint32) bool {
+    return scalar == 10 || scalar == 13 || scalar == 133 || scalar == 8232 || scalar == 8233
+}

@@ -53,6 +53,10 @@ Compile the complete catalogue from the workspace root with:
 - [WriteReport.sx](JSON/WriteReport.sx) — construct and pretty-print JSON.
 - [InspectValueKinds.sx](JSON/InspectValueKinds.sx) — inspect every JSON value
   kind through its typed projection.
+- [ExtractContacts.sx](Regex/ExtractContacts.sx) — compile a regular expression,
+  iterate lazily over contacts and read named captures.
+- [NormalizeLog.sx](Regex/NormalizeLog.sx) — replace matches with a callback and
+  split structured text.
 - [CleanNames.sx](Text/CleanNames.sx) — trim, title-case and join human text.
 - [CountGraphemes.sx](Text/CountGraphemes.sx) — count user-visible Unicode
   characters.

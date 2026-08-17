@@ -1,0 +1,100 @@
+use Interop.C
+use STD.Text.Data
+
+internal struct ScalarRange {
+    let first:uint32
+    let last:uint32
+}
+
+internal func normalized_ranges(values:ScalarRange[]) ScalarRange[] {
+    var sorted:ScalarRange[] = []
+    for value in values {
+        var index = sorted.count()
+        while index > 0 && sorted[index - 1].first > value.first { index-- }
+        sorted.insert(index, value)
+    }
+    var result:ScalarRange[] = []
+    for value in sorted {
+        if result.count() == 0 {
+            result.append(value)
+            continue
+        }
+        let last = result.count() - 1
+        let separated = value.first > result[last].last &&
+            (result[last].last == 1_114_111 || value.first > result[last].last + 1)
+        if separated { result.append(value) }
+        elif value.last > result[last].last {
+            result[last] = ScalarRange(first:result[last].first, last:value.last)
+        }
+    }
+    return result
+}
+
+internal func digit_ranges() ScalarRange[] { return decoded_ranges(Data.regex_decimal_ranges()) }
+internal func word_ranges() ScalarRange[] { return decoded_ranges(Data.regex_word_ranges()) }
+internal func whitespace_ranges() ScalarRange[] { return decoded_ranges(Data.regex_whitespace_ranges()) }
+
+internal func property_ranges(name:str) ScalarRange[]? {
+    if name == "L" || name == "Letter" { return decoded_ranges(Data.regex_letter_ranges()) }
+    if name == "M" || name == "Mark" { return decoded_ranges(Data.regex_mark_ranges()) }
+    if name == "N" || name == "Number" { return decoded_ranges(Data.regex_number_ranges()) }
+    if name == "Nd" || name == "Decimal_Number" { return digit_ranges() }
+    if name == "Z" || name == "Separator" { return decoded_ranges(Data.regex_separator_ranges()) }
+    if name == "P" || name == "Punctuation" { return decoded_ranges(Data.regex_punctuation_ranges()) }
+    if name == "S" || name == "Symbol" { return decoded_ranges(Data.regex_symbol_ranges()) }
+    if name == "White_Space" { return whitespace_ranges() }
+    if name == "Word" { return word_ranges() }
+    return null
+}
+
+internal func in_ranges(ranges:@ScalarRange[], scalar:uint32) bool {
+    var first = 0
+    var last = ranges.count()
+    while first < last {
+        let middle = first + (last - first) / 2
+        if ranges[middle].last < scalar { first = middle + 1 }
+        else { last = middle }
+    }
+    return first < ranges.count() && ranges[first].first <= scalar
+}
+
+internal func complement(ranges:ScalarRange[]) ScalarRange[] {
+    var result:ScalarRange[] = []
+    var first:uint32 = 0
+    for interval in ranges {
+        if first < interval.first { result.append(ScalarRange(first:first, last:interval.first - 1)) }
+        if interval.last == 1_114_111 { return result }
+        first = interval.last + 1
+    }
+    result.append(ScalarRange(first:first, last:1_114_111))
+    return result
+}
+
+func decoded_ranges(data:str) ScalarRange[] {
+    var result:ScalarRange[] = []
+    var offset = 0
+    let count = C.byte_count(data) as int
+    while offset < count {
+        result.append(ScalarRange(first:read_u21(data, offset), last:read_u21(data, offset + 4)))
+        offset += 8
+    }
+    return result
+}
+
+func read_u21(data:@str, offset:int) uint32 {
+    var result:uint32 = 0
+    var index = 0
+    while index < 4 {
+        result = (result << 6) + base64_digit(C.byte_at(data, (offset + index) as uint))
+        index++
+    }
+    return result
+}
+
+func base64_digit(byte:uint8) uint32 {
+    if byte >= 65 && byte <= 90 { return (byte - 65) as uint32 }
+    if byte >= 97 && byte <= 122 { return (byte - 97 + 26) as uint32 }
+    if byte >= 48 && byte <= 57 { return (byte - 48 + 52) as uint32 }
+    if byte == 43 { return 62 }
+    return 63
+}

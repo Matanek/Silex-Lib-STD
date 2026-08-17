@@ -1,0 +1,24 @@
+public enum CompileErrorKind {
+    unexpected_token
+    unexpected_end
+    invalid_escape
+    invalid_range
+    invalid_quantifier
+    unclosed_group
+    unclosed_class
+    invalid_group_name
+    duplicate_group_name
+    unsupported_construct
+}
+
+public struct CompileError {
+    let kind:CompileErrorKind
+    let scalar_index:int
+    let detail:str
+}
+
+public struct Options {
+    let case_insensitive:bool
+    let multi_line:bool
+    let dot_matches_newline:bool
+}

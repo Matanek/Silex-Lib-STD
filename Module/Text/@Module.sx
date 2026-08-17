@@ -19,6 +19,20 @@ public func uppercase(text:str) str { return map_case(text, 2) }
 public func case_fold(text:str) str { return map_case(text, 3) }
 public func unicode_version() str { return "17.0.0" }
 
+internal func fold_scalar(scalar:uint32) uint32 {
+    if mapped = case_mapping(Data.fold_keys(), Data.fold_metadata(), Data.fold_values(), scalar) {
+        if mapped.count() == 1 { return mapped[0] }
+    }
+    return scalar
+}
+
+internal func upper_scalar(scalar:uint32) uint32 {
+    if mapped = case_mapping(Data.uppercase_keys(), Data.uppercase_metadata(), Data.uppercase_values(), scalar) {
+        if mapped.count() == 1 { return mapped[0] }
+    }
+    return scalar
+}
+
 public func is_empty(text:@str) bool { return text == "" }
 
 public func index_of(text:@str, expected:@str) int? {

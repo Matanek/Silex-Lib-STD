@@ -34,8 +34,13 @@ def encode_ranges(values: list[tuple[int, int, int]]) -> str:
 
 
 def encode_plain_ranges(values: list[tuple[int, int, int]]) -> str:
-    values.sort()
-    return "".join(u21(first) + u21(last) for first, last, _ in values)
+    merged: list[tuple[int, int]] = []
+    for first, last, _ in sorted(values):
+        if merged and first <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], last))
+        else:
+            merged.append((first, last))
+    return "".join(u21(first) + u21(last) for first, last in merged)
 
 
 def encode_mapping(mapping: dict[int, tuple[int, ...]], compatibility: set[int] | None = None) -> tuple[str, str, str]:
@@ -57,9 +62,22 @@ def parse_unicode_data(path: Path):
     combining = {}
     lower = {}
     upper = {}
+    categories = []
+    category_first = None
     for raw in path.read_text(encoding="utf-8").splitlines():
         fields = raw.split(";")
         codepoint = int(fields[0], 16)
+        name = fields[1]
+        category = fields[2]
+        if name.endswith(", First>"):
+            category_first = (codepoint, category)
+        elif name.endswith(", Last>"):
+            if category_first is None or category_first[1] != category:
+                raise ValueError(f"unpaired UnicodeData range at U+{codepoint:04X}")
+            categories.append((category_first[0], codepoint, category))
+            category_first = None
+        else:
+            categories.append((codepoint, codepoint, category))
         if fields[3] != "0":
             combining[codepoint] = int(fields[3])
         value = fields[5]
@@ -73,7 +91,7 @@ def parse_unicode_data(path: Path):
             upper[codepoint] = (int(fields[12], 16),)
         if fields[13]:
             lower[codepoint] = (int(fields[13], 16),)
-    return decomposition, compatibility, combining, lower, upper
+    return decomposition, compatibility, combining, lower, upper, categories
 
 
 def parse_special_casing(path: Path, lower: dict, upper: dict):
@@ -112,7 +130,7 @@ def main():
     parser.add_argument("ucd", type=Path)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    decomposition, compatibility, combining, lower, upper = parse_unicode_data(args.ucd / "UnicodeData.txt")
+    decomposition, compatibility, combining, lower, upper, categories = parse_unicode_data(args.ucd / "UnicodeData.txt")
     parse_special_casing(args.ucd / "SpecialCasing.txt", lower, upper)
     fold = parse_case_folding(args.ucd / "CaseFolding.txt")
     exclusions = {
@@ -141,6 +159,24 @@ def main():
     # Re-read separately because both requested properties intentionally share an encoding value.
     cased = ranges(args.ucd / "DerivedCoreProperties.txt", {"Cased": 1})
     ignorable = ranges(args.ucd / "DerivedCoreProperties.txt", {"Case_Ignorable": 1})
+    category_groups = {
+        "decimal": {"Nd"},
+        "letter": {"Lu", "Ll", "Lt", "Lm", "Lo"},
+        "mark": {"Mn", "Mc", "Me"},
+        "number": {"Nd", "Nl", "No"},
+        "separator": {"Zs", "Zl", "Zp"},
+        "punctuation": {"Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po"},
+        "symbol": {"Sm", "Sc", "Sk", "So"},
+    }
+    regex_categories = {
+        name: [(first, last, 1) for first, last, category in categories if category in wanted]
+        for name, wanted in category_groups.items()
+    }
+    alphabetic = ranges(args.ucd / "DerivedCoreProperties.txt", {"Alphabetic": 1})
+    join_control = ranges(args.ucd / "PropList.txt", {"Join_Control": 1})
+    whitespace = ranges(args.ucd / "PropList.txt", {"White_Space": 1})
+    connector = [(first, last, 1) for first, last, category in categories if category == "Pc"]
+    regex_word = alphabetic + regex_categories["mark"] + regex_categories["decimal"] + connector + join_control
     values = {
         "decomposition_keys": decomp[0], "decomposition_metadata": decomp[1], "decomposition_values": decomp[2],
         "combining_keys": ccc_keys, "combining_values": ccc_values,
@@ -151,6 +187,15 @@ def main():
         "grapheme_ranges": encode_ranges(grapheme), "extended_pictographic_ranges": encode_plain_ranges(pictographic),
         "incb_ranges": encode_ranges(incb),
         "cased_ranges": encode_plain_ranges(cased), "case_ignorable_ranges": encode_plain_ranges(ignorable),
+        "regex_decimal_ranges": encode_plain_ranges(regex_categories["decimal"]),
+        "regex_letter_ranges": encode_plain_ranges(regex_categories["letter"]),
+        "regex_mark_ranges": encode_plain_ranges(regex_categories["mark"]),
+        "regex_number_ranges": encode_plain_ranges(regex_categories["number"]),
+        "regex_separator_ranges": encode_plain_ranges(regex_categories["separator"]),
+        "regex_punctuation_ranges": encode_plain_ranges(regex_categories["punctuation"]),
+        "regex_symbol_ranges": encode_plain_ranges(regex_categories["symbol"]),
+        "regex_whitespace_ranges": encode_plain_ranges(whitespace),
+        "regex_word_ranges": encode_plain_ranges(regex_word),
     }
     header = "// Generated from Unicode 17.0.0 UCD. Do not edit by hand.\n// Unicode data: https://www.unicode.org/license.txt\n\n"
     args.output.parent.mkdir(parents=True, exist_ok=True)

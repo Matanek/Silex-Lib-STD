@@ -1,0 +1,488 @@
+use Interop.C
+use STD.Text.UTF8
+use STD.Regex.Types.CompileErrorKind
+use STD.Regex.Types.CompileError
+use STD.Regex.Unicode.ScalarRange
+use STD.Regex.Unicode.normalized_ranges
+use STD.Regex.Unicode.digit_ranges
+use STD.Regex.Unicode.word_ranges
+use STD.Regex.Unicode.whitespace_ranges
+use STD.Regex.Unicode.property_ranges
+use STD.Regex.Unicode.complement
+
+internal struct SyntaxNode {
+    let kind:int
+    let scalar:uint32
+    let ranges:ScalarRange[]
+    let negated:bool
+    let minimum:int
+    let maximum:int
+    let greedy:bool
+    let capture_index:int
+    let children:int[]
+}
+
+struct RepetitionBounds {
+    let first:int
+    let last:int
+}
+
+struct ClassPiece {
+    let ranges:ScalarRange[]
+    let single:bool
+    let scalar:uint32
+}
+
+internal class Parser {
+    let values:uint32[]
+    var position:int
+    var capture_total:int
+    var capture_labels:str[]
+    var nodes:SyntaxNode[]
+    var parse_error:CompileError?
+
+    internal init(pattern:str) {
+        self.values = UTF8.scalars(pattern)
+        self.position = 0
+        self.capture_total = 0
+        self.capture_labels = []
+        self.capture_labels.append("")
+        self.nodes = []
+        self.parse_error = null
+    }
+
+    internal func capture_names() str[] { return self.capture_labels }
+    internal func syntax_nodes() SyntaxNode[] { return self.nodes }
+
+    internal func parse() Result<int, CompileError> {
+        let result = self.expression()
+        if error = self.parse_error { return Result<int, CompileError>.failure(error) }
+        if self.position != self.values.count() {
+            return Result<int, CompileError>.failure(
+                CompileError(
+                    kind:CompileErrorKind.unexpected_token(),
+                    scalar_index:self.position,
+                    detail:"unexpected token"
+                )
+            )
+        }
+        return Result<int, CompileError>.success(result)
+    }
+
+    func expression() int {
+        var left = self.sequence()
+        if left < 0 { return -1 }
+        while self.at(124) {
+            self.position++
+            let right = self.sequence()
+            if right < 0 { return -1 }
+            left = self.pair_node(5, left, right)
+        }
+        return left
+    }
+
+    func sequence() int {
+        var nodes:int[] = []
+        while self.position < self.values.count() && !self.at(124) && !self.at(41) {
+            let node = self.repetition()
+            if node < 0 { return -1 }
+            nodes.append(node)
+        }
+        if nodes.count() == 0 {
+            return self.simple_node(1)
+        }
+        var result = nodes[0]
+        var index = 1
+        while index < nodes.count() {
+            result = self.pair_node(4, result, nodes[index])
+            index++
+        }
+        return result
+    }
+
+    func repetition() int {
+        var result = self.atom()
+        if result < 0 { return -1 }
+        if self.position >= self.values.count() { return result }
+        let token = self.values[self.position]
+        var quantified = false
+        var minimum = 0
+        var maximum = 0
+        if token == 42 {
+            self.position++
+            quantified = true
+            maximum = -1
+        } elif token == 43 {
+            self.position++
+            quantified = true
+            minimum = 1
+            maximum = -1
+        } elif token == 63 {
+            self.position++
+            quantified = true
+            maximum = 1
+        } elif token == 123 {
+            if bounds = self.bounds() {
+                quantified = true
+                minimum = bounds.first
+                maximum = bounds.last
+            }
+            else { return -1 }
+        } else { return result }
+        var greedy = true
+        if self.at(63) { greedy = false; self.position++ }
+        if quantified { result = self.repeat_node(result, minimum, maximum, greedy) }
+        if self.position < self.values.count() {
+            let next = self.values[self.position]
+            if next == 42 || next == 43 || next == 63 || next == 123 {
+                return self.fail(CompileErrorKind.invalid_quantifier(), self.position, "an expression can have only one quantifier")
+            }
+        }
+        return result
+    }
+
+    func atom() int {
+        if self.position >= self.values.count() {
+            return self.fail(CompileErrorKind.unexpected_end(), self.position, "expected an expression")
+        }
+        let token = self.values[self.position]
+        if token == 42 || token == 43 || token == 63 || token == 123 || token == 125 {
+            return self.fail(CompileErrorKind.invalid_quantifier(), self.position, "quantifier has no expression")
+        }
+        if token == 40 { return self.group() }
+        if token == 91 { return self.character_class() }
+        if token == 92 { return self.escaped_node() }
+        self.position++
+        if token == 46 { return self.simple_node(3) }
+        if token == 94 { return self.simple_node(7) }
+        if token == 36 { return self.simple_node(8) }
+        return self.literal_node(token)
+    }
+
+    func group() int {
+        let opening = self.position
+        self.position++
+        var capture_index = 0
+        var capture_name = ""
+        if self.at(63) {
+            self.position++
+            if self.at(58) { self.position++ }
+            elif self.at(60) {
+                self.position++
+                let name_start = self.position
+                if self.position >= self.values.count() || !name_start_character(self.values[self.position]) {
+                    return self.fail(CompileErrorKind.invalid_group_name(), name_start, "invalid capture name")
+                }
+                var bytes:uint8[] = []
+                while self.position < self.values.count() && name_character(self.values[self.position]) {
+                    bytes.append(self.values[self.position] as uint8)
+                    self.position++
+                }
+                if !self.at(62) {
+                    return self.fail(CompileErrorKind.invalid_group_name(), name_start, "capture name is not closed")
+                }
+                self.position++
+                let view = @bytes[0:bytes.count()]
+                capture_name = C.string(view)
+                var existing = 1
+                while existing < self.capture_labels.count() {
+                    if self.capture_labels[existing] == capture_name {
+                        return self.fail(CompileErrorKind.duplicate_group_name(), name_start, "capture name is duplicated")
+                    }
+                    existing++
+                }
+            } else {
+                return self.fail(
+                    CompileErrorKind.unsupported_construct(),
+                    opening + 1,
+                    "unsupported group extension"
+                )
+            }
+        } else {
+            capture_name = ""
+        }
+        if !self.values_group_is_non_capturing(opening) {
+            self.capture_total++
+            capture_index = self.capture_total
+            self.capture_labels.append(capture_name)
+        }
+        let child = self.expression()
+        if child < 0 { return -1 }
+        if !self.at(41) {
+            return self.fail(CompileErrorKind.unclosed_group(), opening, "group is not closed")
+        }
+        self.position++
+        if capture_index == 0 { return child }
+        var children:int[] = []
+        children.append(child)
+        return self.emit_node(SyntaxNode(
+            kind:9,
+            scalar:0,
+            ranges:[],
+            negated:false,
+            minimum:0,
+            maximum:0,
+            greedy:true,
+            capture_index:capture_index,
+            children:children
+        ))
+    }
+
+    func character_class() int {
+        let opening = self.position
+        self.position++
+        var negated = false
+        if self.at(94) { negated = true; self.position++ }
+        var ranges:ScalarRange[] = []
+        while self.position < self.values.count() && !self.at(93) {
+            var first:ClassPiece?
+            first = self.class_piece()
+            if first == null { return -1 }
+            if self.at(45) && self.position + 1 < self.values.count() && self.values[self.position + 1] != 93 {
+                let separator = self.position
+                self.position++
+                var last:ClassPiece?
+                last = self.class_piece()
+                if last == null { return -1 }
+                if first_value = first {
+                    if last_value = last {
+                        if !first_value.single || !last_value.single || first_value.scalar > last_value.scalar {
+                            return self.fail(CompileErrorKind.invalid_range(), separator, "invalid character range")
+                        }
+                        ranges.append(ScalarRange(first:first_value.scalar, last:last_value.scalar))
+                    }
+                }
+            } else {
+                if first_value = first { for interval in first_value.ranges { ranges.append(interval) } }
+            }
+        }
+        if !self.at(93) {
+            return self.fail(CompileErrorKind.unclosed_class(), opening, "character class is not closed")
+        }
+        self.position++
+        if ranges.count() == 0 {
+            return self.fail(CompileErrorKind.invalid_range(), opening, "character class is empty")
+        }
+        return self.class_node(ranges, negated)
+    }
+
+    func class_piece() ClassPiece? {
+        if self.position >= self.values.count() {
+            return self.piece_failure(CompileErrorKind.unexpected_end(), self.position, "expected a class character")
+        }
+        if self.at(92) {
+            self.position++
+            return self.escape_piece()
+        }
+        let scalar = self.values[self.position]
+        self.position++
+        return single_piece(scalar)
+    }
+
+    func escaped_node() int {
+        self.position++
+        if self.at(98) { self.position++; return self.simple_node(11) }
+        if self.at(66) { self.position++; return self.simple_node(12) }
+        if piece = self.escape_piece() { return self.class_node(piece.ranges, false) }
+        return -1
+    }
+
+    func escape_piece() ClassPiece? {
+        if self.position >= self.values.count() {
+            return self.piece_failure(CompileErrorKind.unexpected_end(), self.position, "escape is incomplete")
+        }
+        let escape_position = self.position - 1
+        let token = self.values[self.position]
+        self.position++
+        if token == 110 { return single_piece(10) }
+        if token == 114 { return single_piece(13) }
+        if token == 116 { return single_piece(9) }
+        if token == 112 || token == 80 {
+            return self.property_piece(token == 80, escape_position)
+        }
+        if token == 100 || token == 115 || token == 119 || token == 68 || token == 83 || token == 87 {
+            var ranges:ScalarRange[] = []
+            if token == 100 || token == 68 { ranges = digit_ranges() }
+            elif token == 115 || token == 83 { ranges = whitespace_ranges() }
+            else { ranges = word_ranges() }
+            if token == 68 || token == 83 || token == 87 { ranges = complement(ranges) }
+            return ClassPiece(ranges:ranges, single:false, scalar:0)
+        }
+        if escaped_literal(token) {
+            return single_piece(token)
+        }
+        return self.piece_failure(CompileErrorKind.invalid_escape(), escape_position, "unknown escape")
+    }
+
+    func property_piece(negated:bool, escape_position:int) ClassPiece? {
+        if !self.at(123) {
+            return self.piece_failure(CompileErrorKind.invalid_escape(), escape_position, "Unicode property requires braces")
+        }
+        self.position++
+        var bytes:uint8[] = []
+        while self.position < self.values.count() && self.values[self.position] != 125 {
+            let scalar = self.values[self.position]
+            if !name_character(scalar) {
+                return self.piece_failure(CompileErrorKind.invalid_escape(), self.position, "invalid Unicode property name")
+            }
+            bytes.append(scalar as uint8)
+            self.position++
+        }
+        if !self.at(125) || bytes.count() == 0 {
+            return self.piece_failure(CompileErrorKind.invalid_escape(), escape_position, "Unicode property is not closed")
+        }
+        self.position++
+        let name = C.string(@bytes[0:bytes.count()])
+        if ranges = property_ranges(name) {
+            var selected = ranges
+            if negated { selected = complement(selected) }
+            return ClassPiece(ranges:selected, single:false, scalar:0)
+        }
+        return self.piece_failure(CompileErrorKind.invalid_escape(), escape_position, "unknown Unicode property")
+    }
+
+    func bounds() RepetitionBounds? {
+        let opening = self.position
+        self.position++
+        if self.position >= self.values.count() {
+            return self.range_failure(CompileErrorKind.unexpected_end(), opening, "quantifier is incomplete")
+        }
+        let minimum = self.number(opening)
+        if minimum < 0 { return null }
+        var maximum = minimum
+        if self.at(44) {
+            self.position++
+            if self.at(125) { maximum = -1 }
+            else {
+                maximum = self.number(opening)
+                if maximum < 0 { return null }
+            }
+        }
+        if !self.at(125) {
+            return self.range_failure(CompileErrorKind.invalid_quantifier(), opening, "quantifier is not closed")
+        }
+        self.position++
+        if maximum >= 0 && maximum < minimum {
+            return self.range_failure(CompileErrorKind.invalid_quantifier(), opening, "quantifier maximum is below its minimum")
+        }
+        if minimum > 10_000 || maximum > 10_000 {
+            return self.range_failure(CompileErrorKind.invalid_quantifier(), opening, "finite repetition exceeds 10000")
+        }
+        return RepetitionBounds(first:minimum, last:maximum)
+    }
+
+    func number(opening:int) int {
+        if self.position >= self.values.count() || !digit(self.values[self.position]) {
+            return self.int_failure(CompileErrorKind.invalid_quantifier(), opening, "quantifier requires a decimal bound")
+        }
+        var value = 0
+        let maximum_int:int = 9223372036854775807
+        while self.position < self.values.count() && digit(self.values[self.position]) {
+            let next = (self.values[self.position] - 48) as int
+            if value > (maximum_int - next) / 10 {
+                return self.int_failure(CompileErrorKind.invalid_quantifier(), opening, "quantifier bound is too large")
+            }
+            value = value * 10 + next
+            self.position++
+        }
+        return value
+    }
+
+    func at(token:uint32) bool {
+        return self.position < self.values.count() && self.values[self.position] == token
+    }
+
+    func values_group_is_non_capturing(opening:int) bool {
+        return opening + 2 < self.values.count() &&
+            self.values[opening + 1] == 63 && self.values[opening + 2] == 58
+    }
+
+    func fail(kind:CompileErrorKind, index:int, detail:str) int {
+        self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
+        return -1
+    }
+
+    func piece_failure(kind:CompileErrorKind, index:int, detail:str) ClassPiece? {
+        self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
+        return null
+    }
+
+    func range_failure(kind:CompileErrorKind, index:int, detail:str) RepetitionBounds? {
+        self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
+        return null
+    }
+
+    func int_failure(kind:CompileErrorKind, index:int, detail:str) int {
+        self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
+        return -1
+    }
+
+    func emit_node(node:SyntaxNode) int {
+        let index = self.nodes.count()
+        self.nodes.append(node)
+        return index
+    }
+
+    func simple_node(kind:int) int {
+        return self.emit_node(SyntaxNode(
+            kind:kind, scalar:0, ranges:[], negated:false,
+            minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
+        ))
+    }
+
+    func literal_node(scalar:uint32) int {
+        return self.emit_node(SyntaxNode(
+            kind:2, scalar:scalar, ranges:[], negated:false,
+            minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
+        ))
+    }
+
+    func class_node(ranges:ScalarRange[], negated:bool) int {
+        return self.emit_node(SyntaxNode(
+            kind:6, scalar:0, ranges:normalized_ranges(ranges), negated:negated,
+            minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
+        ))
+    }
+
+    func pair_node(kind:int, left:int, right:int) int {
+        var children:int[] = []
+        children.append(left)
+        children.append(right)
+        return self.emit_node(SyntaxNode(
+            kind:kind, scalar:0, ranges:[], negated:false,
+            minimum:0, maximum:0, greedy:true, capture_index:0, children:children
+        ))
+    }
+
+    func repeat_node(child:int, minimum:int, maximum:int, greedy:bool) int {
+        var children:int[] = []
+        children.append(child)
+        return self.emit_node(SyntaxNode(
+            kind:10, scalar:0, ranges:[], negated:false,
+            minimum:minimum, maximum:maximum, greedy:greedy, capture_index:0, children:children
+        ))
+    }
+}
+
+
+func single_piece(scalar:uint32) ClassPiece {
+    var ranges:ScalarRange[] = []
+    ranges.append(ScalarRange(first:scalar, last:scalar))
+    return ClassPiece(ranges:ranges, single:true, scalar:scalar)
+}
+
+func name_start_character(scalar:uint32) bool {
+    return (scalar >= 65 && scalar <= 90) || (scalar >= 97 && scalar <= 122) || scalar == 95
+}
+
+func name_character(scalar:uint32) bool {
+    return name_start_character(scalar) || digit(scalar)
+}
+
+func escaped_literal(token:uint32) bool {
+    return token == 92 || token == 46 || token == 43 || token == 42 || token == 63 ||
+        token == 40 || token == 41 || token == 91 || token == 93 || token == 123 ||
+        token == 125 || token == 124 || token == 94 || token == 36 || token == 45
+}
+
+func digit(scalar:uint32) bool { return scalar >= 48 && scalar <= 57 }

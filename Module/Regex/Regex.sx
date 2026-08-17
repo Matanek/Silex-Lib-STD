@@ -1,0 +1,271 @@
+use Interop.C
+use STD.Regex.Types.CompileErrorKind
+use STD.Regex.Types.CompileError
+use STD.Regex.Types.Options
+use STD.Regex.Syntax.Parser
+use STD.Regex.Compiler.Compiler
+use STD.Regex.Compiler.Program
+use STD.Regex.Engine.RawMatch
+use STD.Regex.Engine.find_in
+use STD.Regex.Engine.run_from
+use STD.Regex.Engine.decode_at
+
+public struct Capture {
+    private let source:str
+    private let first:int
+    private let last:int
+    private let first_byte:int
+    private let last_byte:int
+
+    internal init(source:str, first:int, last:int, first_byte:int, last_byte:int) {
+        self.source = source
+        self.first = first
+        self.last = last
+        self.first_byte = first_byte
+        self.last_byte = last_byte
+    }
+
+    public func start() int { return self.first }
+    public func end() int { return self.last }
+    public func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
+}
+
+public struct Match {
+    private let source:str
+    private let first:int
+    private let last:int
+    private let first_byte:int
+    private let last_byte:int
+    private let capture_starts:int[]
+    private let capture_ends:int[]
+    private let capture_names:str[]
+
+    internal init(
+        source:str,
+        first:int,
+        last:int,
+        first_byte:int,
+        last_byte:int,
+        capture_starts:int[],
+        capture_ends:int[],
+        capture_names:str[]
+    ) {
+        self.source = source
+        self.first = first
+        self.last = last
+        self.first_byte = first_byte
+        self.last_byte = last_byte
+        self.capture_starts = capture_starts
+        self.capture_ends = capture_ends
+        self.capture_names = capture_names
+    }
+
+    public func start() int { return self.first }
+    public func end() int { return self.last }
+    public func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
+    public func capture_count() int { return self.capture_names.count() - 1 }
+    internal func byte_start() int { return self.first_byte }
+    internal func byte_end() int { return self.last_byte }
+
+    public func capture(value:int) Capture? {
+        if value < 0 || value >= self.capture_names.count() { return null }
+        let first = self.capture_starts[value * 2]
+        let first_byte = self.capture_starts[value * 2 + 1]
+        let last = self.capture_ends[value * 2]
+        let last_byte = self.capture_ends[value * 2 + 1]
+        if first < 0 || last < 0 { return null }
+        return Capture(self.source, first, last, first_byte, last_byte)
+    }
+
+    public func capture(value:str) Capture? {
+        var index = 1
+        while index < self.capture_names.count() {
+            if self.capture_names[index] == value { return self.capture(index) }
+            index++
+        }
+        return null
+    }
+}
+
+public struct Regex {
+    internal let program:Program
+
+    internal init(program:Program) {
+        self.program = program
+    }
+
+    public static func compile(pattern:str, options:Options = Options()) Result<Regex, CompileError> {
+        var parser = Parser(pattern)
+        match parser.parse() {
+            failure(error) => { return Result<Regex, CompileError>.failure(error) }
+            success(syntax) => {
+                var compiler = Compiler()
+                return Result<Regex, CompileError>.success(
+                    Regex(compiler.compile(
+                        parser.syntax_nodes(),
+                        syntax,
+                        parser.capture_names(),
+                        options
+                    ))
+                )
+            }
+        }
+        panic("regex parser did not produce a result")
+    }
+
+    public func contains(text:str) bool {
+        return find_in(self.program, text, 0, 0) != null
+    }
+
+    public func first(text:str) Match? {
+        return public_match(text, self.program, find_in(self.program, text, 0, 0))
+    }
+
+    public func find(text:str) Cursor { return Cursor(self, text) }
+
+    public func match(text:str) bool {
+        if found = run_from(self.program, text, 0, 0) {
+            return found.last_byte == C.byte_count(text) as int
+        }
+        return false
+    }
+
+    public func all(text:str) Match[] {
+        var result:Match[] = []
+        var cursor = self.find(text)
+        while found = cursor.next() { result.append(found) }
+        return result
+    }
+
+    public func split(text:str) str[] { return split_text(self, text) }
+
+    public func replace_first(text:str, replacement:str) str {
+        return replace_text(self, text, replacement, false)
+    }
+
+    public func replace_all(text:str, replacement:str) str {
+        return replace_text(self, text, replacement, true)
+    }
+
+    public func replace_first(text:str, replacement:func(@Match) str) str {
+        return replace_text_with(self, text, replacement, false)
+    }
+
+    public func replace_all(text:str, replacement:func(@Match) str) str {
+        return replace_text_with(self, text, replacement, true)
+    }
+}
+
+public struct Cursor {
+    private let regex:Regex?
+    private let source:str
+    private var next_scalar:int
+    private var next_byte:int
+    private var finished:bool
+
+    internal init(regex:Regex, source:str) {
+        self.regex = regex
+        self.source = source
+        self.next_scalar = 0
+        self.next_byte = 0
+        self.finished = false
+    }
+
+    public func next() Match? {
+        if self.finished { return null }
+        if compiled = self.regex {
+        if raw = find_in(compiled.program, self.source, self.next_scalar, self.next_byte) {
+            if raw.last_byte > raw.first_byte {
+                self.next_scalar = raw.last
+                self.next_byte = raw.last_byte
+            } else {
+                if decoded = decode_at(self.source, raw.last_byte) {
+                    self.next_scalar = raw.last + 1
+                    self.next_byte = decoded.next_byte
+                } else { self.finished = true }
+            }
+            return public_match(self.source, compiled.program, raw)
+        }
+        }
+        self.finished = true
+        return null
+    }
+}
+
+func byte_slice(source:@str, first:int, last:int) str {
+    var bytes:uint8[] = []
+    var index = first
+    while index < last {
+        bytes.append(C.byte_at(source, index as uint))
+        index++
+    }
+    return C.string(@bytes[0:bytes.count()])
+}
+
+func public_match(source:str, program:@Program, raw:RawMatch?) Match? {
+    if found = raw {
+        var names:str[] = []
+        for name in program.capture_names { names.append(name) }
+        return Match(
+            source:source,
+            first:found.first,
+            last:found.last,
+            first_byte:found.first_byte,
+            last_byte:found.last_byte,
+            capture_starts:found.starts,
+            capture_ends:found.ends,
+            capture_names:names
+        )
+    }
+    return null
+}
+
+func split_text(regex:@Regex, source:str) str[] {
+    var result:str[] = []
+    var cursor = regex.find(source)
+    var first_byte = 0
+    while found = cursor.next() {
+        result.append(byte_slice(source, first_byte, found.byte_start()))
+        first_byte = found.byte_end()
+    }
+    result.append(byte_slice(source, first_byte, C.byte_count(source) as int))
+    return result
+}
+
+func replace_text(regex:@Regex, source:str, replacement:str, all:bool) str {
+    var output:uint8[] = []
+    var cursor = regex.find(source)
+    var first_byte = 0
+    while found = cursor.next() {
+        append_bytes(output, source, first_byte, found.byte_start())
+        append_bytes(output, replacement, 0, C.byte_count(replacement) as int)
+        first_byte = found.byte_end()
+        if !all { break }
+    }
+    append_bytes(output, source, first_byte, C.byte_count(source) as int)
+    return C.string(@output[0:output.count()])
+}
+
+func replace_text_with(regex:@Regex, source:str, replacement:func(@Match) str, all:bool) str {
+    var output:uint8[] = []
+    var cursor = regex.find(source)
+    var first_byte = 0
+    while found = cursor.next() {
+        append_bytes(output, source, first_byte, found.byte_start())
+        let inserted = replacement(found)
+        append_bytes(output, inserted, 0, C.byte_count(inserted) as int)
+        first_byte = found.byte_end()
+        if !all { break }
+    }
+    append_bytes(output, source, first_byte, C.byte_count(source) as int)
+    return C.string(@output[0:output.count()])
+}
+
+func append_bytes(output:&uint8[], source:@str, first:int, last:int) {
+    var index = first
+    while index < last {
+        output.append(C.byte_at(source, index as uint))
+        index++
+    }
+}
+

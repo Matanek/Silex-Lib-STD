@@ -1,0 +1,238 @@
+use STD.Regex
+use STD.Text.UTF8
+
+func compiled(pattern:str) Regex {
+    match Regex.compile(pattern) {
+        success(value) => { return value }
+        failure(error) => { panic("regex did not compile at $(error.scalar_index): $(error.detail)") }
+    }
+    panic("regex compilation did not produce a value")
+}
+
+func compiled_with(pattern:str, options:Regex.Options) Regex {
+    match Regex.compile(pattern, options) {
+        success(value) => { return value }
+        failure(error) => { panic("regex did not compile at $(error.scalar_index): $(error.detail)") }
+    }
+    panic("regex compilation did not produce a value")
+}
+
+func surround(found:@Regex.Match) str { return "<$(found.text())>" }
+
+func rejected(pattern:str, expected:Regex.CompileErrorKind, scalar_index:int) {
+    match Regex.compile(pattern) {
+        success(value) => { panic("invalid regex was accepted: $(pattern)") }
+        failure(error) => {
+            assert(error.kind == expected, "compile error kind")
+            assert(error.scalar_index == scalar_index, "compile error scalar position")
+            assert(error.detail.count() > 0, "compile error detail")
+        }
+    }
+}
+
+test "literal search uses Unicode scalar positions" {
+    let expression = compiled("été")
+    assert(expression.contains("un été Silex"), "literal occurrence")
+    assert(!expression.contains("un ETE Silex"), "literal matching is exact")
+    if found = expression.first("🙂 été !") {
+        assert(found.start() == 2, "match scalar start")
+        assert(found.end() == 5, "match scalar end")
+        assert(found.text() == "été", "matched Unicode text")
+        assert(found.capture_count() == 0, "literal has no explicit capture")
+        if whole = found.capture(0) {
+            assert(whole.start() == 2 && whole.end() == 5, "whole capture range")
+            assert(whole.text() == "été", "whole capture text")
+        } else { panic("whole match capture is absent") }
+    } else { panic("Unicode literal was not found") }
+}
+
+test "alternation classes and wildcard" {
+    let colors = compiled("gr(a|e)y")
+    assert(colors.match("gray"), "first alternative")
+    assert(colors.match("grey"), "second alternative")
+    assert(!colors.match("groy"), "missing alternative")
+
+    let identifier = compiled("[A-Za-z_][A-Za-z0-9_]*")
+    assert(identifier.match("silex_38"), "class and repetition")
+    assert(!identifier.match("38_silex"), "leading class")
+    assert(compiled("[^0-9]+").match("Silex🙂"), "negated class")
+    assert(compiled("a.c").match("a🙂c"), "wildcard consumes one scalar")
+    assert(!compiled("a.c").match("a\nc"), "wildcard excludes line terminators")
+}
+
+test "escapes and shorthand classes" {
+    assert(compiled("\\d+").match("2048"), "decimal digits")
+    assert(compiled("\\d+").match("２０４８"), "Unicode decimal digits")
+    assert(compiled("\\w+").match("Silex_κόσμος38"), "Unicode word characters")
+    assert(compiled("\\s+").match("\t\u{2003}\n"), "Unicode whitespace")
+    assert(compiled("\\D+").match("abc🙂"), "negated digit shorthand")
+    assert(compiled("[\\w-]+").match("silex-lang"), "shorthand inside class")
+    assert(compiled("a\\+b").match("a+b"), "escaped metacharacter")
+}
+
+test "alternatives are leftmost first and quantifiers are greedy" {
+    assert(compiled("ab*").match("abbb"), "star")
+    assert(compiled("ab+").match("ab"), "plus")
+    assert(compiled("colou?r").match("color"), "optional absent")
+    assert(compiled("colou?r").match("colour"), "optional present")
+    assert(compiled("a{2}").match("aa"), "exact bound")
+    assert(compiled("a{2,4}").match("aaaa"), "closed bounds")
+    assert(compiled("a{2,}").match("aaaaaa"), "open bound")
+    assert(compiled("a{10}").match("aaaaaaaaaa"), "compact exact bound")
+    assert(compiled("(?:ab){5}").match("ababababab"), "compact fixed-width group")
+    if found = compiled("a{2,10}").first("aaaaaaaaaa") {
+        assert(found.text() == "aaaaaaaaaa", "compact greedy bound")
+    } else { panic("compact greedy repetition was not found") }
+    if found = compiled("a{2,10}?").first("aaaaaaaaaa") {
+        assert(found.text() == "aa", "compact lazy bound")
+    } else { panic("compact lazy repetition was not found") }
+    assert(compiled("(a?){5}").match("aaa"), "nullable finite repetition")
+
+    if found = compiled("a|aaa|aa").first("baaa") {
+        assert(found.start() == 1 && found.end() == 2, "first alternative at earliest start")
+        assert(found.text() == "a", "leftmost-first text")
+    } else { panic("alternation was not found") }
+
+    if found = compiled("a+?").first("baaa") {
+        assert(found.text() == "a", "lazy plus stops at the first accepted length")
+    } else { panic("lazy repetition was not found") }
+}
+
+test "options control Unicode case lines and dot" {
+    let insensitive = compiled_with("été", Regex.Options(case_insensitive:true))
+    assert(insensitive.match("ÉTÉ"), "Unicode simple case folding")
+    let insensitive_class = compiled_with("[A-Z]+", Regex.Options(case_insensitive:true))
+    assert(insensitive_class.match("silex"), "case-insensitive class")
+
+    let lines = compiled_with("^Silex$", Regex.Options(multi_line:true))
+    if found = lines.first("first\nSilex\nlast") {
+        assert(found.text() == "Silex", "multiline anchors")
+    } else { panic("multiline match was not found") }
+
+    let dot = compiled_with("a.b", Regex.Options(dot_matches_newline:true))
+    assert(dot.match("a\nb"), "dot-all option")
+}
+
+test "groups can be named or noncapturing" {
+    let expression = compiled("(?<word>\\w+)-(?:v)(?<version>\\d+)")
+    if found = expression.first("Silex-v38") {
+        assert(found.capture_count() == 2, "noncapturing group is not numbered")
+        if word = found.capture("word") { assert(word.text() == "Silex", "named word") }
+        else { panic("named word is absent") }
+        if version = found.capture("version") { assert(version.text() == "38", "named version") }
+        else { panic("named version is absent") }
+        assert(found.capture("missing") == null, "unknown capture name")
+    } else { panic("named captures were not found") }
+}
+
+test "Unicode properties and word boundaries" {
+    assert(compiled("\\p{L}+").match("Étéκόσμος"), "letter property")
+    assert(compiled("\\p{Nd}+").match("１２３"), "decimal property")
+    assert(compiled("\\P{N}+").match("Silex🙂"), "negated number property")
+    assert(compiled("[\\p{L}\\p{N}_]+").match("Silex_３8"), "properties in class")
+    if found = compiled("\\bκόσμος\\b").first("un κόσμος ici") {
+        assert(found.text() == "κόσμος", "Unicode word boundaries")
+    } else { panic("word boundary match was not found") }
+}
+
+test "cursor split and replacements support consuming workflows" {
+    let words = compiled("\\w+")
+    var iterated:str[] = []
+    for found in words.find("one two three") { iterated.append(found.text()) }
+    assert(iterated.count() == 3, "direct cursor iteration count")
+    assert(iterated[0] == "one" && iterated[1] == "two" && iterated[2] == "three", "direct cursor iteration")
+
+    var cursor = words.find("one two three")
+    if first = cursor.next() { assert(first.text() == "one", "cursor first match") }
+    else { panic("cursor is empty") }
+    if second = cursor.next() { assert(second.text() == "two", "cursor second match") }
+    else { panic("cursor stopped early") }
+
+    let fields = compiled("\\s*,\\s*").split("one, two,three")
+    assert(fields.count() == 3, "split field count")
+    assert(fields[0] == "one" && fields[1] == "two" && fields[2] == "three", "split fields")
+    assert(compiled("\\d+").replace_first("v12 then 34", "#") == "v# then 34", "first literal replacement")
+    assert(compiled("\\d+").replace_all("12 and 34", "#") == "# and #", "all literal replacements")
+    assert(words.replace_all("one two", surround) == "<one> <two>", "callback replacement")
+    let empty_fields = compiled("").split("ab")
+    assert(empty_fields.count() == 4, "zero-width split field count")
+    assert(empty_fields[0] == "" && empty_fields[1] == "a" && empty_fields[2] == "b" && empty_fields[3] == "", "zero-width split")
+    assert(compiled("").replace_all("ab", "-") == "-a-b-", "zero-width replacement")
+}
+
+test "streaming search handles a large text" {
+    var scalars:uint32[] = []
+    var index = 0
+    while index < 200_000 { scalars.append(97 as uint32); index++ }
+    scalars.append(90 as uint32)
+    match UTF8.from_scalars(@scalars[0:scalars.count()]) {
+        success(text) => {
+            if found = compiled("Z$").first(text) {
+                assert(found.start() == 200_000, "large input scalar position")
+            } else { panic("large input suffix was not found") }
+        }
+        failure(error) => { panic("large test text was invalid") }
+    }
+}
+
+test "anchors and complete matching" {
+    let line = compiled("^Silex$")
+    assert(line.contains("Silex"), "absolute anchors")
+    assert(!line.contains("A Silex"), "start anchor")
+    assert(!line.contains("Silex language"), "end anchor")
+    assert(compiled("Silex").contains("the Silex language"), "search finds a substring")
+    assert(!compiled("Silex").match("the Silex language"), "complete match rejects surrounding text")
+}
+
+test "captures preserve the last participating repetition" {
+    let expression = compiled("([A-Za-z]+)-([0-9]+)(-([A-Za-z]+))?")
+    if found = expression.first("id: Silex-38") {
+        assert(found.capture_count() == 4, "capture count")
+        if name = found.capture(1) { assert(name.text() == "Silex", "first capture") }
+        else { panic("first capture is absent") }
+        if version = found.capture(2) { assert(version.text() == "38", "second capture") }
+        else { panic("second capture is absent") }
+        assert(found.capture(3) == null, "optional outer capture is absent")
+        assert(found.capture(4) == null, "optional inner capture is absent")
+        assert(found.capture(5) == null, "out-of-range capture is absent")
+    } else { panic("capturing expression was not found") }
+
+    if found = compiled("(ab)+").first("abab") {
+        if capture = found.capture(1) { assert(capture.text() == "ab", "last repeated capture") }
+        else { panic("repeated capture is absent") }
+    } else { panic("repeated capture was not found") }
+}
+
+test "all is non-overlapping and advances after empty matches" {
+    let words = compiled("[A-Za-z]+")
+    let found = words.all("one, two, three")
+    assert(found.count() == 3, "all words")
+    assert(found[0].text() == "one", "first word")
+    assert(found[1].text() == "two", "second word")
+    assert(found[2].text() == "three", "third word")
+
+    let pairs = compiled("aa").all("aaaaa")
+    assert(pairs.count() == 2, "matches do not overlap")
+    assert(pairs[0].start() == 0 && pairs[1].start() == 2, "non-overlapping positions")
+
+    let boundaries = compiled("").all("ab")
+    assert(boundaries.count() == 3, "empty expression visits every boundary once")
+    assert(boundaries[0].start() == 0, "first empty boundary")
+    assert(boundaries[1].start() == 1, "middle empty boundary")
+    assert(boundaries[2].start() == 2, "last empty boundary")
+}
+
+test "compile errors are structured" {
+    rejected("\\q", Regex.CompileErrorKind.invalid_escape(), 0)
+    rejected("[z-a]", Regex.CompileErrorKind.invalid_range(), 2)
+    rejected("[abc", Regex.CompileErrorKind.unclosed_class(), 0)
+    rejected("(abc", Regex.CompileErrorKind.unclosed_group(), 0)
+    rejected("*abc", Regex.CompileErrorKind.invalid_quantifier(), 0)
+    rejected("a{4,2}", Regex.CompileErrorKind.invalid_quantifier(), 1)
+    rejected("a**", Regex.CompileErrorKind.invalid_quantifier(), 2)
+    rejected("(?=a)", Regex.CompileErrorKind.unsupported_construct(), 1)
+    rejected("(?<1>a)", Regex.CompileErrorKind.invalid_group_name(), 3)
+    rejected("(?<name>a)(?<name>b)", Regex.CompileErrorKind.duplicate_group_name(), 13)
+    rejected("\\p{Unknown}", Regex.CompileErrorKind.invalid_escape(), 0)
+    rejected("\\1", Regex.CompileErrorKind.invalid_escape(), 0)
+}

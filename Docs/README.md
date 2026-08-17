@@ -14,6 +14,7 @@ protocol implementations carried by internal types.
 | Build a terminal application | `Console`, `Console.Session` | [Console](Console.md) |
 | Store, traverse and transform values | `Collections.*`, `Iterator`, `Algorithms.*` | [Collections](Collections.md), [Algorithms](Algorithms.md) |
 | Parse or produce JSON | `JSON` | [JSON](JSON.md) |
+| Search and capture structured text | `Regex` | [Regular expressions](Regex.md) |
 | Work with paths, files and directories | `Path`, `File`, `FileSystem`, `IO` | [Files and paths](Files.md) |
 | Normalize, segment and encode Unicode text | `Text`, `Text.UTF8`, `Text.Grapheme`, `Text.Encoding` | [Text](Text.md) |
 | Resolve names and exchange network data | `Network`, `Network.TCP`, `Network.UDP` | [Network](Network.md) |

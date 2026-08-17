@@ -72,14 +72,21 @@ internal struct Decoded {
 }
 
 internal func find_in(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
-    return search(program, source, first, first_byte, true)
+    return search(program, source, first, first_byte, true, false)
 }
 
 internal func run_from(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
-    return search(program, source, first, first_byte, false)
+    return search(program, source, first, first_byte, false, true)
 }
 
-func search(program:@Program, source:@str, first:int, first_byte:int, unanchored:bool) RawMatch? {
+func search(
+    program:@Program,
+    source:@str,
+    first:int,
+    first_byte:int,
+    unanchored:bool,
+    require_end:bool
+) RawMatch? {
     var starts:int[] = []
     var ends:int[] = []
     var counters:int[] = []
@@ -140,6 +147,7 @@ func search(program:@Program, source:@str, first:int, first_byte:int, unanchored
         }
         for thread in current.values {
             if program.states[thread.state].kind == 10 {
+                if require_end && decoded != null { continue }
                 var accepted_starts = thread.starts
                 var accepted_ends = thread.ends
                 if accepted_starts.count() == 0 {

@@ -58,6 +58,7 @@ test "alternation classes and wildcard" {
     assert(compiled("[^0-9]+").match("Silex🙂"), "negated class")
     assert(compiled("a.c").match("a🙂c"), "wildcard consumes one scalar")
     assert(!compiled("a.c").match("a\nc"), "wildcard excludes line terminators")
+    assert(compiled("a|aaa").match("aaa"), "whole match keeps viable longer alternatives")
 }
 
 test "escapes and shorthand classes" {
@@ -68,6 +69,46 @@ test "escapes and shorthand classes" {
     assert(compiled("\\D+").match("abc🙂"), "negated digit shorthand")
     assert(compiled("[\\w-]+").match("silex-lang"), "shorthand inside class")
     assert(compiled("a\\+b").match("a+b"), "escaped metacharacter")
+}
+
+test "presets expose common compiled expressions" {
+    let digit = Regex.Presets.digit()
+    assert(digit.match("7"), "ASCII digit preset")
+    assert(digit.match("７"), "Unicode digit preset")
+    assert(!digit.match("42"), "digit means exactly one digit")
+
+    let digits = Regex.Presets.digits()
+    assert(digits.match("２０４８"), "Unicode digits preset")
+    assert(!digits.match("38a"), "digits reject non-digits")
+
+    let ipv4 = Regex.Presets.ipv4()
+    assert(ipv4.match("192.168.0.1"), "IPv4 preset")
+    assert(ipv4.match("0.0.0.0"), "minimum IPv4 octets")
+    assert(ipv4.match("255.255.255.255"), "maximum IPv4 octets")
+    assert(!ipv4.match("256.1.1.1"), "IPv4 octets stay bounded")
+    assert(!ipv4.match("01.2.3.4"), "IPv4 rejects leading zeroes")
+
+    let ipv6 = Regex.Presets.ipv6()
+    assert(ipv6.match("2001:db8:85a3:0:0:8a2e:370:7334"), "full IPv6 preset")
+    assert(ipv6.match("2001:db8::1"), "compressed IPv6 preset")
+    assert(ipv6.match("::1"), "IPv6 loopback")
+    assert(ipv6.match("::"), "unspecified IPv6 address")
+    assert(!ipv6.match("2001:db8:::1"), "invalid IPv6 compression")
+
+    let email = Regex.Presets.email()
+    assert(email.match("hello@silex-lang.org"), "email preset")
+    assert(email.match("team+compiler@example.co.uk"), "email tags and subdomains")
+    assert(!email.match("hello@example"), "email requires a qualified domain")
+    assert(!email.match("@example.org"), "email requires a local part")
+
+    var addresses = email.find("one@example.org then two@silex-lang.org")
+    if first = addresses.next() { assert(first.text() == "one@example.org", "first preset cursor match") }
+    else { panic("email preset cursor did not yield its first match") }
+    if second = addresses.next() { assert(second.text() == "two@silex-lang.org", "second preset cursor match") }
+    else { panic("email preset cursor did not yield its second match") }
+    assert(addresses.next() == null, "preset cursor reaches exhaustion")
+
+    assert(Regex.Presets.ipv4().match("127.0.0.1"), "preset can be requested repeatedly")
 }
 
 test "alternatives are leftmost first and quantifiers are greedy" {

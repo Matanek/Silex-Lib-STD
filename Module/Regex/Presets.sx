@@ -1,0 +1,94 @@
+use STD.Regex.Regex.Regex
+
+func compiled(pattern:str) Regex {
+    match Regex.compile(pattern) {
+        success(expression) => { return expression }
+        failure(error) => { panic("invalid built-in Regex preset: $(error.detail)") }
+    }
+    panic("built-in Regex preset was not produced")
+}
+
+class CachedRegex {
+    let expression:Regex?
+
+    internal init(expression:Regex) { self.expression = expression }
+
+    internal func get() Regex {
+        if value = self.expression { return value }
+        panic("built-in Regex preset cache is empty")
+    }
+}
+
+class Cache {
+    private static var digit_entry:CachedRegex? = null
+    private static var digits_entry:CachedRegex? = null
+    private static var ipv4_entry:CachedRegex? = null
+    private static var ipv6_entry:CachedRegex? = null
+    private static var email_entry:CachedRegex? = null
+
+    internal static func digit() Regex {
+        mutex {
+            if var cached = Cache.digit_entry { return cached.get() }
+            var cached = CachedRegex(compiled("\\d"))
+            Cache.digit_entry = cached
+            return cached.get()
+        }
+    }
+
+    internal static func digits() Regex {
+        mutex {
+            if var cached = Cache.digits_entry { return cached.get() }
+            var cached = CachedRegex(compiled("\\d+"))
+            Cache.digits_entry = cached
+            return cached.get()
+        }
+    }
+
+    internal static func ipv4() Regex {
+        mutex {
+            if var cached = Cache.ipv4_entry { return cached.get() }
+            let octet = "(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)"
+            var cached = CachedRegex(compiled("$(octet)(?:\\.$(octet)){3}"))
+            Cache.ipv4_entry = cached
+            return cached.get()
+        }
+    }
+
+    internal static func ipv6() Regex {
+        mutex {
+            if var cached = Cache.ipv6_entry { return cached.get() }
+            let hex = "[0-9A-Fa-f]{1,4}"
+            var cached = CachedRegex(compiled(
+                "(?:(?:$(hex):){7}$(hex)|" +
+                "(?:$(hex):){1,6}:$(hex)|" +
+                "(?:$(hex):){1,5}(?::$(hex)){1,2}|" +
+                "(?:$(hex):){1,4}(?::$(hex)){1,3}|" +
+                "(?:$(hex):){1,3}(?::$(hex)){1,4}|" +
+                "(?:$(hex):){1,2}(?::$(hex)){1,5}|" +
+                "$(hex):(?:(?::$(hex)){1,6})|" +
+                "(?:$(hex):){1,7}:|" +
+                ":(?:(?::$(hex)){1,7}|:))"
+            ))
+            Cache.ipv6_entry = cached
+            return cached.get()
+        }
+    }
+
+    internal static func email() Regex {
+        mutex {
+            if var cached = Cache.email_entry { return cached.get() }
+            let label = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+            var cached = CachedRegex(compiled(
+                "[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@$(label)(?:\\.$(label))+"
+            ))
+            Cache.email_entry = cached
+            return cached.get()
+        }
+    }
+}
+
+public func digit() Regex { return Cache.digit() }
+public func digits() Regex { return Cache.digits() }
+public func ipv4() Regex { return Cache.ipv4() }
+public func ipv6() Regex { return Cache.ipv6() }
+public func email() Regex { return Cache.email() }

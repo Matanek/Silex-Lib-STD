@@ -29,6 +29,34 @@ var cursor = expression.find(text)
 while found = cursor.next() { print(found.text()) }
 ```
 
+## Presets
+
+`Regex.Presets` provides common expressions without mixing domain names into
+the core `Regex` type. On first use, each function calls `Regex.compile` with a
+maintained pattern and caches the resulting ordinary `Regex` inside `Presets`.
+Later calls return that value; the `Regex` type and engine have no preset-specific
+path. Store the returned value when it will be used repeatedly.
+
+```sx
+let email = Regex.Presets.email()
+if email.contains(message) { print("an email address is present") }
+
+if Regex.Presets.ipv4().match("192.168.1.20") { print("valid IPv4") }
+if Regex.Presets.ipv6().match("2001:db8::38") { print("valid IPv6") }
+if Regex.Presets.digit().match("７") { print("one Unicode digit") }
+```
+
+- `digit()` covers exactly one Unicode decimal digit;
+- `digits()` covers one or more Unicode decimal digits;
+- `ipv4()` accepts four decimal octets from 0 through 255 without leading zeroes;
+- `ipv6()` accepts full and `::`-compressed hexadecimal IPv6 addresses;
+- `email()` recognizes practical mailbox addresses with a qualified DNS domain.
+
+`email()` intentionally targets common application input rather than every
+address permitted by the complete email RFC grammar. `ipv6()` does not include
+the embedded-IPv4 notation; use a domain-specific parser when that distinction
+or canonicalization matters.
+
 Matching follows the common leftmost-first convention: the earliest start wins,
 then the first viable alternative in pattern order. Quantifiers are greedy unless
 followed by `?`; `a+` prefers the longest viable run while `a+?` prefers the

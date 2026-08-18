@@ -46,13 +46,8 @@ Compile the complete catalogue from the workspace root with:
 - [WaitForConfirmation.sx](Console/WaitForConfirmation.sx) — pause a command
   until Enter is pressed. Interactive input is required.
 
-## JSON and text
+## Text
 
-- [ReadConfiguration.sx](JSON/ReadConfiguration.sx) — parse a configuration and
-  report source-located errors.
-- [WriteReport.sx](JSON/WriteReport.sx) — construct and pretty-print JSON.
-- [InspectValueKinds.sx](JSON/InspectValueKinds.sx) — inspect every JSON value
-  kind through its typed projection.
 - [ExtractContacts.sx](Regex/ExtractContacts.sx) — compile a regular expression,
   iterate lazily over contacts and read named captures.
 - [NormalizeLog.sx](Regex/NormalizeLog.sx) — replace matches with a callback and

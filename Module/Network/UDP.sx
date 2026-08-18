@@ -12,6 +12,8 @@ public struct Receive {
     let truncated:bool
 }
 
+// Public opaque socket handle. Applications may store and pass it, while UDP
+// owns its construction and descriptor access through module operations.
 public class Socket {
     private var descriptor:int
     private var closed:bool

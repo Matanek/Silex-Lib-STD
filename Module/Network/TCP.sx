@@ -61,6 +61,8 @@ public class Stream : IO.Reader, IO.Writer {
     }
 }
 
+// Public opaque listener handle. Applications may store and pass it, while
+// TCP owns its construction and descriptor access through module operations.
 public class Listener {
     private var descriptor:int
     private var closed:bool

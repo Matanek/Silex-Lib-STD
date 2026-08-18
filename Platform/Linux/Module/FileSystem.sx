@@ -2,8 +2,8 @@ use Interop.C
 use Interop.Boundary
 use STD.Text.UTF8
 
-internal struct RawMetadata { public let kind:int; public let size:int; public let readonly:bool }
-internal struct RawEntry { public let name:str; public let kind:int }
+struct RawMetadata { let kind:int; let size:int; let readonly:bool }
+struct RawEntry { let name:str; let kind:int }
 
 func metadata_kind(value:RawMetadata) int { return value.kind }
 func metadata_size(value:RawMetadata) int { return value.size }

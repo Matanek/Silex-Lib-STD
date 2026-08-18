@@ -1,12 +1,12 @@
 use Interop.C
 use STD.Text.Data
 
-internal struct ScalarRange {
+struct ScalarRange {
     let first:uint32
     let last:uint32
 }
 
-internal func normalized_ranges(values:ScalarRange[]) ScalarRange[] {
+func normalized_ranges(values:ScalarRange[]) ScalarRange[] {
     var sorted:ScalarRange[] = []
     for value in values {
         var index = sorted.count()
@@ -30,11 +30,11 @@ internal func normalized_ranges(values:ScalarRange[]) ScalarRange[] {
     return result
 }
 
-internal func digit_ranges() ScalarRange[] { return decoded_ranges(Data.regex_decimal_ranges()) }
-internal func word_ranges() ScalarRange[] { return decoded_ranges(Data.regex_word_ranges()) }
-internal func whitespace_ranges() ScalarRange[] { return decoded_ranges(Data.regex_whitespace_ranges()) }
+func digit_ranges() ScalarRange[] { return decoded_ranges(Data.regex_decimal_ranges()) }
+func word_ranges() ScalarRange[] { return decoded_ranges(Data.regex_word_ranges()) }
+func whitespace_ranges() ScalarRange[] { return decoded_ranges(Data.regex_whitespace_ranges()) }
 
-internal func property_ranges(name:str) ScalarRange[]? {
+func property_ranges(name:str) ScalarRange[]? {
     if name == "L" || name == "Letter" { return decoded_ranges(Data.regex_letter_ranges()) }
     if name == "M" || name == "Mark" { return decoded_ranges(Data.regex_mark_ranges()) }
     if name == "N" || name == "Number" { return decoded_ranges(Data.regex_number_ranges()) }
@@ -47,7 +47,7 @@ internal func property_ranges(name:str) ScalarRange[]? {
     return null
 }
 
-internal func in_ranges(ranges:@ScalarRange[], scalar:uint32) bool {
+func in_ranges(ranges:@ScalarRange[], scalar:uint32) bool {
     var first = 0
     var last = ranges.count()
     while first < last {
@@ -58,7 +58,7 @@ internal func in_ranges(ranges:@ScalarRange[], scalar:uint32) bool {
     return first < ranges.count() && ranges[first].first <= scalar
 }
 
-internal func complement(ranges:ScalarRange[]) ScalarRange[] {
+func complement(ranges:ScalarRange[]) ScalarRange[] {
     var result:ScalarRange[] = []
     var first:uint32 = 0
     for interval in ranges {

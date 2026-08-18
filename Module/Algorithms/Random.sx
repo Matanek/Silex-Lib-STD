@@ -18,11 +18,11 @@ public func shuffle<T>(randomizer:Randomizer, values:&T[..]) {
 }
 
 extend Randomizer {
-    public func choose<T>(values:@T[..]) @T {
+    func choose<T>(values:@T[..]) @T {
         return choose<T>(self, values)
     }
 
-    public func shuffle<T>(values:&T[..]) {
+    func shuffle<T>(values:&T[..]) {
         shuffle<T>(self, values)
     }
 }

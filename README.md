@@ -11,13 +11,15 @@ use STD.Console
 Start with [Docs/README.md](Docs/README.md) to choose a capability, then use the
 focused programs in [Examples/README.md](Examples/README.md) as executable
 starting points. Examples are organized by application intent rather than by
-the internal platform implementation.
+platform implementation details.
 
 The repository root is the `STD` package root. `Package.json` declares the
 package, `Module/` contains its portable Silex API and `Platform/` supplies the
-system boundary selected by the compiler. Platform implementations remain
-internal to STD; applications import capabilities such as `STD.File` or
-`STD.Network.TCP`, never an operating-system module.
+system boundary selected by the compiler. Helpers shared only by fragments of
+one logical module are module-visible; collaboration between distinct STD
+modules is explicitly package-visible. Neither category belongs to the public
+API: applications import capabilities such as `STD.File` or `STD.Network.TCP`,
+never an operating-system module.
 
 Within every `Module/` root, STD writes the complete logical module path in the
 `.sx` filename. Dots make the source tree mirror `use` declarations directly:

@@ -3,7 +3,7 @@ use Interop.Boundary
 use STD.Text.Encoding
 use STD.Text.UTF8
 
-internal struct RawOutput { let status:int; let signaled:bool; let stdout:uint8[]; let stderr:uint8[]; let limited:bool; let error:int }
+struct RawOutput { let status:int; let signaled:bool; let stdout:uint8[]; let stderr:uint8[]; let limited:bool; let error:int }
 struct PipeResult { let valid:bool; let read:uint; let write:uint }
 func output_status(value:RawOutput) int { return value.status }
 func output_signaled(value:RawOutput) bool { return value.signaled }

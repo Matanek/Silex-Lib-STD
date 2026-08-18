@@ -5,13 +5,13 @@ public struct Queue<T> {
     private var back:T[]
     private var reserved_capacity:int
 
-    public init() {
+    init() {
         self.front = []
         self.back = []
         self.reserved_capacity = 0
     }
 
-    public init(minimum_capacity:int) {
+    init(minimum_capacity:int) {
         if minimum_capacity < 0 {
             panic("Queue requires a non-negative minimum capacity")
         }
@@ -20,11 +20,11 @@ public struct Queue<T> {
         self.reserved_capacity = minimum_capacity
     }
 
-    public func count() int {
+    func count() int {
         return self.front.count() + self.back.count()
     }
 
-    public func capacity() int {
+    func capacity() int {
         let count = self.count()
         if self.reserved_capacity < count {
             return count
@@ -32,11 +32,11 @@ public struct Queue<T> {
         return self.reserved_capacity
     }
 
-    public func is_empty() bool {
+    func is_empty() bool {
         return self.front.is_empty() && self.back.is_empty()
     }
 
-    public func contains(value:@T) bool {
+    func contains(value:@T) bool {
         var index = self.front.count() - 1
         while index >= 0 {
             if self.front[index] == value {
@@ -54,7 +54,7 @@ public struct Queue<T> {
         return false
     }
 
-    public func add(value:T) {
+    func add(value:T) {
         if self.is_empty() {
             self.front.append(value)
         } else {
@@ -73,7 +73,7 @@ public struct Queue<T> {
         }
     }
 
-    public func take() T? {
+    func take() T? {
         self.prepare_front()
         if self.front.is_empty() {
             return null
@@ -83,14 +83,14 @@ public struct Queue<T> {
         return value
     }
 
-    public func peek() & T {
+    func peek() & T {
         if self.front.is_empty() {
             panic("Queue.peek requires a value")
         }
         return &self.front[-1]
     }
 
-    public func remove(value:@T) bool {
+    func remove(value:@T) bool {
         var index = self.front.count() - 1
         while index >= 0 {
             if self.front[index] == value {
@@ -111,7 +111,7 @@ public struct Queue<T> {
         return false
     }
 
-    public func reserve(minimum_capacity:int) {
+    func reserve(minimum_capacity:int) {
         if minimum_capacity < 0 {
             panic("Queue.reserve requires a non-negative minimum capacity")
         }
@@ -120,13 +120,13 @@ public struct Queue<T> {
         }
     }
 
-    public func clear() {
+    func clear() {
         while !self.is_empty() {
             self.take()
         }
     }
 
-    public func iterator() Iterator<T> {
+    func iterator() Iterator<T> {
         var result = Iterator<T>.empty()
         var index = self.front.count() - 1
         while index >= 0 {

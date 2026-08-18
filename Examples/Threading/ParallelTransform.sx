@@ -1,8 +1,8 @@
 use STD.Threading
 
 class Values {
-    public var items:int[]
-    public func double_range(start:int, end:int) {
+    var items:int[]
+    func double_range(start:int, end:int) {
         var index = start
         while index < end {
             self.items[index] *= 2

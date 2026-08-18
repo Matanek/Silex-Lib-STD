@@ -1,4 +1,4 @@
-internal func digest(input:@uint8[..]) uint8[20] {
+func digest(input:@uint8[..]) uint8[20] {
     let message = padded(input)
     var state0:uint32 = 0x67452301
     var state1:uint32 = 0xefcdab89

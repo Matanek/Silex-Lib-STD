@@ -11,7 +11,7 @@ struct Thread {
     let ends:int[]
     let counters:int[]
 
-    internal init(
+    init(
         state:int, first:int, first_byte:int, starts:int[], ends:int[], counters:int[] = []
     ) {
         self.state = state
@@ -24,17 +24,17 @@ struct Thread {
 }
 
 class ThreadSet {
-    internal var values:Thread[]
-    internal var seen:bool[]
-    internal var pending:Thread[]
+    var values:Thread[]
+    var seen:bool[]
+    var pending:Thread[]
 
-    internal init(state_count:int) {
+    init(state_count:int) {
         self.values = []
         self.seen = seen_states(state_count)
         self.pending = []
     }
 
-    internal func clear() {
+    func clear() {
         self.values.clear()
         var index = 0
         while index < self.seen.count() {
@@ -44,20 +44,20 @@ class ThreadSet {
         self.pending.clear()
     }
 
-    internal func begin(initial:Thread) {
+    func begin(initial:Thread) {
         self.pending.clear()
         self.pending.append(initial)
     }
 
-    internal func has_pending() bool { return self.pending.count() > 0 }
-    internal func take_pending() Thread { return self.pending.take_last() }
-    internal func was_seen(state:int) bool { return self.seen[state] }
-    internal func mark_seen(state:int) { self.seen[state] = true }
-    internal func schedule(thread:Thread) { self.pending.append(thread) }
-    internal func append(thread:Thread) { self.values.append(thread) }
+    func has_pending() bool { return self.pending.count() > 0 }
+    func take_pending() Thread { return self.pending.take_last() }
+    func was_seen(state:int) bool { return self.seen[state] }
+    func mark_seen(state:int) { self.seen[state] = true }
+    func schedule(thread:Thread) { self.pending.append(thread) }
+    func append(thread:Thread) { self.values.append(thread) }
 }
 
-internal struct RawMatch {
+struct RawMatch {
     let first:int
     let last:int
     let first_byte:int
@@ -66,16 +66,16 @@ internal struct RawMatch {
     let ends:int[]
 }
 
-internal struct Decoded {
+struct Decoded {
     let scalar:uint32
     let next_byte:int
 }
 
-internal func find_in(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
+func find_in(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
     return search(program, source, first, first_byte, true, false)
 }
 
-internal func run_from(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
+func run_from(program:@Program, source:@str, first:int, first_byte:int) RawMatch? {
     return search(program, source, first, first_byte, false, true)
 }
 
@@ -430,7 +430,7 @@ func literal_matches(program:@Program, expected:uint32, scalar:uint32) bool {
     return expected == scalar
 }
 
-internal func decode_at(source:@str, byte_offset:int) Decoded? {
+func decode_at(source:@str, byte_offset:int) Decoded? {
     let byte_count = C.byte_count(source) as int
     if byte_offset >= byte_count { return null }
     let first = C.byte_at(source, byte_offset as uint) as uint32

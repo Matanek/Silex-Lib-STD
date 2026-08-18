@@ -1,8 +1,8 @@
 use STD.Threading
 
 class Results {
-    public var first:int
-    public var second:int
+    var first:int
+    var second:int
 }
 
 struct First:Threading.Job {

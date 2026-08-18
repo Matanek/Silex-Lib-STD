@@ -7,12 +7,12 @@ public class File : IO.Reader, IO.Writer {
     private var descriptor:int
     private var closed:bool
 
-    internal init(descriptor:int) {
+    module init(descriptor:int) {
         self.descriptor = descriptor
         self.closed = false
     }
 
-    public func read(buffer:&uint8[..]) Result<int, Error> {
+    func read(buffer:&uint8[..]) Result<int, Error> {
         if self.closed { return Result<int, Error>.failure(file_error("file.read", null, "file is closed")) }
         var index = 0
         while index < buffer.count() {
@@ -25,7 +25,7 @@ public class File : IO.Reader, IO.Writer {
         return Result<int, Error>.success(index)
     }
 
-    public func write(buffer:@uint8[..]) Result<int, Error> {
+    func write(buffer:@uint8[..]) Result<int, Error> {
         if self.closed { return Result<int, Error>.failure(file_error("file.write", null, "file is closed")) }
         var index = 0
         while index < buffer.count() {
@@ -37,36 +37,36 @@ public class File : IO.Reader, IO.Writer {
         return Result<int, Error>.success(index)
     }
 
-    public func flush() Result<void, Error> {
+    func flush() Result<void, Error> {
         if self.closed { return Result<void, Error>.failure(file_error("file.flush", null, "file is closed")) }
         if Platform.flush(self.descriptor) { return Result<void, Error>.success() }
         return Result<void, Error>.failure(file_error("file.flush", null, "system flush failed"))
     }
 
-    public func seek(offset:int, from:SeekFrom) Result<int, Error> {
+    func seek(offset:int, from:SeekFrom) Result<int, Error> {
         if self.closed { return Result<int, Error>.failure(file_error("file.seek", null, "file is closed")) }
         let position = Platform.seek(self.descriptor, offset, seek_code(from))
         if position >= 0 { return Result<int, Error>.success(position) }
         return Result<int, Error>.failure(file_error("file.seek", null, "system seek failed"))
     }
 
-    public func position() Result<int, Error> { return self.seek(0, SeekFrom.current()) }
+    func position() Result<int, Error> { return self.seek(0, SeekFrom.current()) }
 
-    public func length() Result<int, Error> {
+    func length() Result<int, Error> {
         let original = try self.position()
         let result = try self.seek(0, SeekFrom.end())
         let ignored = try self.seek(original, SeekFrom.start())
         return Result<int, Error>.success(result)
     }
 
-    public func set_length(length:int) Result<void, Error> {
+    func set_length(length:int) Result<void, Error> {
         if length < 0 { return Result<void, Error>.failure(file_error("file.set_length", null, "length must be non-negative")) }
         if self.closed { return Result<void, Error>.failure(file_error("file.set_length", null, "file is closed")) }
         if Platform.set_length(self.descriptor, length) { return Result<void, Error>.success() }
         return Result<void, Error>.failure(file_error("file.set_length", null, "system truncate failed"))
     }
 
-    internal func close_handle() bool {
+    module func close_handle() bool {
         if self.closed { return false }
         self.closed = true
         return Platform.close(self.descriptor)

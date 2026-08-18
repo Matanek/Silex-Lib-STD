@@ -5,7 +5,7 @@ use STD.Iterator
 public struct Set<T> {
     private var entries:Dictionary<T, bool>
 
-    public init(
+    init(
         hash:func(@T) uint = Hashing.hash,
         equal:func(@T, @T) bool = Hashing.equal,
         minimum_capacity:int = 0,
@@ -16,43 +16,43 @@ public struct Set<T> {
         self.entries = Dictionary<T, bool>(hash, equal, minimum_capacity)
     }
 
-    public func count() int {
+    func count() int {
         return self.entries.count()
     }
 
-    public func capacity() int {
+    func capacity() int {
         return self.entries.capacity()
     }
 
-    public func is_empty() bool {
+    func is_empty() bool {
         return self.entries.is_empty()
     }
 
-    public func contains(value:@T) bool {
+    func contains(value:@T) bool {
         return self.entries.contains(value)
     }
 
-    public func add(value:T) bool {
+    func add(value:T) bool {
         let previous = self.entries.set(value, true)
         return previous == null
     }
 
-    public func remove(value:@T) bool {
+    func remove(value:@T) bool {
         return self.entries.remove(value)
     }
 
-    public func reserve(minimum_capacity:int) {
+    func reserve(minimum_capacity:int) {
         if minimum_capacity < 0 {
             panic("Set.reserve requires a non-negative minimum capacity")
         }
         self.entries.reserve(minimum_capacity)
     }
 
-    public func clear() {
+    func clear() {
         self.entries.clear()
     }
 
-    public func iterator() Iterator<T> {
+    func iterator() Iterator<T> {
         var result = Iterator<T>.empty()
         var entries = self.entries.iterator()
         while entry = entries.next() {

@@ -2,7 +2,7 @@ use Interop.C
 use Interop.Boundary
 use STD.Text.Encoding
 
-internal struct RawEndpoint {
+struct RawEndpoint {
     let family:int
     let port:uint16
     let scope:uint32

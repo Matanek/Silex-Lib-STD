@@ -34,7 +34,7 @@ public class Session {
     private var open:bool
     private var alternate:bool
 
-    public init() {
+    init() {
         if let state = Platform.activate() {
             self.original = state
             self.open = true
@@ -44,19 +44,19 @@ public class Session {
         }
     }
 
-    public func read_key() KeyEvent {
+    func read_key() KeyEvent {
         if !self.open { panic("Console.Session.read_key requires an open session") }
         if let event = read_event(-1) { return event }
         panic("Console.Session.read_key failed")
     }
 
-    public func poll_key(timeout_milliseconds:int) KeyEvent? {
+    func poll_key(timeout_milliseconds:int) KeyEvent? {
         if !self.open { panic("Console.Session.poll_key requires an open session") }
         if timeout_milliseconds < 0 { panic("Console.Session.poll_key requires a non-negative timeout") }
         return read_event(timeout_milliseconds)
     }
 
-    public func poll_keys(maximum_count:int, timeout_milliseconds:int) Queue<KeyEvent> {
+    func poll_keys(maximum_count:int, timeout_milliseconds:int) Queue<KeyEvent> {
         if maximum_count <= 0 { panic("Console.Session.poll_keys requires a positive maximum count") }
         var events = Queue<KeyEvent>(maximum_count)
         if let first = self.poll_key(timeout_milliseconds) { events.add(first) }
@@ -68,7 +68,7 @@ public class Session {
         return events
     }
 
-    public func enter_alternate_screen() {
+    func enter_alternate_screen() {
         if !self.open { panic("Console.Session is closed") }
         if !self.alternate {
             Console.write("\u{1b}[?1049h")
@@ -76,7 +76,7 @@ public class Session {
         }
     }
 
-    public func leave_alternate_screen() {
+    func leave_alternate_screen() {
         if !self.open { panic("Console.Session is closed") }
         if self.alternate {
             Console.write("\u{1b}[?1049l")
@@ -84,9 +84,9 @@ public class Session {
         }
     }
 
-    public func is_open() bool { return self.open }
+    func is_open() bool { return self.open }
 
-    public func close() {
+    func close() {
         if !self.open { return }
         if self.alternate { Console.write("\u{1b}[?1049l") }
         Console.write("\u{1b}[0m\u{1b}[?25h")

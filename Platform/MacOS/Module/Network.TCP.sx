@@ -1,7 +1,7 @@
 use Interop.C
 use Interop.Boundary
 
-internal struct RawEndpoint {
+struct RawEndpoint {
     let family:int
     let port:uint16
     let scope:uint32

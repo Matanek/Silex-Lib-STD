@@ -3,7 +3,7 @@ use Interop.Boundary
 use STD.File
 use STD.Text.UTF8
 
-internal struct RawEndpoint {
+struct RawEndpoint {
     let family:int
     let port:uint16
     let scope:uint32

@@ -1,14 +1,14 @@
 use Interop.C
 use Interop.Boundary
 
-internal struct RawEndpoint {
+struct RawEndpoint {
     let family:int
     let port:uint16
     let scope:uint32
     let bytes:uint8[16]
 }
 
-internal struct RawReceive {
+struct RawReceive {
     let count:int
     let endpoint:RawEndpoint
     let truncated:bool

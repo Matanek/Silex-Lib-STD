@@ -19,14 +19,14 @@ public func uppercase(text:str) str { return map_case(text, 2) }
 public func case_fold(text:str) str { return map_case(text, 3) }
 public func unicode_version() str { return "17.0.0" }
 
-internal func fold_scalar(scalar:uint32) uint32 {
+package func fold_scalar(scalar:uint32) uint32 {
     if mapped = case_mapping(Data.fold_keys(), Data.fold_metadata(), Data.fold_values(), scalar) {
         if mapped.count() == 1 { return mapped[0] }
     }
     return scalar
 }
 
-internal func upper_scalar(scalar:uint32) uint32 {
+package func upper_scalar(scalar:uint32) uint32 {
     if mapped = case_mapping(Data.uppercase_keys(), Data.uppercase_metadata(), Data.uppercase_values(), scalar) {
         if mapped.count() == 1 { return mapped[0] }
     }
@@ -371,6 +371,7 @@ func encoded(values:uint32[]) str {
         failure(error) => { panic("Unicode table produced an invalid scalar") }
     }
 }
+
 func read_values(data:str, offset:int, count:int) uint32[] {
     var result:uint32[] = []
     var index = 0
@@ -380,6 +381,7 @@ func read_values(data:str, offset:int, count:int) uint32[] {
     }
     return result
 }
+
 func find_key(data:str, scalar:uint32) int {
     var first = 0
     var last = (C.byte_count(data) / 4) as int
@@ -390,6 +392,7 @@ func find_key(data:str, scalar:uint32) int {
     if first * 4 < C.byte_count(data) as int && read_u21(data, first * 4) == scalar { return first }
     return -1
 }
+
 func find_pair(data:str, first_scalar:uint32, second_scalar:uint32) int {
     var first = 0
     var last = (C.byte_count(data) / 8) as int
@@ -402,6 +405,7 @@ func find_pair(data:str, first_scalar:uint32, second_scalar:uint32) int {
     if first * 8 < C.byte_count(data) as int && read_u21(data, first * 8) == first_scalar && read_u21(data, first * 8 + 4) == second_scalar { return first }
     return -1
 }
+
 func in_plain_ranges(data:str, scalar:uint32) bool {
     var first = 0
     var last = (C.byte_count(data) / 8) as int
@@ -411,9 +415,11 @@ func in_plain_ranges(data:str, scalar:uint32) bool {
     }
     return first * 8 < C.byte_count(data) as int && read_u21(data, first * 8) <= scalar
 }
+
 func read_u21(data:str, offset:int) uint32 {
     return (read_digit(data, offset) << 18) + (read_digit(data, offset + 1) << 12) + (read_digit(data, offset + 2) << 6) + read_digit(data, offset + 3)
 }
+
 func read_digit(data:str, offset:int) uint32 {
     let byte = C.byte_at(data, offset as uint)
     if byte >= 65 && byte <= 90 { return (byte - 65) as uint32 }

@@ -10,7 +10,7 @@ use STD.Regex.Unicode.whitespace_ranges
 use STD.Regex.Unicode.property_ranges
 use STD.Regex.Unicode.complement
 
-internal struct SyntaxNode {
+struct SyntaxNode {
     let kind:int
     let scalar:uint32
     let ranges:ScalarRange[]
@@ -33,15 +33,15 @@ struct ClassPiece {
     let scalar:uint32
 }
 
-internal class Parser {
-    let values:uint32[]
-    var position:int
-    var capture_total:int
-    var capture_labels:str[]
-    var nodes:SyntaxNode[]
-    var parse_error:CompileError?
+class Parser {
+    private let values:uint32[]
+    private var position:int
+    private var capture_total:int
+    private var capture_labels:str[]
+    private var nodes:SyntaxNode[]
+    private var parse_error:CompileError?
 
-    internal init(pattern:str) {
+    init(pattern:str) {
         self.values = UTF8.scalars(pattern)
         self.position = 0
         self.capture_total = 0
@@ -51,10 +51,10 @@ internal class Parser {
         self.parse_error = null
     }
 
-    internal func capture_names() str[] { return self.capture_labels }
-    internal func syntax_nodes() SyntaxNode[] { return self.nodes }
+    func capture_names() str[] { return self.capture_labels }
+    func syntax_nodes() SyntaxNode[] { return self.nodes }
 
-    internal func parse() Result<int, CompileError> {
+    func parse() Result<int, CompileError> {
         let result = self.expression()
         if error = self.parse_error { return Result<int, CompileError>.failure(error) }
         if self.position != self.values.count() {
@@ -69,7 +69,7 @@ internal class Parser {
         return Result<int, CompileError>.success(result)
     }
 
-    func expression() int {
+    private func expression() int {
         var left = self.sequence()
         if left < 0 { return -1 }
         while self.at(124) {
@@ -81,7 +81,7 @@ internal class Parser {
         return left
     }
 
-    func sequence() int {
+    private func sequence() int {
         var nodes:int[] = []
         while self.position < self.values.count() && !self.at(124) && !self.at(41) {
             let node = self.repetition()
@@ -100,7 +100,7 @@ internal class Parser {
         return result
     }
 
-    func repetition() int {
+    private func repetition() int {
         var result = self.atom()
         if result < 0 { return -1 }
         if self.position >= self.values.count() { return result }
@@ -141,7 +141,7 @@ internal class Parser {
         return result
     }
 
-    func atom() int {
+    private func atom() int {
         if self.position >= self.values.count() {
             return self.fail(CompileErrorKind.unexpected_end(), self.position, "expected an expression")
         }
@@ -159,7 +159,7 @@ internal class Parser {
         return self.literal_node(token)
     }
 
-    func group() int {
+    private func group() int {
         let opening = self.position
         self.position++
         var capture_index = 0
@@ -228,7 +228,7 @@ internal class Parser {
         ))
     }
 
-    func character_class() int {
+    private func character_class() int {
         let opening = self.position
         self.position++
         var negated = false
@@ -266,7 +266,7 @@ internal class Parser {
         return self.class_node(ranges, negated)
     }
 
-    func class_piece() ClassPiece? {
+    private func class_piece() ClassPiece? {
         if self.position >= self.values.count() {
             return self.piece_failure(CompileErrorKind.unexpected_end(), self.position, "expected a class character")
         }
@@ -279,7 +279,7 @@ internal class Parser {
         return single_piece(scalar)
     }
 
-    func escaped_node() int {
+    private func escaped_node() int {
         self.position++
         if self.at(98) { self.position++; return self.simple_node(11) }
         if self.at(66) { self.position++; return self.simple_node(12) }
@@ -287,7 +287,7 @@ internal class Parser {
         return -1
     }
 
-    func escape_piece() ClassPiece? {
+    private func escape_piece() ClassPiece? {
         if self.position >= self.values.count() {
             return self.piece_failure(CompileErrorKind.unexpected_end(), self.position, "escape is incomplete")
         }
@@ -314,7 +314,7 @@ internal class Parser {
         return self.piece_failure(CompileErrorKind.invalid_escape(), escape_position, "unknown escape")
     }
 
-    func property_piece(negated:bool, escape_position:int) ClassPiece? {
+    private func property_piece(negated:bool, escape_position:int) ClassPiece? {
         if !self.at(123) {
             return self.piece_failure(CompileErrorKind.invalid_escape(), escape_position, "Unicode property requires braces")
         }
@@ -341,7 +341,7 @@ internal class Parser {
         return self.piece_failure(CompileErrorKind.invalid_escape(), escape_position, "unknown Unicode property")
     }
 
-    func bounds() RepetitionBounds? {
+    private func bounds() RepetitionBounds? {
         let opening = self.position
         self.position++
         if self.position >= self.values.count() {
@@ -371,7 +371,7 @@ internal class Parser {
         return RepetitionBounds(first:minimum, last:maximum)
     }
 
-    func number(opening:int) int {
+    private func number(opening:int) int {
         if self.position >= self.values.count() || !digit(self.values[self.position]) {
             return self.int_failure(CompileErrorKind.invalid_quantifier(), opening, "quantifier requires a decimal bound")
         }
@@ -388,63 +388,63 @@ internal class Parser {
         return value
     }
 
-    func at(token:uint32) bool {
+    private func at(token:uint32) bool {
         return self.position < self.values.count() && self.values[self.position] == token
     }
 
-    func values_group_is_non_capturing(opening:int) bool {
+    private func values_group_is_non_capturing(opening:int) bool {
         return opening + 2 < self.values.count() &&
             self.values[opening + 1] == 63 && self.values[opening + 2] == 58
     }
 
-    func fail(kind:CompileErrorKind, index:int, detail:str) int {
+    private func fail(kind:CompileErrorKind, index:int, detail:str) int {
         self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
         return -1
     }
 
-    func piece_failure(kind:CompileErrorKind, index:int, detail:str) ClassPiece? {
+    private func piece_failure(kind:CompileErrorKind, index:int, detail:str) ClassPiece? {
         self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
         return null
     }
 
-    func range_failure(kind:CompileErrorKind, index:int, detail:str) RepetitionBounds? {
+    private func range_failure(kind:CompileErrorKind, index:int, detail:str) RepetitionBounds? {
         self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
         return null
     }
 
-    func int_failure(kind:CompileErrorKind, index:int, detail:str) int {
+    private func int_failure(kind:CompileErrorKind, index:int, detail:str) int {
         self.parse_error = CompileError(kind:kind, scalar_index:index, detail:detail)
         return -1
     }
 
-    func emit_node(node:SyntaxNode) int {
+    private func emit_node(node:SyntaxNode) int {
         let index = self.nodes.count()
         self.nodes.append(node)
         return index
     }
 
-    func simple_node(kind:int) int {
+    private func simple_node(kind:int) int {
         return self.emit_node(SyntaxNode(
             kind:kind, scalar:0, ranges:[], negated:false,
             minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
         ))
     }
 
-    func literal_node(scalar:uint32) int {
+    private func literal_node(scalar:uint32) int {
         return self.emit_node(SyntaxNode(
             kind:2, scalar:scalar, ranges:[], negated:false,
             minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
         ))
     }
 
-    func class_node(ranges:ScalarRange[], negated:bool) int {
+    private func class_node(ranges:ScalarRange[], negated:bool) int {
         return self.emit_node(SyntaxNode(
             kind:6, scalar:0, ranges:normalized_ranges(ranges), negated:negated,
             minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
         ))
     }
 
-    func pair_node(kind:int, left:int, right:int) int {
+    private func pair_node(kind:int, left:int, right:int) int {
         var children:int[] = []
         children.append(left)
         children.append(right)
@@ -454,7 +454,7 @@ internal class Parser {
         ))
     }
 
-    func repeat_node(child:int, minimum:int, maximum:int, greedy:bool) int {
+    private func repeat_node(child:int, minimum:int, maximum:int, greedy:bool) int {
         var children:int[] = []
         children.append(child)
         return self.emit_node(SyntaxNode(

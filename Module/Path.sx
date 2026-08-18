@@ -112,7 +112,7 @@ func parse(path:Path, windows:bool) Parsed {
             return failed("Windows UNC root requires a server and share")
         }
         let server = byte_slice(bytes, server_start, cursor)
-        if server == "?" || server == "." { return failed("internal Win32 device prefixes are not portable paths") }
+        if server == "?" || server == "." { return failed("reserved Win32 device prefixes are not portable paths") }
         while cursor < bytes.count() && separator(bytes[cursor], true) { cursor++ }
         let share_start = cursor
         while cursor < bytes.count() && !separator(bytes[cursor], true) { cursor++ }

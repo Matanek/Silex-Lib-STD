@@ -17,12 +17,12 @@ public class Stream : IO.Reader, IO.Writer {
     private var descriptor:int
     private var closed:bool
 
-    internal init(descriptor:int) {
+    module init(descriptor:int) {
         self.descriptor = descriptor
         self.closed = false
     }
 
-    public func read(buffer:&uint8[..]) Result<int, Error> {
+    func read(buffer:&uint8[..]) Result<int, Error> {
         if self.closed { return Result<int, Error>.failure(failure("tcp.read", "stream is closed")) }
         var index = 0
         while index < buffer.count() {
@@ -35,7 +35,7 @@ public class Stream : IO.Reader, IO.Writer {
         return Result<int, Error>.success(index)
     }
 
-    public func write(buffer:@uint8[..]) Result<int, Error> {
+    func write(buffer:@uint8[..]) Result<int, Error> {
         if self.closed { return Result<int, Error>.failure(failure("tcp.write", "stream is closed")) }
         var index = 0
         while index < buffer.count() {
@@ -47,14 +47,14 @@ public class Stream : IO.Reader, IO.Writer {
         return Result<int, Error>.success(index)
     }
 
-    public func shutdown_read() Result<void, Error> { return shutdown(self, false) }
-    public func shutdown_write() Result<void, Error> { return shutdown(self, true) }
-    public func local_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, false) }
-    public func peer_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, true) }
+    func shutdown_read() Result<void, Error> { return shutdown(self, false) }
+    func shutdown_write() Result<void, Error> { return shutdown(self, true) }
+    func local_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, false) }
+    func peer_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, true) }
 
-    internal func handle() int { return self.descriptor }
-    internal func is_closed() bool { return self.closed }
-    internal func close_handle() bool {
+    module func handle() int { return self.descriptor }
+    module func is_closed() bool { return self.closed }
+    module func close_handle() bool {
         if self.closed { return false }
         self.closed = true
         return Platform.close(self.descriptor)
@@ -65,14 +65,14 @@ public class Listener {
     private var descriptor:int
     private var closed:bool
 
-    internal init(descriptor:int) {
+    module init(descriptor:int) {
         self.descriptor = descriptor
         self.closed = false
     }
 
-    internal func handle() int { return self.descriptor }
-    internal func is_closed() bool { return self.closed }
-    internal func close_handle() bool {
+    module func handle() int { return self.descriptor }
+    module func is_closed() bool { return self.closed }
+    module func close_handle() bool {
         if self.closed { return false }
         self.closed = true
         return Platform.close(self.descriptor)

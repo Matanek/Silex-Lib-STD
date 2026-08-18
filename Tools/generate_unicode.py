@@ -122,7 +122,8 @@ def parse_case_folding(path: Path) -> dict[int, tuple[int, ...]]:
 
 
 def function(name: str, value: str) -> str:
-    return f'internal func {name}() str {{ return "{value}" }}\n'
+    visibility = "package " if name.startswith("regex_") else ""
+    return f'{visibility}func {name}() str {{ return "{value}" }}\n'
 
 
 def main():

@@ -5,7 +5,7 @@ struct TextHolder {
 }
 
 class TextConfiguration {
-    public var value:str
+    var value:str
 }
 
 func contains_from_borrow(text:@str, expected:@str) bool {

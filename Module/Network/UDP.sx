@@ -16,14 +16,14 @@ public class Socket {
     private var descriptor:int
     private var closed:bool
 
-    internal init(descriptor:int) {
+    module init(descriptor:int) {
         self.descriptor = descriptor
         self.closed = false
     }
 
-    internal func handle() int { return self.descriptor }
-    internal func is_closed() bool { return self.closed }
-    internal func close_handle() bool {
+    module func handle() int { return self.descriptor }
+    module func is_closed() bool { return self.closed }
+    module func close_handle() bool {
         if self.closed { return false }
         self.closed = true
         return Platform.close(self.descriptor)

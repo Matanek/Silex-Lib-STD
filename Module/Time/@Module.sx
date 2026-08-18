@@ -4,7 +4,7 @@ public struct LocalTime {
     let second:int
     let nanosecond:int
 
-    public static func now() LocalTime {
+    static func now() LocalTime {
         let components = Platform.local_time_components()
         return LocalTime(
             hour:components[0],
@@ -15,11 +15,11 @@ public struct LocalTime {
     }
 }
 
-internal func monotonic_microseconds() int {
+func monotonic_microseconds() int {
     return Platform.monotonic_microseconds()
 }
 
-internal func seconds_between(start:int, end:int) float {
+func seconds_between(start:int, end:int) float {
     let elapsed = end - start
     let whole_seconds = elapsed / 1_000_000
     let remaining_microseconds = elapsed % 1_000_000

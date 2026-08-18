@@ -1,7 +1,6 @@
 use Interop.C
 use STD.Threading
 use STD.Threading.Native
-use STD.Threading.Runtime.JobState
 
 struct Counter:Threading.Job {
     var value:int
@@ -28,8 +27,8 @@ struct MixedJob:Threading.Job {
 }
 
 class ReusableClassJob:Threading.Job {
-    public var value:int
-    public func execute() { mutex { self.value++ } }
+    var value:int
+    func execute() { mutex { self.value++ } }
 }
 
 struct StateSnapshot {
@@ -38,13 +37,13 @@ struct StateSnapshot {
 }
 
 class SharedCounter:Threading.Job {
-    public var value:int
-    public func execute() { mutex { self.value++ } }
+    var value:int
+    func execute() { mutex { self.value++ } }
 }
 
 class ContendedCounter:Threading.Job {
-    public var value:int
-    public func execute() {
+    var value:int
+    func execute() {
         for i in 0...2000 {
             mutex { self.value++ }
         }
@@ -52,21 +51,21 @@ class ContendedCounter:Threading.Job {
 }
 
 class DropTracker {
-    public var value:int
+    var value:int
 }
 
 class OwnedDropJob:Threading.Job {
-    public var tracker:DropTracker
-    public func execute() {}
+    var tracker:DropTracker
+    func execute() {}
     drop { mutex { self.tracker.value++ } }
 }
 
 class DependencyState {
-    public var published:int
-    public var starts:int
+    var published:int
+    var starts:int
 
-    public func publish(value:int) { self.published = value }
-    public func observe(expected:int) {
+    func publish(value:int) { self.published = value }
+    func observe(expected:int) {
         if self.published != expected { panic("dependent job started before publication") }
         mutex { self.starts++ }
     }
@@ -85,11 +84,11 @@ struct ObserveJob:Threading.Job {
 }
 
 class PairState {
-    public var left:int
-    public var right:int
-    public var starts:int
+    var left:int
+    var right:int
+    var starts:int
 
-    public func observe() {
+    func observe() {
         if self.left != 11 || self.right != 22 { panic("joined job started before its last dependency") }
         mutex { self.starts++ }
     }
@@ -111,17 +110,17 @@ struct ObservePairJob:Threading.Job {
 }
 
 class ManualGate {
-    public var entered:int
-    public var released:bool
+    var entered:int
+    var released:bool
 
-    public func wait_until_released() {
+    func wait_until_released() {
         mutex { self.entered++ }
         var waiting = true
         while waiting { mutex { waiting = !self.released } }
     }
 
-    public func release() { mutex { self.released = true } }
-    public func entered_count() int {
+    func release() { mutex { self.released = true } }
+    func entered_count() int {
         var count = 0
         mutex { count = self.entered }
         return count
@@ -144,11 +143,11 @@ struct CooperativeWaitJob:Threading.Job {
 }
 
 class IndexedState {
-    public var visits:int[]
-    public var values:int[]
-    public var intervals:int
+    var visits:int[]
+    var values:int[]
+    var intervals:int
 
-    public func process(start:int, end:int) {
+    func process(start:int, end:int) {
         if start < 0 || end < start || end > self.visits.count() {
             panic("parallel executor produced an invalid interval")
         }
@@ -161,7 +160,7 @@ class IndexedState {
         }
     }
 
-    public func verify() {
+    func verify() {
         var index = 0
         while index < self.visits.count() {
             if self.visits[index] != 1 { panic("parallel index was lost or visited more than once") }
@@ -177,10 +176,10 @@ struct IndexedJob:Threading.ParallelJob {
 }
 
 class ReadState {
-    public var source:int[]
-    public var destination:int[]
+    var source:int[]
+    var destination:int[]
 
-    public func copy_range(start:int, end:int) {
+    func copy_range(start:int, end:int) {
         var index = start
         while index < end {
             self.destination[index] = self.source[index] + 1
@@ -215,16 +214,16 @@ func make_read_state(count:int) ReadState {
 }
 
 class ProducerState {
-    internal var executor:Threading.Executor
-    internal var completed:int
+    var executor:Threading.Executor
+    var completed:int
 
-    internal init(executor:Threading.Executor) {
+    init(executor:Threading.Executor) {
         self.executor = executor
         self.completed = 0
     }
 }
 
-internal func produce(context:uint) uint {
+local func produce(context:uint) uint {
     var state = C.object_from_address<ProducerState>(context)
     for i in 0...1000 {
         if submit_counter(state.executor, i) != i + 1 { panic("concurrent producer received an invalid result") }
@@ -233,7 +232,7 @@ internal func produce(context:uint) uint {
     return 0
 }
 
-internal func submit_counter(executor:Threading.Executor, value:int) int {
+local func submit_counter(executor:Threading.Executor, value:int) int {
     var shared = executor
     var handle = shared.submit(Counter(value:value))
     return handle.complete().value
@@ -440,8 +439,7 @@ test "recycled slots advance their generation" {
     let previous = consume_snapshot(executor)
     submit_counter(executor, 2)
     if executor.submission_allocation_count() != 1 { panic("generation test did not reuse its submission slot") }
-    var state = C.object_from_address<JobState<Counter>>(previous.address)
-    if state.generation_matches(previous.generation) { panic("recycled submission kept its previous generation") }
+    if Threading.generation_matches<Counter>(previous.address, previous.generation) { panic("recycled submission kept its previous generation") }
 }
 
 test "fence observes completion without consuming the job" {

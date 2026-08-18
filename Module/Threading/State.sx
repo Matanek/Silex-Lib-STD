@@ -1,13 +1,13 @@
-internal protocol CompletionState {
+protocol CompletionState {
     func is_completed() bool
     func wait_for_completion()
     func notify_waiter()
 }
 
-internal protocol DependencyTarget {
+protocol DependencyTarget {
     func dependency_completed()
 }
 
-internal protocol PoolResource {
+protocol PoolResource {
     func slot_count() int
 }

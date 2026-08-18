@@ -5,26 +5,26 @@ let system_create = C.function<func(C.Pointer<uint8>, C.Size, C.Pointer<uint8>, 
 let system_wait = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
 let system_close = C.function<func(uint) int32>(library:Boundary.System, name:"CloseHandle")
 
-internal func spawn(entry:uint, context:uint) uint {
+package func spawn(entry:uint, context:uint) uint {
     return system_create(C.pointer_bits(0 as uint), 0 as C.Size, C.pointer_bits(entry), C.pointer_bits(context), 0, C.pointer_bits(0 as uint))
 }
 
-internal func join(thread:uint) bool {
+package func join(thread:uint) bool {
     let waited = system_wait(thread, 0xffff_ffff) == 0
     let closed = system_close(thread) != 0
     return waited && closed
 }
 
-internal func current_thread() uint { return 0 }
+func current_thread() uint { return 0 }
 
-internal func create_signal(initial:int) uint {
+func create_signal(initial:int) uint {
     panic("STD.Threading.Executor is not implemented natively on Windows yet")
 }
 
-internal func wait(signal:uint) { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
-internal func try_wait(signal:uint) bool { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
-internal func signal(value:uint) { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
-internal func release_signal(value:uint) {}
-internal func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
-internal func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 24 as uint, 0) }
-internal func logical_processor_count() int { return 1 }
+func wait(signal:uint) { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
+func try_wait(signal:uint) bool { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
+func signal(value:uint) { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
+func release_signal(value:uint) {}
+func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
+func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 24 as uint, 0) }
+func logical_processor_count() int { return 1 }

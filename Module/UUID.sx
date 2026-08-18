@@ -9,27 +9,27 @@ public enum Version {
 public struct UUID {
     let storage:uint8[16]
 
-    public init(value:Version = Version.v4) {
+    init(value:Version = Version.v4) {
         self.storage = generate(value)
     }
 
-    public init(value:uint8[16]) {
+    init(value:uint8[16]) {
         self.storage = value
     }
 
-    public static func v4() UUID {
+    static func v4() UUID {
         return UUID(Version.v4)
     }
 
-    public static func v7() UUID {
+    static func v7() UUID {
         return UUID(Version.v7)
     }
 
-    public func to_bytes() uint8[16] {
+    func to_bytes() uint8[16] {
         return self.storage
     }
 
-    public func to_str() str {
+    func to_str() str {
         var encoded:uint8[] = []
         var index = 0
         while index < 16 {

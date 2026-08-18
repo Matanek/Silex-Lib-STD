@@ -9,10 +9,11 @@ This matrix defines what “STD is covered” means for production use:
 4. interactive and server-waiting paths are compiled, even when automation
    cannot safely drive their environment.
 
-Methods marked `public` only because they implement an internal protocol on an
-`internal` type are implementation details. They are excluded from the
-consumer surface. Digest engines under `Crypto.MD5`, `Crypto.SHA1` and
-`Crypto.SHA256` are internal; consumers use `STD.Crypto`.
+Members inherit the visibility of their type unless they state a narrower
+exception. Protocol implementations carried by package-visible types therefore
+remain implementation details and are excluded from the consumer surface.
+Digest engines under `Crypto.MD5`, `Crypto.SHA1` and `Crypto.SHA256` are
+package-visible; consumers use `STD.Crypto`.
 
 | Public surface | Operations covered | Consumer examples | Executable proof |
 | --- | --- | --- | --- |

@@ -17,7 +17,7 @@ public struct Capture {
     private let first_byte:int
     private let last_byte:int
 
-    internal init(source:str, first:int, last:int, first_byte:int, last_byte:int) {
+    module init(source:str, first:int, last:int, first_byte:int, last_byte:int) {
         self.source = source
         self.first = first
         self.last = last
@@ -25,9 +25,9 @@ public struct Capture {
         self.last_byte = last_byte
     }
 
-    public func start() int { return self.first }
-    public func end() int { return self.last }
-    public func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
+    func start() int { return self.first }
+    func end() int { return self.last }
+    func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
 }
 
 public struct Match {
@@ -40,7 +40,7 @@ public struct Match {
     private let capture_ends:int[]
     private let capture_names:str[]
 
-    internal init(
+    module init(
         source:str,
         first:int,
         last:int,
@@ -60,14 +60,14 @@ public struct Match {
         self.capture_names = capture_names
     }
 
-    public func start() int { return self.first }
-    public func end() int { return self.last }
-    public func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
-    public func capture_count() int { return self.capture_names.count() - 1 }
-    internal func byte_start() int { return self.first_byte }
-    internal func byte_end() int { return self.last_byte }
+    func start() int { return self.first }
+    func end() int { return self.last }
+    func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
+    func capture_count() int { return self.capture_names.count() - 1 }
+    module func byte_start() int { return self.first_byte }
+    module func byte_end() int { return self.last_byte }
 
-    public func capture(value:int) Capture? {
+    func capture(value:int) Capture? {
         if value < 0 || value >= self.capture_names.count() { return null }
         let first = self.capture_starts[value * 2]
         let first_byte = self.capture_starts[value * 2 + 1]
@@ -77,7 +77,7 @@ public struct Match {
         return Capture(self.source, first, last, first_byte, last_byte)
     }
 
-    public func capture(value:str) Capture? {
+    func capture(value:str) Capture? {
         var index = 1
         while index < self.capture_names.count() {
             if self.capture_names[index] == value { return self.capture(index) }
@@ -88,13 +88,13 @@ public struct Match {
 }
 
 public struct Regex {
-    internal let program:Program
+    module let program:Program
 
-    internal init(program:Program) {
+    module init(program:Program) {
         self.program = program
     }
 
-    public static func compile(pattern:str, options:Options = Options()) Result<Regex, CompileError> {
+    static func compile(pattern:str, options:Options = Options()) Result<Regex, CompileError> {
         var parser = Parser(pattern)
         match parser.parse() {
             failure(error) => { return Result<Regex, CompileError>.failure(error) }
@@ -113,45 +113,45 @@ public struct Regex {
         panic("regex parser did not produce a result")
     }
 
-    public func contains(text:str) bool {
+    func contains(text:str) bool {
         return find_in(self.program, text, 0, 0) != null
     }
 
-    public func first(text:str) Match? {
+    func first(text:str) Match? {
         return public_match(text, self.program, find_in(self.program, text, 0, 0))
     }
 
-    public func find(text:str) Cursor { return Cursor(self, text) }
+    func find(text:str) Cursor { return Cursor(self, text) }
 
-    public func match(text:str) bool {
+    func match(text:str) bool {
         if found = run_from(self.program, text, 0, 0) {
             return found.last_byte == C.byte_count(text) as int
         }
         return false
     }
 
-    public func all(text:str) Match[] {
+    func all(text:str) Match[] {
         var result:Match[] = []
         var cursor = self.find(text)
         while found = cursor.next() { result.append(found) }
         return result
     }
 
-    public func split(text:str) str[] { return split_text(self, text) }
+    func split(text:str) str[] { return split_text(self, text) }
 
-    public func replace_first(text:str, replacement:str) str {
+    func replace_first(text:str, replacement:str) str {
         return replace_text(self, text, replacement, false)
     }
 
-    public func replace_all(text:str, replacement:str) str {
+    func replace_all(text:str, replacement:str) str {
         return replace_text(self, text, replacement, true)
     }
 
-    public func replace_first(text:str, replacement:func(@Match) str) str {
+    func replace_first(text:str, replacement:func(@Match) str) str {
         return replace_text_with(self, text, replacement, false)
     }
 
-    public func replace_all(text:str, replacement:func(@Match) str) str {
+    func replace_all(text:str, replacement:func(@Match) str) str {
         return replace_text_with(self, text, replacement, true)
     }
 }
@@ -163,7 +163,7 @@ public struct Cursor {
     private var next_byte:int
     private var finished:bool
 
-    internal init(regex:Regex, source:str) {
+    module init(regex:Regex, source:str) {
         self.regex = regex
         self.source = source
         self.next_scalar = 0
@@ -171,7 +171,7 @@ public struct Cursor {
         self.finished = false
     }
 
-    public func next() Match? {
+    func next() Match? {
         if self.finished { return null }
         if compiled = self.regex {
         if raw = find_in(compiled.program, self.source, self.next_scalar, self.next_byte) {

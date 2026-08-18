@@ -2,10 +2,10 @@ use STD.Threading
 use STD.Time.Stopwatch
 
 class Samples {
-    public var source:int[]
-    public var destination:int[]
+    var source:int[]
+    var destination:int[]
 
-    public func transform(start:int, end:int) {
+    func transform(start:int, end:int) {
         var index = start
         while index < end {
             let value = self.source[index]

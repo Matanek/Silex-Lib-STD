@@ -1,4 +1,4 @@
-internal func digest(input:@uint8[..]) uint8[16] {
+func digest(input:@uint8[..]) uint8[16] {
     let shifts:int[64] = [
         7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
         5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,

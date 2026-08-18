@@ -26,7 +26,7 @@ public struct ScalarError {
 
 public func bytes(text:str) uint8[] { return read_bytes(text) }
 
-internal func read_bytes(text:@str) uint8[] {
+func read_bytes(text:@str) uint8[] {
     var result:uint8[] = []
     var index:uint = 0
     let count = C.byte_count(text)
@@ -93,7 +93,7 @@ public func decode(values:@uint8[..]) Result<str, DecodeError> {
 
 public func scalars(text:str) uint32[] { return read_scalars(text) }
 
-internal func read_scalars(text:@str) uint32[] {
+func read_scalars(text:@str) uint32[] {
     let encoded = read_bytes(text)
     var result:uint32[] = []
     var index = 0

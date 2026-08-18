@@ -1,5 +1,5 @@
 // Scalar real operations keep the concrete precision selected by the caller.
-// Platform helpers are internal implementation details; IEEE 754 behavior is
+// Platform helpers are module-visible implementation details; IEEE 754 behavior is
 // defined here where it differs from a raw system operation.
 
 public func sqrt(value:float32) float32 { return Platform.sqrt(value) }

@@ -1,15 +1,15 @@
 public class Randomizer {
-    var state:int
+    private var state:int
 
-    public init() {
+    init() {
         self.state = Platform.system_seed()
     }
 
-    public init(seed:int) {
+    init(seed:int) {
         self.state = seed
     }
 
-    public func get_int() int {
+    func get_int() int {
         var value:uint
         if self.state < 0 {
             let minimum:int = -9223372036854775808
@@ -31,7 +31,7 @@ public class Randomizer {
         return self.state
     }
 
-    public func get_int(minimum:int, maximum:int) int {
+    func get_int(minimum:int, maximum:int) int {
         if minimum >= maximum {
             panic("get_int(minimum, maximum) requires minimum < maximum")
         }
@@ -52,12 +52,12 @@ public class Randomizer {
         panic("get_int(minimum, maximum) could not produce a value")
     }
 
-    public func get_float() float {
+    func get_float() float {
         let bits:uint = (self.get_int() as uint) & 0xFF_FFFF
         return (bits as float) / 16777216.0
     }
 
-    public func get_float(minimum:float, maximum:float) float {
+    func get_float(minimum:float, maximum:float) float {
         if minimum - minimum != 0.0 || maximum - maximum != 0.0 {
             panic("get_float(minimum, maximum) requires finite bounds")
         }
@@ -80,7 +80,7 @@ public class Randomizer {
         panic("get_float(minimum, maximum) could not produce a value")
     }
 
-    public func get_bool() bool {
+    func get_bool() bool {
         return self.get_int() % 2 == 0
     }
 }

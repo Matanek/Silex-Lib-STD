@@ -7,7 +7,7 @@ also smoke-run during documentation validation.
 
 The [public API coverage matrix](Coverage.md) records the executable proof for
 every intended public module. It distinguishes consumer API from public
-protocol implementations carried by internal types.
+protocol contracts implemented by package-visible types.
 
 | Intention | Modules | Guide |
 | --- | --- | --- |

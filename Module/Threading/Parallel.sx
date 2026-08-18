@@ -7,32 +7,32 @@ use STD.Threading.Runtime.WorkItem
 use STD.Threading.Runtime.GraphState
 use STD.Threading.Runtime.Runtime
 
-internal func parallel_minimum_grain() int { return 64 }
-internal func parallel_ranges_per_worker() int { return 4 }
+func parallel_minimum_grain() int { return 64 }
+func parallel_ranges_per_worker() int { return 4 }
 
-internal class ParallelWork<T:ParallelJob>:WorkItem {
+class ParallelWork<T:ParallelJob>:WorkItem {
     private var batch_address:uint
     private var start:int
     private var end:int
 
-    internal init(batch:ParallelBatch<T>) {
+    init(batch:ParallelBatch<T>) {
         self.batch_address = C.object_address(batch)
         self.start = 0
         self.end = 0
     }
 
-    internal func prepare(start:int, end:int) {
+    func prepare(start:int, end:int) {
         self.start = start
         self.end = end
     }
 
-    public func execute() {
+    func execute() {
         var batch = C.object_from_address<ParallelBatch<T>>(self.batch_address)
         batch.execute_range(self.start, self.end)
     }
 }
 
-internal class ParallelBatch<T:ParallelJob>:DependencyTarget {
+class ParallelBatch<T:ParallelJob>:DependencyTarget {
     private var runtime_address:uint
     private var graph_address:uint
     private var job:T?
@@ -40,7 +40,7 @@ internal class ParallelBatch<T:ParallelJob>:DependencyTarget {
     private var active_entries:int
     private var published:bool
 
-    internal init(runtime:Runtime, graph:GraphState, job:T) {
+    init(runtime:Runtime, graph:GraphState, job:T) {
         self.runtime_address = C.object_address(runtime)
         self.graph_address = C.object_address(graph)
         self.job = job
@@ -49,12 +49,12 @@ internal class ParallelBatch<T:ParallelJob>:DependencyTarget {
         self.published = false
     }
 
-    internal func recyclable() bool {
+    func recyclable() bool {
         var graph = self.shared_graph()
         return graph.completed
     }
 
-    internal func prepare(graph:GraphState, job:T, count:int, interval_count:int) {
+    func prepare(graph:GraphState, job:T, count:int, interval_count:int) {
         self.graph_address = C.object_address(graph)
         var previous = self.job
         self.job = null
@@ -82,7 +82,7 @@ internal class ParallelBatch<T:ParallelJob>:DependencyTarget {
         if start != count { panic("STD.Threading parallel partition did not cover its range") }
     }
 
-    internal func publish() {
+    func publish() {
         var runtime = C.object_from_address<Runtime>(self.runtime_address)
         runtime.lock()
         if self.published {
@@ -104,9 +104,9 @@ internal class ParallelBatch<T:ParallelJob>:DependencyTarget {
         }
     }
 
-    public func dependency_completed() { self.publish() }
+    func dependency_completed() { self.publish() }
 
-    internal func execute_range(start:int, end:int) {
+    func execute_range(start:int, end:int) {
         var pending = self.job
         if var job = pending {
             job.execute(start, end)
@@ -137,10 +137,10 @@ internal class ParallelBatch<T:ParallelJob>:DependencyTarget {
         return C.object_from_address<GraphState>(self.graph_address)
     }
 
-    internal func completion() GraphState { return self.shared_graph() }
+    func completion() GraphState { return self.shared_graph() }
 }
 
-internal class ParallelPool<T:ParallelJob>:PoolResource {
+class ParallelPool<T:ParallelJob>:PoolResource {
     private var runtime:Runtime
     private var batches:ParallelBatch<T>[]
 
@@ -149,7 +149,7 @@ internal class ParallelPool<T:ParallelJob>:PoolResource {
         self.batches = []
     }
 
-    internal static func for_runtime(runtime:Runtime) ParallelPool<T> {
+    static func for_runtime(runtime:Runtime) ParallelPool<T> {
         let key = parallel_pool_type_key<T>()
         let address = runtime.pool_address(key)
         if address != 0 { return C.object_from_address<ParallelPool<T>>(address) }
@@ -158,7 +158,7 @@ internal class ParallelPool<T:ParallelJob>:PoolResource {
         return created
     }
 
-    internal func available_index() int {
+    func available_index() int {
         var selected = -1
         var index = 0
         while index < self.batches.count() {
@@ -172,32 +172,32 @@ internal class ParallelPool<T:ParallelJob>:PoolResource {
         return selected
     }
 
-    internal func prepare(index:int, graph:GraphState, job:T, count:int, interval_count:int) {
+    func prepare(index:int, graph:GraphState, job:T, count:int, interval_count:int) {
         var batch = self.batches[index]
         batch.prepare(graph, job, count, interval_count)
     }
 
-    internal func batch_at(index:int) ParallelBatch<T> { return self.batches[index] }
-    internal func add(batch:ParallelBatch<T>) { self.batches.append(batch) }
+    func batch_at(index:int) ParallelBatch<T> { return self.batches[index] }
+    func add(batch:ParallelBatch<T>) { self.batches.append(batch) }
 
-    public func slot_count() int { return self.batches.count() }
+    func slot_count() int { return self.batches.count() }
 }
 
-internal func parallel_pool_type_key<T:ParallelJob>() uint {
+func parallel_pool_type_key<T:ParallelJob>() uint {
     return C.function_address<T>(parallel_pool_type_marker)
 }
 
-internal func parallel_pool_type_marker<T:ParallelJob>(context:uint) uint { return context }
+func parallel_pool_type_marker<T:ParallelJob>(context:uint) uint { return context }
 
-internal func enqueue_parallel<T:ParallelJob>(runtime:Runtime, count:int, job:T) GraphState {
+func enqueue_parallel<T:ParallelJob>(runtime:Runtime, count:int, job:T) GraphState {
     return prepare_parallel<T>(runtime, count, job, null)
 }
 
-internal func enqueue_parallel_after<T:ParallelJob>(runtime:Runtime, count:int, job:T, after:GraphState) GraphState {
+func enqueue_parallel_after<T:ParallelJob>(runtime:Runtime, count:int, job:T, after:GraphState) GraphState {
     return prepare_parallel<T>(runtime, count, job, after)
 }
 
-internal func prepare_parallel<T:ParallelJob>(runtime:Runtime, count:int, job:T, after:GraphState?) GraphState {
+func prepare_parallel<T:ParallelJob>(runtime:Runtime, count:int, job:T, after:GraphState?) GraphState {
     if count < 0 { panic("STD.Threading parallel count cannot be negative") }
     if count == 0 { return runtime.completed_graph() }
 
@@ -232,7 +232,7 @@ internal func prepare_parallel<T:ParallelJob>(runtime:Runtime, count:int, job:T,
     panic("STD.Threading could not prepare a parallel submission")
 }
 
-internal func parallel_interval_count(count:int, worker_count:int) int {
+func parallel_interval_count(count:int, worker_count:int) int {
     let useful = ((count - 1) / parallel_minimum_grain()) + 1
     let maximum = worker_count * parallel_ranges_per_worker()
     if useful < maximum { return useful }

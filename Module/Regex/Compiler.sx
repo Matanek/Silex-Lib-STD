@@ -3,7 +3,7 @@ use STD.Regex.Syntax.SyntaxNode
 use STD.Regex.Unicode.ScalarRange
 use STD.Regex.Unicode.word_ranges
 
-internal struct State {
+struct State {
     let kind:int
     var first:int
     var second:int
@@ -16,7 +16,7 @@ internal struct State {
     var counter_index:int
     var greedy:bool
 
-    internal init(
+    init(
         kind:int,
         first:int,
         second:int,
@@ -49,7 +49,7 @@ struct Fragment {
     let outs:Patch[]
 }
 
-internal struct Program {
+struct Program {
     let states:State[]
     let start:int
     let capture_count:int
@@ -59,13 +59,13 @@ internal struct Program {
     let prefix:uint32?
 }
 
-internal class Compiler {
-    var states:State[]
-    var counter_total:int
+class Compiler {
+    private var states:State[]
+    private var counter_total:int
 
-    internal init() { self.states = []; self.counter_total = 0 }
+    init() { self.states = []; self.counter_total = 0 }
 
-    internal func compile(
+    func compile(
         syntax_nodes:SyntaxNode[],
         root:int,
         capture_names:str[],
@@ -85,7 +85,7 @@ internal class Compiler {
         )
     }
 
-    func node(syntax_nodes:SyntaxNode[], index:int) Fragment {
+    private func node(syntax_nodes:SyntaxNode[], index:int) Fragment {
         let syntax = syntax_nodes[index]
         if syntax.kind == 1 { return self.empty() }
         if syntax.kind == 2 { return self.consuming(State(1, -1, -1, syntax.scalar, [], false, 0)) }
@@ -116,40 +116,40 @@ internal class Compiler {
         panic("unknown regex syntax node")
     }
 
-    func empty() Fragment { return self.zero_width(5) }
+    private func empty() Fragment { return self.zero_width(5) }
 
-    func zero_width(kind:int) Fragment {
+    private func zero_width(kind:int) Fragment {
         let state = self.emit(State(kind, -1, -1, 0, [], false, 0))
         var outs:Patch[] = []
         outs.append(Patch(state:state, edge:1))
         return Fragment(start:state, outs:outs)
     }
 
-    func word_boundary(kind:int) Fragment {
+    private func word_boundary(kind:int) Fragment {
         let state = self.emit(State(kind, -1, -1, 0, word_ranges(), false, 0))
         var outs:Patch[] = []
         outs.append(Patch(state:state, edge:1))
         return Fragment(start:state, outs:outs)
     }
 
-    func consuming(state:State) Fragment {
+    private func consuming(state:State) Fragment {
         let index = self.emit(state)
         var outs:Patch[] = []
         outs.append(Patch(state:index, edge:1))
         return Fragment(start:index, outs:outs)
     }
 
-    func concatenate(left:Fragment, right:Fragment) Fragment {
+    private func concatenate(left:Fragment, right:Fragment) Fragment {
         self.patch(left.outs, right.start)
         return Fragment(start:left.start, outs:right.outs)
     }
 
-    func alternate(left:Fragment, right:Fragment) Fragment {
+    private func alternate(left:Fragment, right:Fragment) Fragment {
         let split = self.emit(State(4, left.start, right.start, 0, [], false, 0))
         return Fragment(start:split, outs:joined(left.outs, right.outs))
     }
 
-    func optional(child:Fragment, greedy:bool) Fragment {
+    private func optional(child:Fragment, greedy:bool) Fragment {
         var first = child.start
         var second = -1
         var exit_edge = 2
@@ -160,7 +160,7 @@ internal class Compiler {
         return Fragment(start:split, outs:outs)
     }
 
-    func star(child:Fragment, greedy:bool) Fragment {
+    private func star(child:Fragment, greedy:bool) Fragment {
         var first = child.start
         var second = -1
         var exit_edge = 2
@@ -172,7 +172,7 @@ internal class Compiler {
         return Fragment(start:split, outs:outs)
     }
 
-    func repeat(syntax_nodes:SyntaxNode[], syntax:SyntaxNode) Fragment {
+    private func repeat(syntax_nodes:SyntaxNode[], syntax:SyntaxNode) Fragment {
         if syntax.maximum > 4 && fixed_syntax_width(syntax_nodes, syntax.children[0]) > 0 {
             return self.compact_repeat(
                 self.node(syntax_nodes, syntax.children[0]),
@@ -204,7 +204,7 @@ internal class Compiler {
         return result
     }
 
-    func compact_repeat(child:Fragment, minimum:int, maximum:int, greedy:bool) Fragment {
+    private func compact_repeat(child:Fragment, minimum:int, maximum:int, greedy:bool) Fragment {
         let counter = self.counter_total
         self.counter_total++
         let gate = self.emit(State(14, child.start, -1, 0, [], false, 0))
@@ -222,7 +222,7 @@ internal class Compiler {
         return Fragment(start:reset, outs:outs)
     }
 
-    func capture(index:int, child:Fragment) Fragment {
+    private func capture(index:int, child:Fragment) Fragment {
         let opening = self.emit(State(8, child.start, -1, 0, [], false, index))
         let closing = self.emit(State(9, -1, -1, 0, [], false, index))
         self.patch(child.outs, closing)
@@ -231,13 +231,13 @@ internal class Compiler {
         return Fragment(start:opening, outs:outs)
     }
 
-    func emit(state:State) int {
+    private func emit(state:State) int {
         let index = self.states.count()
         self.states.append(state)
         return index
     }
 
-    func patch(values:Patch[], target:int) {
+    private func patch(values:Patch[], target:int) {
         for value in values {
             if value.edge == 1 { self.states[value.state].first = target }
             else { self.states[value.state].second = target }

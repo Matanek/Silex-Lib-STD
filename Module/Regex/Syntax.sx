@@ -10,8 +10,23 @@ use STD.Regex.Unicode.whitespace_ranges
 use STD.Regex.Unicode.property_ranges
 use STD.Regex.Unicode.complement
 
+enum SyntaxKind {
+    empty
+    literal
+    any
+    concatenate
+    alternate
+    character_class
+    start_anchor
+    end_anchor
+    capture
+    repeat
+    word_boundary
+    non_word_boundary
+}
+
 struct SyntaxNode {
-    let kind:int
+    let kind:SyntaxKind
     let scalar:uint32
     let ranges:ScalarRange[]
     let negated:bool
@@ -76,7 +91,7 @@ class Parser {
             self.position++
             let right = self.sequence()
             if right < 0 { return -1 }
-            left = self.pair_node(5, left, right)
+            left = self.pair_node(SyntaxKind.alternate, left, right)
         }
         return left
     }
@@ -89,12 +104,12 @@ class Parser {
             nodes.append(node)
         }
         if nodes.count() == 0 {
-            return self.simple_node(1)
+            return self.simple_node(SyntaxKind.empty)
         }
         var result = nodes[0]
         var index = 1
         while index < nodes.count() {
-            result = self.pair_node(4, result, nodes[index])
+            result = self.pair_node(SyntaxKind.concatenate, result, nodes[index])
             index++
         }
         return result
@@ -153,9 +168,9 @@ class Parser {
         if token == 91 { return self.character_class() }
         if token == 92 { return self.escaped_node() }
         self.position++
-        if token == 46 { return self.simple_node(3) }
-        if token == 94 { return self.simple_node(7) }
-        if token == 36 { return self.simple_node(8) }
+        if token == 46 { return self.simple_node(SyntaxKind.any) }
+        if token == 94 { return self.simple_node(SyntaxKind.start_anchor) }
+        if token == 36 { return self.simple_node(SyntaxKind.end_anchor) }
         return self.literal_node(token)
     }
 
@@ -216,7 +231,7 @@ class Parser {
         var children:int[] = []
         children.append(child)
         return self.emit_node(SyntaxNode(
-            kind:9,
+            kind:SyntaxKind.capture,
             scalar:0,
             ranges:[],
             negated:false,
@@ -281,8 +296,8 @@ class Parser {
 
     private func escaped_node() int {
         self.position++
-        if self.at(98) { self.position++; return self.simple_node(11) }
-        if self.at(66) { self.position++; return self.simple_node(12) }
+        if self.at(98) { self.position++; return self.simple_node(SyntaxKind.word_boundary) }
+        if self.at(66) { self.position++; return self.simple_node(SyntaxKind.non_word_boundary) }
         if piece = self.escape_piece() { return self.class_node(piece.ranges, false) }
         return -1
     }
@@ -423,7 +438,7 @@ class Parser {
         return index
     }
 
-    private func simple_node(kind:int) int {
+    private func simple_node(kind:SyntaxKind) int {
         return self.emit_node(SyntaxNode(
             kind:kind, scalar:0, ranges:[], negated:false,
             minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
@@ -432,19 +447,19 @@ class Parser {
 
     private func literal_node(scalar:uint32) int {
         return self.emit_node(SyntaxNode(
-            kind:2, scalar:scalar, ranges:[], negated:false,
+            kind:SyntaxKind.literal, scalar:scalar, ranges:[], negated:false,
             minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
         ))
     }
 
     private func class_node(ranges:ScalarRange[], negated:bool) int {
         return self.emit_node(SyntaxNode(
-            kind:6, scalar:0, ranges:normalized_ranges(ranges), negated:negated,
+            kind:SyntaxKind.character_class, scalar:0, ranges:normalized_ranges(ranges), negated:negated,
             minimum:0, maximum:0, greedy:true, capture_index:0, children:[]
         ))
     }
 
-    private func pair_node(kind:int, left:int, right:int) int {
+    private func pair_node(kind:SyntaxKind, left:int, right:int) int {
         var children:int[] = []
         children.append(left)
         children.append(right)
@@ -458,7 +473,7 @@ class Parser {
         var children:int[] = []
         children.append(child)
         return self.emit_node(SyntaxNode(
-            kind:10, scalar:0, ranges:[], negated:false,
+            kind:SyntaxKind.repeat, scalar:0, ranges:[], negated:false,
             minimum:minimum, maximum:maximum, greedy:greedy, capture_index:0, children:children
         ))
     }

@@ -1,10 +1,29 @@
 use STD.Regex.Types.Options
 use STD.Regex.Syntax.SyntaxNode
+use STD.Regex.Syntax.SyntaxKind
 use STD.Regex.Unicode.ScalarRange
 use STD.Regex.Unicode.word_ranges
 
+enum StateKind {
+    literal
+    any
+    character_class
+    split
+    epsilon
+    start_anchor
+    end_anchor
+    capture_start
+    capture_end
+    accept
+    word_boundary
+    non_word_boundary
+    counter_reset
+    counter_gate
+    counter_increment
+}
+
 struct State {
-    let kind:int
+    let kind:StateKind
     var first:int
     var second:int
     let scalar:uint32
@@ -17,7 +36,7 @@ struct State {
     var greedy:bool
 
     init(
-        kind:int,
+        kind:StateKind,
         first:int,
         second:int,
         scalar:uint32,
@@ -72,7 +91,7 @@ class Compiler {
         options:Options
     ) Program {
         let fragment = self.node(syntax_nodes, root)
-        let accepted = self.emit(State(10, -1, -1, 0, [], false, 0))
+        let accepted = self.emit(State(StateKind.accept, -1, -1, 0, [], false, 0))
         self.patch(fragment.outs, accepted)
         return Program(
             states:self.states,
@@ -87,45 +106,51 @@ class Compiler {
 
     private func node(syntax_nodes:SyntaxNode[], index:int) Fragment {
         let syntax = syntax_nodes[index]
-        if syntax.kind == 1 { return self.empty() }
-        if syntax.kind == 2 { return self.consuming(State(1, -1, -1, syntax.scalar, [], false, 0)) }
-        if syntax.kind == 3 { return self.consuming(State(2, -1, -1, 0, [], false, 0)) }
-        if syntax.kind == 6 {
-            return self.consuming(State(3, -1, -1, 0, syntax.ranges, syntax.negated, 0))
+        if syntax.kind == SyntaxKind.empty { return self.empty() }
+        if syntax.kind == SyntaxKind.literal {
+            return self.consuming(State(StateKind.literal, -1, -1, syntax.scalar, [], false, 0))
         }
-        if syntax.kind == 4 {
+        if syntax.kind == SyntaxKind.any {
+            return self.consuming(State(StateKind.any, -1, -1, 0, [], false, 0))
+        }
+        if syntax.kind == SyntaxKind.character_class {
+            return self.consuming(State(StateKind.character_class, -1, -1, 0, syntax.ranges, syntax.negated, 0))
+        }
+        if syntax.kind == SyntaxKind.concatenate {
             return self.concatenate(
                 self.node(syntax_nodes, syntax.children[0]),
                 self.node(syntax_nodes, syntax.children[1])
             )
         }
-        if syntax.kind == 5 {
+        if syntax.kind == SyntaxKind.alternate {
             return self.alternate(
                 self.node(syntax_nodes, syntax.children[0]),
                 self.node(syntax_nodes, syntax.children[1])
             )
         }
-        if syntax.kind == 7 { return self.zero_width(6) }
-        if syntax.kind == 8 { return self.zero_width(7) }
-        if syntax.kind == 9 {
+        if syntax.kind == SyntaxKind.start_anchor { return self.zero_width(StateKind.start_anchor) }
+        if syntax.kind == SyntaxKind.end_anchor { return self.zero_width(StateKind.end_anchor) }
+        if syntax.kind == SyntaxKind.capture {
             return self.capture(syntax.capture_index, self.node(syntax_nodes, syntax.children[0]))
         }
-        if syntax.kind == 11 { return self.word_boundary(11) }
-        if syntax.kind == 12 { return self.word_boundary(12) }
-        if syntax.kind == 10 { return self.repeat(syntax_nodes, syntax) }
+        if syntax.kind == SyntaxKind.word_boundary { return self.word_boundary(StateKind.word_boundary) }
+        if syntax.kind == SyntaxKind.non_word_boundary {
+            return self.word_boundary(StateKind.non_word_boundary)
+        }
+        if syntax.kind == SyntaxKind.repeat { return self.repeat(syntax_nodes, syntax) }
         panic("unknown regex syntax node")
     }
 
-    private func empty() Fragment { return self.zero_width(5) }
+    private func empty() Fragment { return self.zero_width(StateKind.epsilon) }
 
-    private func zero_width(kind:int) Fragment {
+    private func zero_width(kind:StateKind) Fragment {
         let state = self.emit(State(kind, -1, -1, 0, [], false, 0))
         var outs:Patch[] = []
         outs.append(Patch(state:state, edge:1))
         return Fragment(start:state, outs:outs)
     }
 
-    private func word_boundary(kind:int) Fragment {
+    private func word_boundary(kind:StateKind) Fragment {
         let state = self.emit(State(kind, -1, -1, 0, word_ranges(), false, 0))
         var outs:Patch[] = []
         outs.append(Patch(state:state, edge:1))
@@ -145,7 +170,7 @@ class Compiler {
     }
 
     private func alternate(left:Fragment, right:Fragment) Fragment {
-        let split = self.emit(State(4, left.start, right.start, 0, [], false, 0))
+        let split = self.emit(State(StateKind.split, left.start, right.start, 0, [], false, 0))
         return Fragment(start:split, outs:joined(left.outs, right.outs))
     }
 
@@ -154,7 +179,7 @@ class Compiler {
         var second = -1
         var exit_edge = 2
         if !greedy { first = -1; second = child.start; exit_edge = 1 }
-        let split = self.emit(State(4, first, second, 0, [], false, 0))
+        let split = self.emit(State(StateKind.split, first, second, 0, [], false, 0))
         var outs = child.outs
         outs.append(Patch(state:split, edge:exit_edge))
         return Fragment(start:split, outs:outs)
@@ -165,7 +190,7 @@ class Compiler {
         var second = -1
         var exit_edge = 2
         if !greedy { first = -1; second = child.start; exit_edge = 1 }
-        let split = self.emit(State(4, first, second, 0, [], false, 0))
+        let split = self.emit(State(StateKind.split, first, second, 0, [], false, 0))
         self.patch(child.outs, split)
         var outs:Patch[] = []
         outs.append(Patch(state:split, edge:exit_edge))
@@ -207,15 +232,15 @@ class Compiler {
     private func compact_repeat(child:Fragment, minimum:int, maximum:int, greedy:bool) Fragment {
         let counter = self.counter_total
         self.counter_total++
-        let gate = self.emit(State(14, child.start, -1, 0, [], false, 0))
+        let gate = self.emit(State(StateKind.counter_gate, child.start, -1, 0, [], false, 0))
         self.states[gate].minimum = minimum
         self.states[gate].maximum = maximum
         self.states[gate].counter_index = counter
         self.states[gate].greedy = greedy
-        let increment = self.emit(State(15, gate, -1, 0, [], false, 0))
+        let increment = self.emit(State(StateKind.counter_increment, gate, -1, 0, [], false, 0))
         self.states[increment].counter_index = counter
         self.patch(child.outs, increment)
-        let reset = self.emit(State(13, gate, -1, 0, [], false, 0))
+        let reset = self.emit(State(StateKind.counter_reset, gate, -1, 0, [], false, 0))
         self.states[reset].counter_index = counter
         var outs:Patch[] = []
         outs.append(Patch(state:gate, edge:2))
@@ -223,8 +248,8 @@ class Compiler {
     }
 
     private func capture(index:int, child:Fragment) Fragment {
-        let opening = self.emit(State(8, child.start, -1, 0, [], false, index))
-        let closing = self.emit(State(9, -1, -1, 0, [], false, index))
+        let opening = self.emit(State(StateKind.capture_start, child.start, -1, 0, [], false, index))
+        let closing = self.emit(State(StateKind.capture_end, -1, -1, 0, [], false, index))
         self.patch(child.outs, closing)
         var outs:Patch[] = []
         outs.append(Patch(state:closing, edge:1))
@@ -247,22 +272,25 @@ class Compiler {
 
 func fixed_syntax_width(nodes:@SyntaxNode[], index:int) int {
     let node = nodes[index]
-    if node.kind == 1 || node.kind == 7 || node.kind == 8 || node.kind == 11 || node.kind == 12 { return 0 }
-    if node.kind == 2 || node.kind == 3 || node.kind == 6 { return 1 }
-    if node.kind == 4 {
+    if node.kind == SyntaxKind.empty || node.kind == SyntaxKind.start_anchor ||
+        node.kind == SyntaxKind.end_anchor || node.kind == SyntaxKind.word_boundary ||
+        node.kind == SyntaxKind.non_word_boundary { return 0 }
+    if node.kind == SyntaxKind.literal || node.kind == SyntaxKind.any ||
+        node.kind == SyntaxKind.character_class { return 1 }
+    if node.kind == SyntaxKind.concatenate {
         let left = fixed_syntax_width(nodes, node.children[0])
         let right = fixed_syntax_width(nodes, node.children[1])
         if left < 0 || right < 0 { return -1 }
         return left + right
     }
-    if node.kind == 5 {
+    if node.kind == SyntaxKind.alternate {
         let left = fixed_syntax_width(nodes, node.children[0])
         let right = fixed_syntax_width(nodes, node.children[1])
         if left == right { return left }
         return -1
     }
-    if node.kind == 9 { return fixed_syntax_width(nodes, node.children[0]) }
-    if node.kind == 10 {
+    if node.kind == SyntaxKind.capture { return fixed_syntax_width(nodes, node.children[0]) }
+    if node.kind == SyntaxKind.repeat {
         if node.maximum != node.minimum { return -1 }
         let child = fixed_syntax_width(nodes, node.children[0])
         if child < 0 { return -1 }
@@ -273,21 +301,21 @@ func fixed_syntax_width(nodes:@SyntaxNode[], index:int) int {
 
 func first_required_literal(nodes:@SyntaxNode[], index:int) uint32? {
     let node = nodes[index]
-    if node.kind == 2 { return node.scalar }
-    if node.kind == 4 {
+    if node.kind == SyntaxKind.literal { return node.scalar }
+    if node.kind == SyntaxKind.concatenate {
         if fixed_syntax_width(nodes, node.children[0]) == 0 {
             return first_required_literal(nodes, node.children[1])
         }
         return first_required_literal(nodes, node.children[0])
     }
-    if node.kind == 5 {
+    if node.kind == SyntaxKind.alternate {
         let left = first_required_literal(nodes, node.children[0])
         let right = first_required_literal(nodes, node.children[1])
         if first = left { if second = right { if first == second { return first } } }
         return null
     }
-    if node.kind == 9 { return first_required_literal(nodes, node.children[0]) }
-    if node.kind == 10 && node.minimum > 0 {
+    if node.kind == SyntaxKind.capture { return first_required_literal(nodes, node.children[0]) }
+    if node.kind == SyntaxKind.repeat && node.minimum > 0 {
         return first_required_literal(nodes, node.children[0])
     }
     return null

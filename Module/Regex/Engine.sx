@@ -1,6 +1,7 @@
 use Interop.C
 use STD.Text
 use STD.Regex.Compiler.Program
+use STD.Regex.Compiler.StateKind
 use STD.Regex.Unicode.in_ranges
 
 struct Thread {
@@ -146,7 +147,7 @@ func search(
             return best
         }
         for thread in current.values {
-            if program.states[thread.state].kind == 10 {
+            if program.states[thread.state].kind == StateKind.accept {
                 if require_end && decoded != null { continue }
                 var accepted_starts = thread.starts
                 var accepted_ends = thread.ends
@@ -224,7 +225,7 @@ func add_thread(
         if thread.state < 0 || output.was_seen(thread.state) { continue }
         output.mark_seen(thread.state)
         let kind = program.states[thread.state].kind
-        if kind == 4 {
+        if kind == StateKind.split {
             output.schedule(Thread(
                 state:program.states[thread.state].second,
                 first:thread.first,
@@ -243,7 +244,7 @@ func add_thread(
             ))
             continue
         }
-        if kind == 5 {
+        if kind == StateKind.epsilon {
             output.schedule(Thread(
                 state:program.states[thread.state].first,
                 first:thread.first,
@@ -254,7 +255,7 @@ func add_thread(
             ))
             continue
         }
-        if kind == 6 {
+        if kind == StateKind.start_anchor {
             var allowed = position == 0
             if program.options.multi_line {
                 if scalar = previous { allowed = line_terminator(scalar) }
@@ -271,7 +272,7 @@ func add_thread(
             }
             continue
         }
-        if kind == 7 {
+        if kind == StateKind.end_anchor {
             var allowed = next == null
             if program.options.multi_line {
                 if value = next { allowed = line_terminator(value.scalar) }
@@ -288,7 +289,7 @@ func add_thread(
             }
             continue
         }
-        if kind == 8 {
+        if kind == StateKind.capture_start {
             var next_starts = thread.starts
             let capture = program.states[thread.state].capture_index * 2
             next_starts[capture] = position
@@ -303,7 +304,7 @@ func add_thread(
             ))
             continue
         }
-        if kind == 9 {
+        if kind == StateKind.capture_end {
             var next_ends = thread.ends
             let capture = program.states[thread.state].capture_index * 2
             next_ends[capture] = position
@@ -318,14 +319,14 @@ func add_thread(
             ))
             continue
         }
-        if kind == 11 || kind == 12 {
+        if kind == StateKind.word_boundary || kind == StateKind.non_word_boundary {
             var left_word = false
             var right_word = false
             let ranges = program.states[thread.state].ranges
             if scalar = previous { left_word = in_ranges(ranges, scalar) }
             if value = next { right_word = in_ranges(ranges, value.scalar) }
             var allowed = left_word != right_word
-            if kind == 12 { allowed = !allowed }
+            if kind == StateKind.non_word_boundary { allowed = !allowed }
             if allowed {
                 output.schedule(Thread(
                     state:program.states[thread.state].first,
@@ -338,7 +339,7 @@ func add_thread(
             }
             continue
         }
-        if kind == 13 {
+        if kind == StateKind.counter_reset {
             var next_counters = thread.counters
             next_counters[program.states[thread.state].counter_index] = 0
             output.schedule(Thread(
@@ -348,7 +349,7 @@ func add_thread(
             ))
             continue
         }
-        if kind == 14 {
+        if kind == StateKind.counter_gate {
             let state = program.states[thread.state]
             let count = thread.counters[state.counter_index]
             if count >= state.maximum {
@@ -384,7 +385,7 @@ func add_thread(
             }
             continue
         }
-        if kind == 15 {
+        if kind == StateKind.counter_increment {
             var next_counters = thread.counters
             let counter = program.states[thread.state].counter_index
             next_counters[counter] = next_counters[counter] + 1
@@ -401,14 +402,14 @@ func add_thread(
 
 func consumes(program:@Program, state_index:int, scalar:uint32) bool {
     let kind = program.states[state_index].kind
-    if kind == 1 {
+    if kind == StateKind.literal {
         if program.options.case_insensitive {
             return simple_fold(program.states[state_index].scalar) == simple_fold(scalar)
         }
         return program.states[state_index].scalar == scalar
     }
-    if kind == 2 { return program.options.dot_matches_newline || !line_terminator(scalar) }
-    if kind != 3 { return false }
+    if kind == StateKind.any { return program.options.dot_matches_newline || !line_terminator(scalar) }
+    if kind != StateKind.character_class { return false }
     let ranges = program.states[state_index].ranges
     var first = 0
     var last = ranges.count()

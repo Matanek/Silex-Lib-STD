@@ -1,9 +1,8 @@
 {
   "name": "STD",
-  "version": "0.16.6",
-  "extensions": [],
+  "version": "0.16.7",
   "requires": {
-    "silex": ">=0.38.20"
+    "silex": ">=0.38.33"
   },
   "boundary": {
     "macos-arm64": {

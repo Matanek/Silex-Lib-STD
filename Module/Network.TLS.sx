@@ -1,5 +1,6 @@
 use STD.Error as StandardError
 use STD.IO
+use STD.Network
 use STD.Network.TCP
 
 // TLS is a certificate-verifying stream layered over STD.Network.TCP.
@@ -21,6 +22,7 @@ public struct Error {
 }
 
 public struct ConnectOptions {
+    let connect_timeout_milliseconds:int?
     let read_timeout_milliseconds:int?
     let write_timeout_milliseconds:int?
 }
@@ -119,6 +121,7 @@ public class Stream:IO.Reader, IO.Writer {
 
 public func default_connect_options() ConnectOptions {
     return ConnectOptions(
+        connect_timeout_milliseconds:null,
         read_timeout_milliseconds:30_000,
         write_timeout_milliseconds:30_000
     )
@@ -139,7 +142,7 @@ public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream
         ))
     }
     match TCP.connect(host, port, TCP.ConnectOptions(
-        connect_timeout_milliseconds:null,
+        connect_timeout_milliseconds:options.connect_timeout_milliseconds,
         stream:TCP.StreamOptions(
             read_timeout_milliseconds:options.read_timeout_milliseconds,
             write_timeout_milliseconds:options.write_timeout_milliseconds
@@ -148,6 +151,36 @@ public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream
         success(transport) => {
             return open_stream(transport, host)
         }
+        failure(error) => {
+            return Result<Stream, Error>.failure(failure(ErrorKind.network, host, error.detail))
+        }
+    }
+}
+
+public func connect_endpoint(endpoint:Network.Endpoint, host:str) Result<Stream, Error> {
+    return connect_endpoint(endpoint, host, default_connect_options())
+}
+
+public func connect_endpoint(
+    endpoint:Network.Endpoint,
+    host:str,
+    options:ConnectOptions
+) Result<Stream, Error> {
+    if !Platform.available() {
+        return Result<Stream, Error>.failure(failure(
+            ErrorKind.unsupported_platform,
+            host,
+            "TLS has no certificate-verifying provider for this target"
+        ))
+    }
+    match TCP.connect(endpoint, TCP.ConnectOptions(
+        connect_timeout_milliseconds:options.connect_timeout_milliseconds,
+        stream:TCP.StreamOptions(
+            read_timeout_milliseconds:options.read_timeout_milliseconds,
+            write_timeout_milliseconds:options.write_timeout_milliseconds
+        )
+    )) {
+        success(transport) => { return open_stream(transport, host) }
         failure(error) => {
             return Result<Stream, Error>.failure(failure(ErrorKind.network, host, error.detail))
         }

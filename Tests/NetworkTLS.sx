@@ -3,3 +3,14 @@ use STD.Network.TLS
 test "target reports TLS provider availability" {
     assert(TLS.available(), "macOS host should expose its certificate-verifying TLS provider")
 }
+
+test "TLS options separate connect and stream timeouts" {
+    let options = TLS.default_connect_options()
+    if let timeout = options.connect_timeout_milliseconds {
+        panic("default TLS connect timeout should follow the system default")
+    }
+    if let timeout = options.read_timeout_milliseconds { assert(timeout == 30_000) }
+    else { panic("default TLS read timeout should be present") }
+    if let timeout = options.write_timeout_milliseconds { assert(timeout == 30_000) }
+    else { panic("default TLS write timeout should be present") }
+}

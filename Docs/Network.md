@@ -41,10 +41,19 @@ buffer truncated the datagram. See
 ## TLS streams
 
 `TLS.connect(host, port)` opens TCP and returns a certificate-verifying
-`TLS.Stream` conforming to `IO.Reader` and `IO.Writer`. The macOS provider
+`TLS.Stream` conforming to `IO.Reader` and `IO.Writer`. `TLS.ConnectOptions`
+separates connect, read and write timeouts; as with TCP, the bootstrap socket
+backend reports non-null connect timeouts as unsupported instead of ignoring
+them. The macOS provider
 requires TLS 1.2 or newer and validates both the certificate chain and requested
 host name against the system trust store. Close it explicitly with
 `TLS.close(stream)`. See [TlsFetch.sx](../Examples/Network/TlsFetch.sx).
+
+Security-sensitive clients may resolve and validate a concrete endpoint before
+calling `TLS.connect_endpoint(endpoint, host, options)`. The connection uses
+that exact endpoint while `host` remains the certificate-verification and TLS
+server-name identity. This avoids a second DNS resolution after an address
+policy has approved the destination.
 
 The current Linux and Windows fragments report `unsupported_platform` until
 their certificate-verifying providers are implemented. They never disable

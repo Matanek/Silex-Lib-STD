@@ -1,14 +1,17 @@
 {
   "name": "STD",
-  "version": "0.16.7",
+  "version": "0.16.8",
   "requires": {
-    "silex": ">=0.38.33"
+    "silex": ">=0.38.37"
   },
   "boundary": {
     "macos-arm64": {
       "providers": {
         "System": {
           "libraries": ["System"]
+        },
+        "Security": {
+          "frameworks": ["CoreFoundation", "Security"]
         }
       }
     },

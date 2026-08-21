@@ -1,0 +1,194 @@
+use STD.Error as StandardError
+use STD.IO
+use STD.Network.TCP
+
+// TLS is a certificate-verifying stream layered over STD.Network.TCP.
+
+public enum ErrorKind {
+    unsupported_platform
+    network
+    configuration
+    handshake
+    certificate
+    input_output
+    closed
+}
+
+public struct Error {
+    let kind:ErrorKind
+    let host:str?
+    let detail:str
+}
+
+public struct ConnectOptions {
+    let read_timeout_milliseconds:int?
+    let write_timeout_milliseconds:int?
+}
+
+public class Stream:IO.Reader, IO.Writer {
+    private var transport:TCP.Stream?
+    private var context:uint
+    private var closed:bool
+
+    package init(transport:TCP.Stream) {
+        self.transport = transport
+        self.context = 0
+        self.closed = false
+    }
+
+    func read(buffer:&uint8[..]) Result<int, StandardError> {
+        if self.closed {
+            return Result<int, StandardError>.failure(standard_error("tls.read", "TLS stream is closed"))
+        }
+        match Platform.read(self.context, buffer) {
+            success(count) => { return Result<int, StandardError>.success(count) }
+            failure(status) => {
+                return Result<int, StandardError>.failure(standard_error(
+                    "tls.read",
+                    "TLS provider failed with status $(status)"
+                ))
+            }
+        }
+    }
+
+    func write(buffer:@uint8[..]) Result<int, StandardError> {
+        if self.closed {
+            return Result<int, StandardError>.failure(standard_error("tls.write", "TLS stream is closed"))
+        }
+        match Platform.write(self.context, buffer) {
+            success(count) => { return Result<int, StandardError>.success(count) }
+            failure(status) => {
+                return Result<int, StandardError>.failure(standard_error(
+                    "tls.write",
+                    "TLS provider failed with status $(status)"
+                ))
+            }
+        }
+    }
+
+    package func set_context(value:uint) { self.context = value }
+    package func context_value() uint { return self.context }
+    package func is_closed() bool { return self.closed }
+
+    package func transport_read(count:int) Result<uint8[], StandardError> {
+        if var transport = self.transport {
+            var result:uint8[] = []
+            var index = 0
+            while index < count {
+                var byte:uint8[1] = [0]
+                var view = &byte[0:1]
+                match transport.read(view) {
+                    success(read) => {
+                        if read == 0 { return Result<uint8[], StandardError>.success(result) }
+                        result.append(view[0])
+                    }
+                    failure(error) => { return Result<uint8[], StandardError>.failure(error) }
+                }
+                index++
+            }
+            return Result<uint8[], StandardError>.success(result)
+        }
+        return Result<uint8[], StandardError>.failure(standard_error("tls.transport.read", "TCP transport is closed"))
+    }
+
+    package func transport_write(bytes:uint8[]) Result<int, StandardError> {
+        if var transport = self.transport {
+            if bytes.count() == 0 { return Result<int, StandardError>.success(0) }
+            return transport.write(@bytes[0:bytes.count()])
+        }
+        return Result<int, StandardError>.failure(standard_error("tls.transport.write", "TCP transport is closed"))
+    }
+
+    package func close_transport() {
+        if var transport = self.transport {
+            self.transport = null
+            match TCP.close(move transport) { success => {}; failure(error) => {} }
+        }
+    }
+
+    package func mark_closed() { self.closed = true }
+
+    drop {
+        if !self.closed {
+            self.closed = true
+            Platform.close(self.context)
+            self.close_transport()
+        }
+    }
+}
+
+public func default_connect_options() ConnectOptions {
+    return ConnectOptions(
+        read_timeout_milliseconds:30_000,
+        write_timeout_milliseconds:30_000
+    )
+}
+
+public func available() bool { return Platform.available() }
+
+public func connect(host:str, port:uint16) Result<Stream, Error> {
+    return connect(host, port, default_connect_options())
+}
+
+public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream, Error> {
+    if !Platform.available() {
+        return Result<Stream, Error>.failure(failure(
+            ErrorKind.unsupported_platform,
+            host,
+            "TLS has no certificate-verifying provider for this target"
+        ))
+    }
+    match TCP.connect(host, port, TCP.ConnectOptions(
+        connect_timeout_milliseconds:null,
+        stream:TCP.StreamOptions(
+            read_timeout_milliseconds:options.read_timeout_milliseconds,
+            write_timeout_milliseconds:options.write_timeout_milliseconds
+        )
+    )) {
+        success(transport) => {
+            return open_stream(transport, host)
+        }
+        failure(error) => {
+            return Result<Stream, Error>.failure(failure(ErrorKind.network, host, error.detail))
+        }
+    }
+}
+
+func open_stream(transport:TCP.Stream, host:str) Result<Stream, Error> {
+    var stream = Stream(transport)
+    match Platform.open(stream, host) {
+        success(context) => {
+            stream.set_context(context)
+            return Result<Stream, Error>.success(stream)
+        }
+        failure(error) => {
+            stream.close_transport()
+            stream.mark_closed()
+            return Result<Stream, Error>.failure(error)
+        }
+    }
+}
+
+public func close(stream:Stream) Result<void, Error> {
+    if stream.is_closed() {
+        return Result<void, Error>.failure(failure(ErrorKind.closed, null, "TLS stream is already closed"))
+    }
+    stream.mark_closed()
+    let status = Platform.close(stream.context_value())
+    stream.close_transport()
+    if status == 0 { return Result<void, Error>.success() }
+    return Result<void, Error>.failure(failure(ErrorKind.input_output, null, "TLS close failed with status $(status)"))
+}
+
+package func failure(kind:ErrorKind, host:str?, detail:str) Error {
+    return Error(kind:kind, host:host, detail:detail)
+}
+
+func standard_error(operation:str, detail:str) StandardError {
+    return StandardError(
+        kind:StandardError.Kind.other,
+        operation:operation,
+        subject:null,
+        detail:detail
+    )
+}

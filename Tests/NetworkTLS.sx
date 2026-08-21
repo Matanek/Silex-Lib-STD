@@ -1,0 +1,5 @@
+use STD.Network.TLS
+
+test "target reports TLS provider availability" {
+    assert(TLS.available(), "macOS host should expose its certificate-verifying TLS provider")
+}

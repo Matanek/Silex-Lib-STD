@@ -1,0 +1,219 @@
+use Interop.Boundary
+use Interop.C
+use STD.Network.TLS
+
+let ssl_create_context = C.function<func(C.Pointer<uint8>, int32, int32) C.Pointer<uint8> >(
+    library:Boundary.Security,
+    name:"SSLCreateContext"
+)
+let ssl_set_io = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(
+    library:Boundary.Security,
+    name:"SSLSetIOFuncs"
+)
+let ssl_set_connection = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(
+    library:Boundary.Security,
+    name:"SSLSetConnection"
+)
+let ssl_set_peer_name = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Size) int32>(
+    library:Boundary.Security,
+    name:"SSLSetPeerDomainName"
+)
+let ssl_set_option = C.function<func(C.Pointer<uint8>, int32, int32) int32>(
+    library:Boundary.Security,
+    name:"SSLSetSessionOption"
+)
+let ssl_set_minimum_protocol = C.function<func(C.Pointer<uint8>, int32) int32>(
+    library:Boundary.Security,
+    name:"SSLSetProtocolVersionMin"
+)
+let ssl_handshake = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.Security, name:"SSLHandshake")
+let ssl_copy_peer_trust = C.function<func(C.Pointer<uint8>, C.MutablePointer<uint>) int32>(
+    library:Boundary.Security,
+    name:"SSLCopyPeerTrust"
+)
+let trust_evaluate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(
+    library:Boundary.Security,
+    name:"SecTrustEvaluateWithError"
+)
+let ssl_read = C.function<func(C.Pointer<uint8>, C.MutablePointer<uint8>, C.Size, C.MutablePointer<uint>) int32>(
+    library:Boundary.Security,
+    name:"SSLRead"
+)
+let ssl_write = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Size, C.MutablePointer<uint>) int32>(
+    library:Boundary.Security,
+    name:"SSLWrite"
+)
+let ssl_close = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.Security, name:"SSLClose")
+let cf_release = C.function<func(C.Pointer<uint8>) void>(library:Boundary.Security, name:"CFRelease")
+
+package func available() bool { return true }
+
+package func open(stream:TLS.Stream, host:str) Result<uint, TLS.Error> {
+    let context = C.address_bits(ssl_create_context(C.pointer_bits(0), 1, 0))
+    if context == 0 {
+        return Result<uint, TLS.Error>.failure(TLS.failure(TLS.ErrorKind.configuration, host, "SSLCreateContext failed"))
+    }
+    let read_callback:func(uint, uint, uint) int32 = transport_read
+    let write_callback:func(uint, uint, uint) int32 = transport_write
+    var status = ssl_set_io(
+        C.pointer_bits(context),
+        C.pointer_bits(C.function_address(read_callback)),
+        C.pointer_bits(C.function_address(write_callback))
+    )
+    if status == 0 {
+        status = ssl_set_connection(C.pointer_bits(context), C.pointer_bits(C.object_address(stream)))
+    }
+    if status == 0 {
+        status = ssl_set_peer_name(C.pointer_bits(context), C.pointer(host), C.byte_count(host))
+    }
+    if status == 0 {
+        status = ssl_set_minimum_protocol(C.pointer_bits(context), 8)
+    }
+    if status == 0 {
+        status = ssl_set_option(C.pointer_bits(context), 0, 1)
+    }
+    if status != 0 {
+        cf_release(C.pointer_bits(context))
+        return Result<uint, TLS.Error>.failure(TLS.failure(
+            TLS.ErrorKind.configuration,
+            host,
+            "TLS configuration failed with status $(status)"
+        ))
+    }
+    while true {
+        status = ssl_handshake(C.pointer_bits(context))
+        if status == 0 { return Result<uint, TLS.Error>.success(context) }
+        if status as uint32 == 4_294_957_493 as uint32 { continue }
+        if status as uint32 == 4_294_957_455 as uint32 {
+            var trust:uint = 0
+            let copied = ssl_copy_peer_trust(C.pointer_bits(context), C.mutable_pointer(trust))
+            if copied != 0 || trust == 0 {
+                cf_release(C.pointer_bits(context))
+                return Result<uint, TLS.Error>.failure(TLS.failure(
+                    TLS.ErrorKind.certificate,
+                    host,
+                    "server certificate chain is unavailable"
+                ))
+            }
+            let trusted = trust_evaluate(C.pointer_bits(trust), C.pointer_bits(0)) != 0
+            cf_release(C.pointer_bits(trust))
+            if !trusted {
+                ssl_close(C.pointer_bits(context))
+                cf_release(C.pointer_bits(context))
+                return Result<uint, TLS.Error>.failure(TLS.failure(
+                    TLS.ErrorKind.certificate,
+                    host,
+                    "server certificate or host name is not trusted"
+                ))
+            }
+            continue
+        }
+        ssl_close(C.pointer_bits(context))
+        cf_release(C.pointer_bits(context))
+        return Result<uint, TLS.Error>.failure(TLS.failure(
+            TLS.ErrorKind.handshake,
+            host,
+            "TLS handshake failed with status $(status)"
+        ))
+    }
+    panic("TLS handshake loop terminated unexpectedly")
+}
+
+package func read(context:uint, buffer:&uint8[..]) Result<int, int> {
+    if buffer.count() == 0 { return Result<int, int>.success(0) }
+    var compact = C.string(@buffer[0:buffer.count()])
+    var processed:uint = 0
+    let status = ssl_read(
+        C.pointer_bits(context),
+        C.mutable_string_pointer(compact),
+        buffer.count() as C.Size,
+        C.mutable_pointer(processed)
+    )
+    var index = 0
+    while index < processed as int {
+        buffer[index] = C.byte_at(compact, index as uint)
+        index++
+    }
+    if status == 0 || (status as uint32 == 4_294_957_493 as uint32 && processed > 0) {
+        return Result<int, int>.success(processed as int)
+    }
+    if status as uint32 == 4_294_957_491 as uint32 || status as uint32 == 4_294_957_480 as uint32 {
+        return Result<int, int>.success(0)
+    }
+    return Result<int, int>.failure(status as int)
+}
+
+package func write(context:uint, buffer:@uint8[..]) Result<int, int> {
+    if buffer.count() == 0 { return Result<int, int>.success(0) }
+    let compact = C.string(buffer)
+    var processed:uint = 0
+    let status = ssl_write(
+        C.pointer_bits(context),
+        C.pointer(compact),
+        buffer.count() as C.Size,
+        C.mutable_pointer(processed)
+    )
+    if status == 0 || (status as uint32 == 4_294_957_493 as uint32 && processed > 0) {
+        return Result<int, int>.success(processed as int)
+    }
+    return Result<int, int>.failure(status as int)
+}
+
+package func close(context:uint) int {
+    if context == 0 { return 0 }
+    let status = ssl_close(C.pointer_bits(context))
+    cf_release(C.pointer_bits(context))
+    return status as int
+}
+
+func transport_read(
+    connection:uint,
+    data:uint,
+    length:uint
+) int32 {
+    let requested = C.load<uint>(length, 0 as uint) as int
+    var stream = C.object_from_address<TLS.Stream>(connection)
+    match stream.transport_read(requested) {
+        failure(error) => {
+            let stored = C.store<uint>(length, 0 as uint, 0)
+            return -9806
+        }
+        success(bytes) => {
+            var index = 0
+            while index < bytes.count() {
+                let stored = C.store<uint8>(data, index as uint, bytes[index])
+                index++
+            }
+            let stored = C.store<uint>(length, 0 as uint, bytes.count() as uint)
+            if bytes.count() == 0 { return -9805 }
+            if bytes.count() < requested { return -9803 }
+            return 0
+        }
+    }
+}
+
+func transport_write(
+    connection:uint,
+    data:uint,
+    length:uint
+) int32 {
+    let requested = C.load<uint>(length, 0 as uint) as int
+    var bytes:uint8[] = []
+    var index = 0
+    while index < requested {
+        bytes.append(C.load<uint8>(data, index as uint))
+        index++
+    }
+    var stream = C.object_from_address<TLS.Stream>(connection)
+    match stream.transport_write(bytes) {
+        failure(error) => {
+            let stored = C.store<uint>(length, 0 as uint, 0)
+            return -9806
+        }
+        success(written) => {
+            let stored = C.store<uint>(length, 0 as uint, written as uint)
+            if written < requested { return -9803 }
+            return 0
+        }
+    }
+}

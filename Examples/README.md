@@ -114,6 +114,11 @@ are not wanted in the project.
   `127.0.0.1:9000`.
 - [UdpReceiver.sx](Network/UdpReceiver.sx) — bind, receive and decode one
   bounded UDP datagram on `127.0.0.1:9000`.
+- [TlsAvailability.sx](Network/TlsAvailability.sx) — inspect whether the selected
+  target provides certificate-verifying TLS.
+- [TlsFetch.sx](Network/TlsFetch.sx) — negotiate TLS 1.2 or newer, verify
+  `example.com` and read encrypted response data. External network access is
+  required.
 
 ## Concurrency and time
 

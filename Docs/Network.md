@@ -38,5 +38,20 @@ buffer truncated the datagram. See
 [UdpAnnouncement.sx](../Examples/Network/UdpAnnouncement.sx) and
 [UdpReceiver.sx](../Examples/Network/UdpReceiver.sx).
 
-Socket operations are fallible and use `STD.Error`. Name resolution, address
-families and port availability depend on the selected runtime platform.
+## TLS streams
+
+`TLS.connect(host, port)` opens TCP and returns a certificate-verifying
+`TLS.Stream` conforming to `IO.Reader` and `IO.Writer`. The macOS provider
+requires TLS 1.2 or newer and validates both the certificate chain and requested
+host name against the system trust store. Close it explicitly with
+`TLS.close(stream)`. See [TlsFetch.sx](../Examples/Network/TlsFetch.sx).
+
+The current Linux and Windows fragments report `unsupported_platform` until
+their certificate-verifying providers are implemented. They never disable
+verification or replace an encrypted connection with cleartext. Applications
+can inspect this capability with `TLS.available()`; see
+[TlsAvailability.sx](../Examples/Network/TlsAvailability.sx).
+
+Socket operations are fallible and use `STD.Error`; TLS connection and trust
+failures use `TLS.Error`. Name resolution, address families, certificate stores
+and port availability depend on the selected runtime platform.

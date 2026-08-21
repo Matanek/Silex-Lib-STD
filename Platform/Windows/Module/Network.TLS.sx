@@ -1,0 +1,9 @@
+use STD.Network.TLS
+
+package func available() bool { return false }
+package func open(stream:TLS.Stream, host:str) Result<uint, TLS.Error> {
+    return Result<uint, TLS.Error>.failure(TLS.failure(TLS.ErrorKind.unsupported_platform, host, "TLS Windows provider is not implemented"))
+}
+package func read(context:uint, buffer:&uint8[..]) Result<int, int> { return Result<int, int>.failure(-1) }
+package func write(context:uint, buffer:@uint8[..]) Result<int, int> { return Result<int, int>.failure(-1) }
+package func close(context:uint) int { return 0 }

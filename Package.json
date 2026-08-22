@@ -1,6 +1,6 @@
 {
   "name": "STD",
-  "version": "0.16.9",
+  "version": "0.17.0",
   "requires": {
     "silex": ">=0.38.37"
   },
@@ -12,6 +12,12 @@
         },
         "Security": {
           "frameworks": ["CoreFoundation", "Security"]
+        },
+        "Compression": {
+          "archive": "Boundary/macos-arm64/libCompression.a"
+        },
+        "NetworkRuntime": {
+          "archive": "Boundary/macos-arm64/libNetworkRuntime.a"
         }
       }
     },
@@ -19,6 +25,12 @@
       "providers": {
         "System": {
           "libraries": ["c", "m", "pthread"]
+        },
+        "Compression": {
+          "archive": "Boundary/linux-x64/libCompression.a"
+        },
+        "NetworkRuntime": {
+          "archive": "Boundary/linux-x64/libNetworkRuntime.a"
         }
       }
     },
@@ -35,6 +47,12 @@
         },
         "Network": {
           "libraries": ["ws2_32"]
+        },
+        "Compression": {
+          "archive": "Boundary/windows-x64/Compression.lib"
+        },
+        "NetworkRuntime": {
+          "archive": "Boundary/windows-x64/NetworkRuntime.lib"
         }
       }
     },
@@ -51,6 +69,12 @@
         },
         "Network": {
           "libraries": ["ws2_32"]
+        },
+        "Compression": {
+          "archive": "Boundary/windows-arm64/Compression.lib"
+        },
+        "NetworkRuntime": {
+          "archive": "Boundary/windows-arm64/NetworkRuntime.lib"
         }
       }
     }

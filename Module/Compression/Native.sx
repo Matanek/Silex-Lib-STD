@@ -1,0 +1,38 @@
+use Interop.C
+use Interop.Boundary
+
+let native_decompress = C.function<func(
+    C.Pointer<uint8>, C.Size, C.MutablePointer<uint8>, C.Size, uint32
+) int>(library:Boundary.Compression, name:"silex_compression_decompress")
+
+module func decompress(
+    input:@uint8[..],
+    capacity:int,
+    format:uint8
+) Decompression {
+    let packed_input = C.string(input)
+    var storage:uint8[] = []
+    while storage.count() < capacity { storage.append(0 as uint8) }
+    var packed_output = C.string(@storage[0:storage.count()])
+    let status = native_decompress(
+        C.pointer(packed_input),
+        C.byte_count(packed_input),
+        C.mutable_string_pointer(packed_output),
+        capacity as C.Size,
+        format as uint32
+    )
+    var bytes:uint8[] = []
+    if status >= 0 {
+        var index = 0
+        while index < status {
+            bytes.append(C.byte_at(packed_output, index as C.Size))
+            index++
+        }
+    }
+    return Decompression(status:status, bytes:bytes)
+}
+
+module struct Decompression {
+    let status:int
+    let bytes:uint8[]
+}

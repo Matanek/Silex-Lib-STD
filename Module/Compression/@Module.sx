@@ -1,0 +1,72 @@
+use STD.Compression.Native
+use STD.Error
+
+public enum Format {
+    raw_deflate
+    gzip
+    zlib
+}
+
+public func decompress(
+    input:@uint8[..],
+    format:Format,
+    maximum_output_bytes:int = 16 * 1024 * 1024
+) Result<uint8[], Error> {
+    if maximum_output_bytes < 0 {
+        return Result<uint8[], Error>.failure(compression_error(
+            Error.Kind.invalid_input,
+            "maximum_output_bytes must be non-negative"
+        ))
+    }
+    if input.is_empty() {
+        return Result<uint8[], Error>.failure(compression_error(
+            Error.Kind.invalid_data,
+            "compressed input is empty"
+        ))
+    }
+    var capacity = input.count() * 3
+    if capacity < 256 { capacity = 256 }
+    if capacity > maximum_output_bytes { capacity = maximum_output_bytes }
+    while capacity > 0 {
+        let attempt = Native.decompress(input, capacity, format_value(format))
+        if attempt.status >= 0 {
+            return Result<uint8[], Error>.success(attempt.bytes)
+        }
+        if attempt.status != -2 {
+            return Result<uint8[], Error>.failure(compression_error(
+                Error.Kind.invalid_data,
+                "compressed input is malformed or has an invalid checksum"
+            ))
+        }
+        if capacity >= maximum_output_bytes {
+            return Result<uint8[], Error>.failure(compression_error(
+                Error.Kind.limit_exceeded,
+                "decompressed data exceeds maximum_output_bytes"
+            ))
+        }
+        var next = capacity * 2
+        if next > maximum_output_bytes { next = maximum_output_bytes }
+        capacity = next
+    }
+    return Result<uint8[], Error>.failure(compression_error(
+        Error.Kind.limit_exceeded,
+        "decompressed data exceeds maximum_output_bytes"
+    ))
+}
+
+func format_value(format:Format) uint8 {
+    return match format {
+        raw_deflate => 0 as uint8
+        gzip => 1 as uint8
+        zlib => 2 as uint8
+    }
+}
+
+func compression_error(kind:Error.Kind, detail:str) Error {
+    return Error(
+        kind:kind,
+        operation:"compression.decompress",
+        subject:null,
+        detail:detail
+    )
+}

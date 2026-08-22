@@ -21,15 +21,30 @@ let system_close = C.function<func(int) int32>(library:Boundary.Network, name:"c
 let system_getsockname = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int32>(library:Boundary.Network, name:"getsockname")
 let system_getpeername = C.function<func(int, C.MutablePointer<int>, C.MutablePointer<int>) int32>(library:Boundary.Network, name:"getpeername")
 let system_setsockopt = C.function<func(int, int32, int32, C.Pointer<uint8>, int32) int32>(library:Boundary.Network, name:"setsockopt")
+let runtime_connect = C.function<func(C.MutablePointer<int>, uint32, int, int, int) int>(
+    library:Boundary.NetworkRuntime,
+    name:"silex_tcp_connect_bounded"
+)
 
 func connect(family:int, address:@uint8[..], port:uint16, scope:uint32, connect_timeout:int, read_timeout:int, write_timeout:int) int {
-    if connect_timeout >= 0 || !startup() { return -1 }
-    let descriptor = system_socket(native_family(family), 1, 6)
-    if descriptor == -1 { cleanup(); return -1 }
-    if !configure(descriptor, read_timeout, write_timeout) { close_raw(descriptor); return -1 }
+    if !startup() { return -1 }
     var storage:int[4]
     let length = write_address(storage, family, address, port, scope)
-    if system_connect(descriptor, C.mutable_pointer(storage), length) != 0 { close_raw(descriptor); return -1 }
+    if connect_timeout >= 0 {
+        let descriptor = runtime_connect(
+            C.mutable_pointer(storage), length as uint32,
+            connect_timeout, read_timeout, write_timeout
+        )
+        if descriptor < 0 { cleanup() }
+        return descriptor
+    }
+    let descriptor = system_socket(native_family(family), 1, 6)
+    if descriptor == -1 { cleanup(); return -1 }
+    if !configure(descriptor, read_timeout, write_timeout) ||
+        system_connect(descriptor, C.mutable_pointer(storage), length) != 0 {
+        close_raw(descriptor)
+        return -1
+    }
     return descriptor
 }
 

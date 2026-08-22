@@ -90,12 +90,6 @@ public func connect(endpoint:Network.Endpoint, options:ConnectOptions) Result<St
     let connect_timeout = try timeout(options.connect_timeout_milliseconds, "tcp.connect")
     let read_timeout = try timeout(options.stream.read_timeout_milliseconds, "tcp.connect")
     let write_timeout = try timeout(options.stream.write_timeout_milliseconds, "tcp.connect")
-    if connect_timeout >= 0 {
-        return Result<Stream, Error>.failure(Error(
-            kind:Error.Kind.unsupported(), operation:"tcp.connect", subject:null,
-            detail:"connect timeouts are not implemented by the bootstrap socket backend yet"
-        ))
-    }
     return connect_endpoint(endpoint, connect_timeout, read_timeout, write_timeout)
 }
 
@@ -163,7 +157,9 @@ func connect_endpoint(value:Network.Endpoint, connect_timeout:int, read_timeout:
         ipv4(bytes) => connect4(bytes, value, connect_timeout, read_timeout, write_timeout)
         ipv6(bytes) => connect6(bytes, value, connect_timeout, read_timeout, write_timeout)
     }
-    if descriptor < 0 { return Result<Stream, Error>.failure(failure("tcp.connect", "system connect failed")) }
+    if descriptor < 0 { return Result<Stream, Error>.failure(failure(
+        "tcp.connect", "system connect failed with status $(descriptor)"
+    )) }
     return Result<Stream, Error>.success(Stream(descriptor))
 }
 

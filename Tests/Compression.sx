@@ -1,0 +1,42 @@
+use STD.Compression
+use STD.Error
+use STD.Text.UTF8
+
+func text(bytes:uint8[]) str {
+    match UTF8.decode(@bytes[0:bytes.count()]) {
+        success(value) => { return value }
+        failure(error) => { panic("decompressed fixture is not UTF-8") }
+    }
+}
+
+test "decompress gzip and zlib payloads" {
+    let gzip:uint8[] = [
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+        0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00,
+        0x86, 0xa6, 0x10, 0x36, 0x05, 0x00, 0x00, 0x00
+    ]
+    let zlib:uint8[] = [
+        0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00,
+        0x06, 0x2c, 0x02, 0x15
+    ]
+    match Compression.decompress(@gzip[0:gzip.count()], Compression.Format.gzip) {
+        success(value) => { assert(text(value) == "hello") }
+        failure(error) => { panic(error.detail) }
+    }
+    match Compression.decompress(@zlib[0:zlib.count()], Compression.Format.zlib) {
+        success(value) => { assert(text(value) == "hello") }
+        failure(error) => { panic(error.detail) }
+    }
+}
+
+test "bound decompressed output" {
+    let gzip:uint8[] = [
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+        0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00,
+        0x86, 0xa6, 0x10, 0x36, 0x05, 0x00, 0x00, 0x00
+    ]
+    match Compression.decompress(@gzip[0:gzip.count()], Compression.Format.gzip, 4) {
+        success(value) => { panic("decompression should enforce its output limit") }
+        failure(error) => { assert(error.kind == Error.Kind.limit_exceeded) }
+    }
+}

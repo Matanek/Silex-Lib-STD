@@ -237,6 +237,11 @@ cased character of each word and lowercases the remaining cased characters.
 Case-ignorable characters such as combining marks and apostrophes remain in
 the current word; other uncased characters start a new word.
 
+Bounded decompression lives under `STD.Compression` for raw deflate, gzip and
+zlib streams. The output limit is mandatory in the execution contract and
+prevents malformed or highly compressible input from growing without bound.
+See [Docs/Compression.md](Docs/Compression.md).
+
 Cryptographic hashes and system entropy are available through `STD.Crypto`:
 
 ```sx

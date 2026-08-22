@@ -149,7 +149,7 @@ public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream
         )
     )) {
         success(transport) => {
-            return open_stream(transport, host)
+            return open(transport, host)
         }
         failure(error) => {
             return Result<Stream, Error>.failure(failure(ErrorKind.network, host, error.detail))
@@ -180,14 +180,25 @@ public func connect_endpoint(
             write_timeout_milliseconds:options.write_timeout_milliseconds
         )
     )) {
-        success(transport) => { return open_stream(transport, host) }
+        success(transport) => { return open(transport, host) }
         failure(error) => {
             return Result<Stream, Error>.failure(failure(ErrorKind.network, host, error.detail))
         }
     }
 }
 
-func open_stream(transport:TCP.Stream, host:str) Result<Stream, Error> {
+// Takes ownership of an already-connected TCP stream and performs a
+// certificate-verifying TLS handshake for host. This is useful after an HTTP
+// CONNECT tunnel or another transport-level negotiation.
+public func open(transport:TCP.Stream, host:str) Result<Stream, Error> {
+    if !Platform.available() {
+        match TCP.close(move transport) { success => {}; failure(error) => {} }
+        return Result<Stream, Error>.failure(failure(
+            ErrorKind.unsupported_platform,
+            host,
+            "TLS has no certificate-verifying provider for this target"
+        ))
+    }
     var stream = Stream(transport)
     match Platform.open(stream, host) {
         success(context) => {

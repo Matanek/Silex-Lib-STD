@@ -16,8 +16,9 @@ resolved locally. See [ResolveService.sx](../Examples/Network/ResolveService.sx)
 `TCP.connect` accepts one endpoint or resolves a host. `ConnectOptions` separates
 connection behavior from the resulting stream's read and write timeouts. A
 `null` timeout waits according to the system default; negative timeouts are
-invalid. The bootstrap backend does not yet implement non-null connect
-timeouts and returns `unsupported` rather than silently ignoring them.
+invalid. Non-null connect timeouts are enforced by a small nonblocking socket
+boundary on macOS ARM64, Linux x86-64, Windows x86-64 and Windows ARM64. The
+unbounded path remains the direct system call and pays no polling overhead.
 
 A `TCP.Stream` conforms to `IO.Reader` and `IO.Writer`. It exposes local and
 peer endpoints plus independent read/write shutdown. Transfer ownership to
@@ -42,9 +43,7 @@ buffer truncated the datagram. See
 
 `TLS.connect(host, port)` opens TCP and returns a certificate-verifying
 `TLS.Stream` conforming to `IO.Reader` and `IO.Writer`. `TLS.ConnectOptions`
-separates connect, read and write timeouts; as with TCP, the bootstrap socket
-backend reports non-null connect timeouts as unsupported instead of ignoring
-them. The macOS provider
+separates connect, read and write timeouts. The macOS provider
 requires TLS 1.2 or newer and validates both the certificate chain and requested
 host name against the system trust store. Close it explicitly with
 `TLS.close(stream)`. See [TlsFetch.sx](../Examples/Network/TlsFetch.sx).
@@ -54,6 +53,11 @@ calling `TLS.connect_endpoint(endpoint, host, options)`. The connection uses
 that exact endpoint while `host` remains the certificate-verification and TLS
 server-name identity. This avoids a second DNS resolution after an address
 policy has approved the destination.
+
+`TLS.open(transport, host)` instead takes ownership of an already-connected
+`TCP.Stream` and performs the same certificate- and hostname-verifying
+handshake. It supports protocols such as an HTTPS proxy tunnel without exposing
+provider internals or permitting a cleartext fallback.
 
 The current Linux and Windows fragments report `unsupported_platform` until
 their certificate-verifying providers are implemented. They never disable

@@ -391,10 +391,14 @@ func verify_stable_graph(worker_count:int) int {
             parallel_allocations = executor.parallel_allocation_count()
         }
     }
-    if executor.submission_allocation_count() != submission_allocations ||
-        executor.combination_allocation_count() != combination_allocations ||
-        executor.parallel_allocation_count() != parallel_allocations
+    let current_submissions = executor.submission_allocation_count()
+    let current_combinations = executor.combination_allocation_count()
+    let current_parallel = executor.parallel_allocation_count()
+    if current_submissions != submission_allocations ||
+        current_combinations != combination_allocations ||
+        current_parallel != parallel_allocations
     {
+        print("SILEX_THREADING_GRAPH allocations workers=$(worker_count) expected=$(submission_allocations)/$(combination_allocations)/$(parallel_allocations) actual=$(current_submissions)/$(current_combinations)/$(current_parallel)")
         panic("warmed multi-phase graph allocated new scheduling state")
     }
     return signature
@@ -748,6 +752,7 @@ test "warmed multi-phase graphs stay deterministic across worker counts" {
     let two = verify_stable_graph(2)
     let four = verify_stable_graph(4)
     let expected = 2 * (256 * (4_096 * 4_097 / 2) - 4_096)
+    print("SILEX_THREADING_GRAPH signatures workers-1=$(one) workers-2=$(two) workers-4=$(four) expected=$(expected)")
     if one != two || two != four || four != expected {
         panic("multi-phase graph changed its deterministic result across worker counts")
     }

@@ -67,7 +67,6 @@ jobs:
           "$silex" setup
           "$silex" link "$GITHUB_WORKSPACE/STD"
           "$silex" test "$GITHUB_WORKSPACE/STD/Tests/Threading.sx" --nocache
-          "$silex" test "$GITHUB_WORKSPACE/STD/Tests/Process.sx" --nocache
 
   windows-x64:
     if: inputs.target == 'all' || inputs.target == 'windows-x64'

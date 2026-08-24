@@ -193,6 +193,22 @@ struct ReadJob:Threading.ParallelJob {
     func execute(start:int, end:int) { self.state.copy_range(start, end) }
 }
 
+struct FinishGraphFrame:Threading.Job {
+    var left:IndexedState
+    var right:IndexedState
+    var preparation:DependencyState
+    var expected:int
+    var signature:int
+    func execute() {
+        self.preparation.observe(self.expected)
+        var index = 0
+        while index < self.left.values.count() {
+            self.signature += self.left.values[index] + self.right.values[index]
+            index++
+        }
+    }
+}
+
 func make_indexed_state(count:int) IndexedState {
     var visits:int[] = []
     var values:int[] = []
@@ -325,6 +341,50 @@ func execute_indexed(executor:Threading.Executor, count:int) IndexedState {
     done.complete()
     state.verify()
     return state
+}
+
+func verify_stable_graph(worker_count:int) int {
+    var executor = Threading.Executor(worker_count:worker_count)
+    var left = make_indexed_state(4_096)
+    var right = make_indexed_state(4_096)
+    var dependency_state = DependencyState(published:0, starts:0)
+    var signature = 0
+    var submission_allocations = 0
+    var combination_allocations = 0
+    var parallel_allocations = 0
+    for frame in 1...9 {
+        var prepare = executor.submit(PublishJob(state:dependency_state, value:frame))
+        var prepared = prepare.fence()
+        var left_done = executor.submit_parallel(4_096, IndexedJob(state:left), after:prepared)
+        var right_done = executor.submit_parallel(4_096, IndexedJob(state:right), after:prepared)
+        var joined = executor.combine([left_done, right_done])
+        var finish = executor.submit(
+            FinishGraphFrame(
+                left:left,
+                right:right,
+                preparation:dependency_state,
+                expected:frame,
+                signature:0
+            ),
+            after:joined
+        )
+        signature = finish.complete().signature
+        if dependency_state.published != frame || dependency_state.starts != frame {
+            panic("multi-phase graph crossed an unpublished preparation barrier")
+        }
+        if frame == 1 {
+            submission_allocations = executor.submission_allocation_count()
+            combination_allocations = executor.combination_allocation_count()
+            parallel_allocations = executor.parallel_allocation_count()
+        }
+    }
+    if executor.submission_allocation_count() != submission_allocations ||
+        executor.combination_allocation_count() != combination_allocations ||
+        executor.parallel_allocation_count() != parallel_allocations
+    {
+        panic("warmed multi-phase graph allocated new scheduling state")
+    }
+    return signature
 }
 
 test "typed job result" {
@@ -624,12 +684,12 @@ test "parallel partition covers small large and remainder sizes exactly once" {
 
     before = executor.parallel_work_count()
     var remainder = execute_indexed(executor, 1000)
-    if remainder.intervals != 12 { panic("parallel remainder did not use the bounded worker partition") }
-    if executor.parallel_work_count() - before != 12 { panic("parallel instrumentation disagrees with executed intervals") }
+    if remainder.intervals != 3 { panic("parallel remainder did not use the bounded worker partition") }
+    if executor.parallel_work_count() - before != 3 { panic("parallel instrumentation disagrees with executed intervals") }
 
     before = executor.parallel_work_count()
     var large = execute_indexed(executor, 100000)
-    if large.intervals != 12 || executor.parallel_work_count() - before != 12 {
+    if large.intervals != 3 || executor.parallel_work_count() - before != 3 {
         panic("large parallel batch degenerated toward one job per element")
     }
 }
@@ -667,5 +727,15 @@ test "warmed parallel batches reuse bounded submission state" {
     for wave in 0...64 { execute_indexed(executor, 4096) }
     if executor.parallel_allocation_count() != warmed {
         panic("stable parallel submissions did not reuse their batch state")
+    }
+}
+
+test "warmed multi-phase graphs stay deterministic across worker counts" {
+    let one = verify_stable_graph(1)
+    let two = verify_stable_graph(2)
+    let four = verify_stable_graph(4)
+    let expected = 2 * (256 * (4_096 * 4_097 / 2) - 4_096)
+    if one != two || two != four || four != expected {
+        panic("multi-phase graph changed its deterministic result across worker counts")
     }
 }

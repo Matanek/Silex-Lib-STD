@@ -5,6 +5,14 @@ let system_create = C.function<func(C.MutablePointer<uint>, C.Pointer<uint8>, C.
 let system_join = C.function<func(uint, C.Pointer<uint8>) int32>(library:Boundary.System, name:"pthread_join")
 let system_current_thread = C.function<func() uint>(library:Boundary.System, name:"pthread_self")
 let system_configuration = C.function<func(int32) int>(library:Boundary.System, name:"sysconf")
+let system_allocate = C.function<func(C.Size) uint>(library:Boundary.System, name:"malloc")
+let system_free = C.function<func(uint) void>(library:Boundary.System, name:"free")
+let semaphore_initialize = C.function<func(uint, int32, uint32) int32>(library:Boundary.System, name:"sem_init")
+let semaphore_wait = C.function<func(uint) int32>(library:Boundary.System, name:"sem_wait")
+let semaphore_try_wait = C.function<func(uint) int32>(library:Boundary.System, name:"sem_trywait")
+let semaphore_signal = C.function<func(uint) int32>(library:Boundary.System, name:"sem_post")
+let semaphore_destroy = C.function<func(uint) int32>(library:Boundary.System, name:"sem_destroy")
+let system_errno = C.function<func() uint>(library:Boundary.System, name:"__errno_location")
 
 package func spawn(entry:uint, context:uint) uint {
     var handle:uint = 0
@@ -15,13 +23,43 @@ package func join(thread:uint) bool { return system_join(thread, C.pointer_bits(
 func current_thread() uint { return system_current_thread() }
 
 func create_signal(initial:int) uint {
-    panic("STD.Threading.Executor is not implemented natively on linux-x64 yet")
+    let address = system_allocate(64 as C.Size)
+    if address == 0 { return 0 }
+    if semaphore_initialize(address, 0, initial as uint32) != 0 {
+        system_free(address)
+        return 0
+    }
+    return address
 }
 
-func wait(signal:uint) { panic("STD.Threading.Executor is not implemented natively on linux-x64 yet") }
-func try_wait(signal:uint) bool { panic("STD.Threading.Executor is not implemented natively on linux-x64 yet") }
-func signal(value:uint) { panic("STD.Threading.Executor is not implemented natively on linux-x64 yet") }
-func release_signal(value:uint) {}
+func wait(signal:uint) {
+    while true {
+        if semaphore_wait(signal) == 0 { return }
+        if C.load<int32>(C.pointer_bits(system_errno()), 0) != 4 {
+            panic("STD.Threading signal wait failed")
+        }
+    }
+}
+func try_wait(signal:uint) bool {
+    while true {
+        if semaphore_try_wait(signal) == 0 { return true }
+        let code = C.load<int32>(C.pointer_bits(system_errno()), 0)
+        if code == 11 { return false }
+        if code != 4 { panic("STD.Threading signal observation failed") }
+    }
+    return false
+}
+func signal(value:uint) {
+    if semaphore_signal(value) != 0 {
+        panic("STD.Threading signal publication failed")
+    }
+}
+func release_signal(value:uint) {
+    if semaphore_destroy(value) != 0 {
+        panic("STD.Threading signal destruction failed")
+    }
+    system_free(value)
+}
 func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
 func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 24 as uint, 0) }
 func logical_processor_count() int {

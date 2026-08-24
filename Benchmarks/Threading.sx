@@ -63,17 +63,37 @@ func benchmark_case(executor:Threading.Executor, count:int, rounds:int) {
     if submitted_work > maximum_useful_work {
         panic("parallel benchmark regressed toward one submission per element")
     }
+    var checksum = 0
+    var index = 0
+    while index < count {
+        if samples.destination[index] != (samples.source[index] * 17 + 31) % 65521 {
+            panic("parallel benchmark changed its deterministic result")
+        }
+        checksum += samples.destination[index]
+        index++
+    }
 
-    print(count, " indices x ", rounds)
-    print("  sequential: ", sequential.get_elapsed_milliseconds(), " ms")
-    print("  parallel:   ", parallel.get_elapsed_milliseconds(), " ms")
-    print("  ranges:     ", submitted_work)
+    print(
+        "SILEX_THREADING_BENCHMARK mode=release workers=$(executor.worker_count()) " +
+        "count=$(count) rounds=$(rounds) " +
+        "sequential_ms=$(sequential.get_elapsed_milliseconds()) " +
+        "parallel_ms=$(parallel.get_elapsed_milliseconds()) " +
+        "ranges=$(submitted_work) allocations=$(warmed_allocations) " +
+        "checksum=$(checksum)"
+    )
 }
 
-test "sequential and parallel indexed batches" {
-    var executor = Threading.Executor()
+func benchmark_workers(worker_count:int) {
+    var executor = Threading.Executor(worker_count:worker_count)
     executor.submit(Warmup(marker:0)).complete()
     benchmark_case(executor, 1_024, 256)
     benchmark_case(executor, 4_096, 64)
     benchmark_case(executor, 16_384, 16)
+    benchmark_case(executor, 262_144, 16)
+}
+
+test "deterministic indexed batches with one two and four workers" {
+    benchmark_workers(1)
+    benchmark_workers(2)
+    benchmark_workers(4)
 }

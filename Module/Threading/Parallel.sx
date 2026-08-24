@@ -8,7 +8,7 @@ use STD.Threading.Runtime.GraphState
 use STD.Threading.Runtime.Runtime
 
 func parallel_minimum_grain() int { return 64 }
-func parallel_ranges_per_worker() int { return 4 }
+func parallel_ranges_per_worker() int { return 1 }
 
 class ParallelWork<T:ParallelJob>:WorkItem {
     private var batch_address:uint

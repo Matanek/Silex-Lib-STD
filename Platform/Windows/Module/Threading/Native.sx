@@ -4,6 +4,10 @@ use Interop.Boundary
 let system_create = C.function<func(C.Pointer<uint8>, C.Size, C.Pointer<uint8>, C.Pointer<uint8>, uint32, C.Pointer<uint8>) uint>(library:Boundary.System, name:"CreateThread")
 let system_wait = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
 let system_close = C.function<func(uint) int32>(library:Boundary.System, name:"CloseHandle")
+let system_current_thread = C.function<func() uint32>(library:Boundary.System, name:"GetCurrentThreadId")
+let system_processor_count = C.function<func(uint32) uint32>(library:Boundary.System, name:"GetActiveProcessorCount")
+let semaphore_create = C.function<func(C.Pointer<uint8>, int32, int32, C.Pointer<uint8>) uint>(library:Boundary.System, name:"CreateSemaphoreW")
+let semaphore_signal = C.function<func(uint, int32, C.Pointer<uint8>) int32>(library:Boundary.System, name:"ReleaseSemaphore")
 
 package func spawn(entry:uint, context:uint) uint {
     return system_create(C.pointer_bits(0 as uint), 0 as C.Size, C.pointer_bits(entry), C.pointer_bits(context), 0, C.pointer_bits(0 as uint))
@@ -15,16 +19,40 @@ package func join(thread:uint) bool {
     return waited && closed
 }
 
-func current_thread() uint { return 0 }
+func current_thread() uint { return system_current_thread() as uint }
 
 func create_signal(initial:int) uint {
-    panic("STD.Threading.Executor is not implemented natively on Windows yet")
+    return semaphore_create(
+        C.pointer_bits(0 as uint),
+        initial as int32,
+        0x7fff_ffff,
+        C.pointer_bits(0 as uint)
+    )
 }
 
-func wait(signal:uint) { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
-func try_wait(signal:uint) bool { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
-func signal(value:uint) { panic("STD.Threading.Executor is not implemented natively on Windows yet") }
-func release_signal(value:uint) {}
+func wait(signal:uint) {
+    if system_wait(signal, 0xffff_ffff) != 0 {
+        panic("STD.Threading signal wait failed")
+    }
+}
+func try_wait(signal:uint) bool {
+    let result = system_wait(signal, 0)
+    if result == 0 { return true }
+    if result == 258 { return false }
+    panic("STD.Threading signal observation failed")
+}
+func signal(value:uint) {
+    if semaphore_signal(value, 1, C.pointer_bits(0 as uint)) == 0 {
+        panic("STD.Threading signal publication failed")
+    }
+}
+func release_signal(value:uint) {
+    if system_close(value) == 0 { panic("STD.Threading signal destruction failed") }
+}
 func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
 func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 24 as uint, 0) }
-func logical_processor_count() int { return 1 }
+func logical_processor_count() int {
+    let count = system_processor_count(0xffff)
+    if count < 1 { return 1 }
+    return count as int
+}

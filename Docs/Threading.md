@@ -138,8 +138,10 @@ done.complete()
 ```
 
 Le nombre et la taille des plages dépendent de la taille du lot et du nombre de
-workers. Un petit lot peut rester une seule plage ; un gros lot crée plusieurs
-plages continues sans dégénérer en un job par élément. Leur ordre et le worker
+workers. Un petit lot peut rester une seule plage ; un gros lot publie au plus
+une plage continue par worker, sans dégénérer en un job par élément. Cette
+borne réduit le coût de planification des kernels denses et laisse chaque
+worker amortir une publication sur une plage utile. Leur ordre et le worker
 qui les traite sont indéterminés. Un résultat dont la valeur dépend de cet
 ordre n'est donc pas déterministe.
 
@@ -169,5 +171,14 @@ lot ne retourne aucun job. Cette surface ne promet ni réduction générique, ni
 SIMD ; les plages continues restent simplement compatibles avec une future
 vectorisation.
 
-Les workers, entrées de file et signaux de plateforme sont internes. La surface
-publique n'expose ni thread, ni verrou, ni priorité, ni affinité.
+Comme les jobs ordinaires, un lot parallèle réutilise après échauffement son
+état de batch, ses entrées de travail et son signal. Une nouvelle allocation de
+planification n'est nécessaire que pour un nouveau type de lot ou un pic de
+lots simultanément vivants. Le benchmark `Benchmarks/Threading.sx` vérifie ce
+régime, le résultat déterministe et la montée en charge à un, deux et quatre
+workers ; `Benchmarks/CheckThreading.py` contrôle les séries répétées sans
+transformer le temps en assertion de test unitaire.
+
+Les workers, entrées de file et signaux des adaptateurs natifs macOS ARM64,
+Linux X64 et Windows X64 restent internes. La surface publique n'expose ni
+thread, ni sémaphore, ni verrou, ni priorité, ni affinité.

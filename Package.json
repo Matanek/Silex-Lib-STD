@@ -41,6 +41,9 @@
         "System": {
           "libraries": ["kernel32"]
         },
+        "Shell": {
+          "libraries": ["shell32"]
+        },
         "Runtime": {
           "libraries": ["ucrtbase"]
         },
@@ -62,6 +65,9 @@
       "providers": {
         "System": {
           "libraries": ["kernel32"]
+        },
+        "Shell": {
+          "libraries": ["shell32"]
         },
         "Runtime": {
           "libraries": ["ucrtbase"]

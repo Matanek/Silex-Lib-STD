@@ -2,8 +2,12 @@ use Interop.C
 use Interop.Boundary
 use STD.Text.Encoding
 
-let system_argc = C.function<func() C.Pointer<uint8> >(library:Boundary.Runtime, name:"__p___argc")
-let system_wargv = C.function<func() C.Pointer<uint8> >(library:Boundary.Runtime, name:"__p___wargv")
+let system_get_command_line = C.function<func() C.Pointer<uint8> >(library:Boundary.System, name:"GetCommandLineW")
+let system_command_line_to_arguments = C.function<func(C.Pointer<uint8>, C.MutablePointer<int32>) C.Pointer<uint8> >(
+    library:Boundary.Shell,
+    name:"CommandLineToArgvW"
+)
+let system_local_free = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.System, name:"LocalFree")
 let system_get_current_directory = C.function<func(uint32, C.MutablePointer<int>) uint32>(library:Boundary.System, name:"GetCurrentDirectoryW")
 let system_set_current_directory = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.System, name:"SetCurrentDirectoryW")
 let system_get_module_file_name = C.function<func(uint, C.MutablePointer<int>, uint32) uint32>(library:Boundary.System, name:"GetModuleFileNameW")
@@ -11,18 +15,24 @@ let system_get_process_id = C.function<func() uint32>(library:Boundary.System, n
 
 func arguments() str[]? {
     var result:str[] = []
-    let count_root = C.address_bits(system_argc())
-    let arguments_root = C.address_bits(system_wargv())
-    if count_root == 0 || arguments_root == 0 { return null }
-    let count = C.load<int32>(count_root, 0 as uint)
-    let arguments = C.address_at(arguments_root, 0 as uint)
+    var raw_count:int32 = 0
+    let arguments = C.address_bits(system_command_line_to_arguments(
+        system_get_command_line(),
+        C.mutable_pointer(raw_count)
+    ))
+    if arguments == 0 || raw_count < 0 { return null }
+    let count = raw_count as int
     var index = 0
     while index < count {
         let argument = C.address_at(arguments, (index as uint) * 8)
-        if argument == 0 { return null }
+        if argument == 0 {
+            system_local_free(C.pointer_bits(arguments))
+            return null
+        }
         result.append(wide_text(argument, wide_length(argument)))
         index++
     }
+    system_local_free(C.pointer_bits(arguments))
     return result
 }
 

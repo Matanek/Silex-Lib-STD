@@ -25,10 +25,12 @@ class GraphState:CompletionState,DependencyTarget {
     }
 
     func recyclable(expected_roots:int) bool {
-        return self.completed && Native.class_root_count(C.object_address(self)) <= expected_roots
+        let address = C.object_address(self)
+        return self.completed && Native.class_root_count(address) <= expected_roots && Native.class_is_revivable(address)
     }
 
     func prepare(remaining:int) {
+        Native.revive_class(C.object_address(self))
         while Native.try_wait(self.completion_signal) {}
         self.completed = false
         self.remaining = remaining
@@ -109,11 +111,12 @@ class JobState<T:Job>:CompletionState {
     func object_address() uint { return C.object_address(self) }
 
     func recyclable(expected_roots:int) bool {
+        let address = C.object_address(self)
         if self.graph_address != 0 {
             var graph = self.graph_state()
             if !graph.recyclable(2) { return false }
         }
-        return self.handle_published && self.completed && Native.class_root_count(C.object_address(self)) <= expected_roots
+        return self.handle_published && self.completed && Native.class_root_count(address) <= expected_roots && Native.class_is_revivable(address)
     }
 
     func consume(expected:int) T? { return take_completed<T>(self, expected) }

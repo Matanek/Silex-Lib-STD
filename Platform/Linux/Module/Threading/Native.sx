@@ -62,6 +62,11 @@ func release_signal(value:uint) {
     system_free(value)
 }
 func class_root_count(object:uint) int { return C.load<uint>(C.pointer_bits(object), 8 as uint) as int }
+func class_is_revivable(object:uint) bool {
+    // States 1 through 3 are owned by an active cycle claim, trace, or finalization.
+    let state = C.load<uint>(C.pointer_bits(object), 24 as uint)
+    return state == 0 || state == 4
+}
 func revive_class(object:uint) { C.store<uint>(C.pointer_bits(object), 24 as uint, 0) }
 func logical_processor_count() int {
     let count = system_configuration(84)

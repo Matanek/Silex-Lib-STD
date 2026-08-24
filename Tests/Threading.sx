@@ -486,10 +486,17 @@ test "warmed waves reuse submission memory" {
 test "prepared job representations remain allocation stable" {
     var executor = Threading.Executor(worker_count:2)
     run_prepared_types(executor)
+    executor.wait_idle()
     let prepared = executor.submission_allocation_count()
+    print("SILEX_THREADING_PREPARED allocations-warm=$(prepared)")
     if prepared != 3 { panic("prepared job types did not establish three reusable slots") }
-    for wave in 0...32 { run_prepared_types(executor) }
-    if executor.submission_allocation_count() != prepared { panic("prepared job types allocated during a stable load") }
+    for wave in 0...32 {
+        run_prepared_types(executor)
+        executor.wait_idle()
+    }
+    let stable = executor.submission_allocation_count()
+    print("SILEX_THREADING_PREPARED allocations-stable=$(stable)")
+    if stable != prepared { panic("prepared job types allocated during a stable load") }
 }
 
 test "abandoned completed jobs recycle their slots" {

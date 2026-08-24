@@ -371,24 +371,45 @@ func execute_graph_frame(
     return completed.signature
 }
 
+func warm_graph_capacity(executor:Threading.Executor) {
+    var shared = executor
+    var gate = ManualGate(entered:0, released:false)
+    var blocker = shared.submit(BlockingJob(gate:gate))
+    while gate.entered_count() == 0 {}
+
+    var left = make_indexed_state(4_096)
+    var right = make_indexed_state(4_096)
+    var blocked = blocker.fence()
+    var left_done = shared.submit_parallel(4_096, IndexedJob(state:left), after:blocked)
+    var right_done = shared.submit_parallel(4_096, IndexedJob(state:right), after:blocked)
+    if shared.parallel_allocation_count() != 2 {
+        panic("multi-phase graph warmup did not reserve both parallel batch states")
+    }
+
+    var joined = shared.combine([left_done, right_done])
+    gate.release()
+    joined.complete()
+    blocker.complete()
+    shared.wait_idle()
+
+    var preparation = DependencyState(published:0, starts:0)
+    execute_graph_frame(shared, left, right, preparation, 0)
+}
+
 func verify_stable_graph(worker_count:int) int {
     var executor = Threading.Executor(worker_count:worker_count)
+    warm_graph_capacity(executor)
     var left = make_indexed_state(4_096)
     var right = make_indexed_state(4_096)
     var dependency_state = DependencyState(published:0, starts:0)
     var signature = 0
-    var submission_allocations = 0
-    var combination_allocations = 0
-    var parallel_allocations = 0
+    let submission_allocations = executor.submission_allocation_count()
+    let combination_allocations = executor.combination_allocation_count()
+    let parallel_allocations = executor.parallel_allocation_count()
     for frame in 1...9 {
         signature = execute_graph_frame(executor, left, right, dependency_state, frame)
         if dependency_state.published != frame || dependency_state.starts != frame {
             panic("multi-phase graph crossed an unpublished preparation barrier")
-        }
-        if frame == 1 {
-            submission_allocations = executor.submission_allocation_count()
-            combination_allocations = executor.combination_allocation_count()
-            parallel_allocations = executor.parallel_allocation_count()
         }
     }
     let current_submissions = executor.submission_allocation_count()

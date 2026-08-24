@@ -366,7 +366,9 @@ func execute_graph_frame(
         ),
         after:joined
     )
-    return finish.complete().signature
+    var completed = finish.complete()
+    shared.wait_idle()
+    return completed.signature
 }
 
 func verify_stable_graph(worker_count:int) int {

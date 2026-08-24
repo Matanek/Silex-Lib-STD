@@ -21,6 +21,7 @@ package func spawn(entry:uint, context:uint) uint {
 }
 package func join(thread:uint) bool { return system_join(thread, C.pointer_bits(0 as uint)) == 0 }
 func current_thread() uint { return system_current_thread() }
+func is_current_thread(thread:uint) bool { return thread == system_current_thread() }
 
 func create_signal(initial:int) uint {
     let address = system_allocate(64 as C.Size)

@@ -5,6 +5,7 @@ let system_create = C.function<func(C.Pointer<uint8>, C.Size, C.Pointer<uint8>, 
 let system_wait = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
 let system_close = C.function<func(uint) int32>(library:Boundary.System, name:"CloseHandle")
 let system_current_thread = C.function<func() uint32>(library:Boundary.System, name:"GetCurrentThreadId")
+let system_thread_id = C.function<func(uint) uint32>(library:Boundary.System, name:"GetThreadId")
 let system_processor_count = C.function<func(uint32) uint32>(library:Boundary.System, name:"GetActiveProcessorCount")
 let semaphore_create = C.function<func(C.Pointer<uint8>, int32, int32, C.Pointer<uint8>) uint>(library:Boundary.System, name:"CreateSemaphoreW")
 let semaphore_signal = C.function<func(uint, int32, C.Pointer<uint8>) int32>(library:Boundary.System, name:"ReleaseSemaphore")
@@ -20,6 +21,9 @@ package func join(thread:uint) bool {
 }
 
 func current_thread() uint { return system_current_thread() as uint }
+func is_current_thread(thread:uint) bool {
+    return system_thread_id(thread) == system_current_thread()
+}
 
 func create_signal(initial:int) uint {
     return semaphore_create(

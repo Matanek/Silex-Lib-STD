@@ -21,6 +21,7 @@ package func join(thread:uint) bool {
 }
 
 func current_thread() uint { return system_current_thread() }
+func is_current_thread(thread:uint) bool { return thread == system_current_thread() }
 
 func create_signal(initial:int) uint { return semaphore_create(initial) }
 func wait(signal:uint) { if semaphore_wait(signal, 0xffff_ffff_ffff_ffff) != 0 { panic("STD.Threading signal wait failed") } }

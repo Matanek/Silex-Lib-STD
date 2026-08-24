@@ -1,0 +1,23 @@
+use STD.Threading
+
+struct Increment:Threading.Job {
+    var value:int
+    func execute() { self.value++ }
+}
+
+func exercise_worker() {
+    var executor = Threading.Executor(worker_count:1)
+    print("SILEX_THREADING_CHECKPOINT executor-ready")
+    var handle = executor.submit(Increment(value:41))
+    print("SILEX_THREADING_CHECKPOINT job-submitted")
+    if handle.complete().value != 42 {
+        panic("native threading checkpoint returned an invalid result")
+    }
+    print("SILEX_THREADING_CHECKPOINT job-completed")
+}
+
+func main() {
+    print("SILEX_THREADING_CHECKPOINT process-ready")
+    exercise_worker()
+    print("SILEX_THREADING_CHECKPOINT executor-stopped")
+}

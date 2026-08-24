@@ -613,7 +613,9 @@ class Runtime {
     private func can_help() bool {
         let current = Native.current_thread()
         if current == self.owner_thread { return true }
-        for worker in self.workers { if worker == current { return true } }
+        for worker in self.workers {
+            if Native.is_current_thread(worker) { return true }
+        }
         return false
     }
 

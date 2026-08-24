@@ -343,6 +343,32 @@ func execute_indexed(executor:Threading.Executor, count:int) IndexedState {
     return state
 }
 
+func execute_graph_frame(
+    executor:Threading.Executor,
+    left:IndexedState,
+    right:IndexedState,
+    dependency_state:DependencyState,
+    frame:int
+) int {
+    var shared = executor
+    var prepare = shared.submit(PublishJob(state:dependency_state, value:frame))
+    var prepared = prepare.fence()
+    var left_done = shared.submit_parallel(4_096, IndexedJob(state:left), after:prepared)
+    var right_done = shared.submit_parallel(4_096, IndexedJob(state:right), after:prepared)
+    var joined = shared.combine([left_done, right_done])
+    var finish = shared.submit(
+        FinishGraphFrame(
+            left:left,
+            right:right,
+            preparation:dependency_state,
+            expected:frame,
+            signature:0
+        ),
+        after:joined
+    )
+    return finish.complete().signature
+}
+
 func verify_stable_graph(worker_count:int) int {
     var executor = Threading.Executor(worker_count:worker_count)
     var left = make_indexed_state(4_096)
@@ -353,22 +379,7 @@ func verify_stable_graph(worker_count:int) int {
     var combination_allocations = 0
     var parallel_allocations = 0
     for frame in 1...9 {
-        var prepare = executor.submit(PublishJob(state:dependency_state, value:frame))
-        var prepared = prepare.fence()
-        var left_done = executor.submit_parallel(4_096, IndexedJob(state:left), after:prepared)
-        var right_done = executor.submit_parallel(4_096, IndexedJob(state:right), after:prepared)
-        var joined = executor.combine([left_done, right_done])
-        var finish = executor.submit(
-            FinishGraphFrame(
-                left:left,
-                right:right,
-                preparation:dependency_state,
-                expected:frame,
-                signature:0
-            ),
-            after:joined
-        )
-        signature = finish.complete().signature
+        signature = execute_graph_frame(executor, left, right, dependency_state, frame)
         if dependency_state.published != frame || dependency_state.starts != frame {
             panic("multi-phase graph crossed an unpublished preparation barrier")
         }

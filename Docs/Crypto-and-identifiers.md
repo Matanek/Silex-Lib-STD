@@ -10,6 +10,22 @@ application secrets when the surrounding protocol uses raw random bytes
 correctly. Negative counts are rejected. See
 [ContentFingerprint.sx](../Examples/Crypto/ContentFingerprint.sx).
 
+`Crypto.X25519` creates ephemeral key pairs and derives a shared secret from a
+local secret key and a peer public key. `Crypto.HKDF.derive_sha256` turns that
+shared secret into purpose-specific key material. `Crypto.ChaCha20Poly1305`
+seals and opens bytes with authenticated associated data; `open` reports
+`Crypto.ErrorKind.authentication_failed` when the ciphertext, tag, nonce or
+associated data does not authenticate.
+
+These are protocol-building primitives, not a complete secure channel. A
+protocol must authenticate the peer keys, separate derivation contexts, erase
+or rotate secrets according to its threat model and never reuse a 12-byte
+ChaCha20-Poly1305 nonce with the same key. Applications that only need a secure
+Sync connection should use `Sync.SecureSession` instead of assembling these
+operations directly. See
+[AuthenticatedMessage.sx](../Examples/Crypto/AuthenticatedMessage.sx) for the
+smallest complete exchange.
+
 `UUID.v4()` produces an opaque random identifier. `UUID.v7()` prefixes random
 data with a Unix-millisecond timestamp and is useful when creation-order
 locality matters. `to_str()` returns canonical lowercase text; `to_bytes()` and

@@ -23,7 +23,7 @@ protocol contracts implemented by package-visible types.
 | Measure and scale time | `Time.Clock`, `Time.Stopwatch` | [Time](Time.md) |
 | Calculate scalar and graphics values | `Math` | [Math](Math.md) |
 | Generate random values or reorder data | `Randomizer`, `Algorithms.Random` | [Randomness](Randomness.md) |
-| Hash data and create identifiers | `Crypto`, `UUID` | [Crypto and identifiers](Crypto-and-identifiers.md) |
+| Hash data, derive keys, encrypt authenticated bytes or create identifiers | `Crypto`, `Crypto.X25519`, `Crypto.HKDF`, `Crypto.ChaCha20Poly1305`, `UUID` | [Crypto and identifiers](Crypto-and-identifiers.md) |
 | Handle fallible system operations | `Error`, `Result` | [Errors](Errors.md) |
 
 The API source remains the exhaustive declaration reference. These guides

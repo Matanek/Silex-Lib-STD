@@ -1,0 +1,176 @@
+use Interop.Boundary
+use Interop.C
+
+let native_public_key = C.function<func(
+    C.Pointer<uint8>, C.MutablePointer<int>
+) int32>(library:Boundary.CryptoPrimitives, name:"silex_crypto_x25519_public_key")
+
+let native_shared_secret = C.function<func(
+    C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<int>
+) int32>(library:Boundary.CryptoPrimitives, name:"silex_crypto_x25519_shared_secret")
+
+let native_derive = C.function<func(
+    C.Pointer<uint8>, C.Size,
+    C.Pointer<uint8>, C.Size,
+    C.Pointer<uint8>, C.Size,
+    C.MutablePointer<uint8>, C.Size
+) int32>(library:Boundary.CryptoPrimitives, name:"silex_crypto_hkdf_sha256")
+
+let native_seal = C.function<func(
+    C.Pointer<uint8>, C.Pointer<uint8>,
+    C.Pointer<uint8>, C.Size,
+    C.Pointer<uint8>, C.Size,
+    C.MutablePointer<uint8>, C.MutablePointer<int>
+) int32>(library:Boundary.CryptoPrimitives, name:"silex_crypto_chacha20_poly1305_seal")
+
+let native_open = C.function<func(
+    C.Pointer<uint8>, C.Pointer<uint8>,
+    C.Pointer<uint8>, C.Size,
+    C.Pointer<uint8>, C.Size,
+    C.Pointer<uint8>, C.MutablePointer<uint8>
+) int32>(library:Boundary.CryptoPrimitives, name:"silex_crypto_chacha20_poly1305_open")
+
+package func public_key(secret:@uint8[..]) FixedResult {
+    let packed_secret = C.string(secret)
+    var output_storage:int[8]
+    let status = native_public_key(C.pointer(packed_secret), C.mutable_pointer(output_storage))
+    var bytes:uint8[32]
+    if status == 0 {
+        let address = C.address_bits(C.mutable_pointer(output_storage))
+        var index = 0
+        while index < 32 {
+            bytes[index] = C.load<uint8>(address, index as uint)
+            index++
+        }
+    }
+    return FixedResult(status:status, bytes:bytes)
+}
+
+package func shared_secret(secret:@uint8[..], public_key:@uint8[..]) FixedResult {
+    let packed_secret = C.string(secret)
+    let packed_public = C.string(public_key)
+    var output_storage:int[8]
+    let status = native_shared_secret(
+        C.pointer(packed_secret),
+        C.pointer(packed_public),
+        C.mutable_pointer(output_storage)
+    )
+    var bytes:uint8[32]
+    if status == 0 {
+        let address = C.address_bits(C.mutable_pointer(output_storage))
+        var index = 0
+        while index < 32 {
+            bytes[index] = C.load<uint8>(address, index as uint)
+            index++
+        }
+    }
+    return FixedResult(status:status, bytes:bytes)
+}
+
+package func derive_sha256(
+    input:@uint8[..],
+    salt:@uint8[..],
+    context:@uint8[..],
+    output_count:int
+) BytesResult {
+    let packed_input = C.string(input)
+    let packed_salt = C.string(salt)
+    let packed_context = C.string(context)
+    var storage:uint8[] = []
+    while storage.count() < output_count { storage.append(0 as uint8) }
+    var packed_output = C.string(@storage[0:storage.count()])
+    let status = native_derive(
+        C.pointer(packed_input), C.byte_count(packed_input),
+        C.pointer(packed_salt), C.byte_count(packed_salt),
+        C.pointer(packed_context), C.byte_count(packed_context),
+        C.mutable_string_pointer(packed_output), output_count as C.Size
+    )
+    return bytes_result(status, packed_output, output_count)
+}
+
+package func seal(
+    key:@uint8[..],
+    nonce:@uint8[..],
+    associated_data:@uint8[..],
+    plaintext:@uint8[..]
+) BytesResult {
+    let packed_key = C.string(key)
+    let packed_nonce = C.string(nonce)
+    let packed_associated = C.string(associated_data)
+    let packed_plaintext = C.string(plaintext)
+    var storage:uint8[] = []
+    while storage.count() < plaintext.count() { storage.append(0 as uint8) }
+    var packed_ciphertext = C.string(@storage[0:storage.count()])
+    var tag_storage:int[4]
+    let status = native_seal(
+        C.pointer(packed_key),
+        C.pointer(packed_nonce),
+        C.pointer(packed_associated), C.byte_count(packed_associated),
+        C.pointer(packed_plaintext), C.byte_count(packed_plaintext),
+        C.mutable_string_pointer(packed_ciphertext),
+        C.mutable_pointer(tag_storage)
+    )
+    var output:uint8[] = []
+    if status == 0 {
+        var index = 0
+        while index < plaintext.count() {
+            output.append(C.byte_at(packed_ciphertext, index as C.Size))
+            index++
+        }
+        let tag_address = C.address_bits(C.mutable_pointer(tag_storage))
+        index = 0
+        while index < 16 {
+            output.append(C.load<uint8>(tag_address, index as uint))
+            index++
+        }
+    }
+    return BytesResult(status:status, bytes:output)
+}
+
+package func open(
+    key:@uint8[..],
+    nonce:@uint8[..],
+    associated_data:@uint8[..],
+    sealed:@uint8[..]
+) BytesResult {
+    let ciphertext_count = sealed.count() - 16
+    let packed_key = C.string(key)
+    let packed_nonce = C.string(nonce)
+    let packed_associated = C.string(associated_data)
+    let packed_ciphertext = C.string(@sealed[0:ciphertext_count])
+    let packed_tag = C.string(@sealed[ciphertext_count:sealed.count()])
+    var storage:uint8[] = []
+    while storage.count() < ciphertext_count { storage.append(0 as uint8) }
+    var packed_plaintext = C.string(@storage[0:storage.count()])
+    let status = native_open(
+        C.pointer(packed_key),
+        C.pointer(packed_nonce),
+        C.pointer(packed_associated), C.byte_count(packed_associated),
+        C.pointer(packed_ciphertext), ciphertext_count as C.Size,
+        C.pointer(packed_tag),
+        C.mutable_string_pointer(packed_plaintext)
+    )
+    return bytes_result(status, packed_plaintext, ciphertext_count)
+}
+
+func bytes_result(status:int32, packed:str, count:int) BytesResult {
+    var bytes:uint8[] = []
+    if status == 0 {
+        var index = 0
+        while index < count {
+            bytes.append(C.byte_at(packed, index as C.Size))
+            index++
+        }
+    }
+    return BytesResult(status:status, bytes:bytes)
+}
+
+package struct FixedResult {
+    let status:int32
+    let bytes:uint8[32]
+}
+
+package struct BytesResult {
+    let status:int32
+    let bytes:uint8[]
+}

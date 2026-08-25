@@ -6,3 +6,6 @@ LLVM Exceptions.
 
 Unicode-derived data remains under its respective terms. See
 Licenses/README.md.
+
+STD distributes target-specific CryptoPrimitives static artifacts built from
+the Zig 0.16 standard library. Its MIT notice is kept in the Licenses directory.

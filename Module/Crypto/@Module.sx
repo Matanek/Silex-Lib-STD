@@ -4,6 +4,20 @@ use STD.Crypto.SHA256.digest as sha256_digest
 use STD.Text.UTF8.bytes as utf8_bytes
 use STD.Text.UTF8.decode as utf8_decode
 
+public enum ErrorKind {
+    invalid_key
+    invalid_nonce
+    invalid_output_size
+    authentication_failed
+    provider_failure
+}
+
+public struct Error {
+    let kind:ErrorKind
+    let operation:str
+    let detail:str
+}
+
 public func random_bytes(count:int) uint8[] {
     if count < 0 {
         panic("crypto.random_bytes requires a non-negative count")
@@ -93,4 +107,8 @@ func hexadecimal(bytes:@uint8[..]) str {
 func hex_digit(value:uint8) uint8 {
     if value < 10 { return value + 48 }
     return value - 10 + 97
+}
+
+package func failure(kind:ErrorKind, operation:str, detail:str) Error {
+    return Error(kind:kind, operation:operation, detail:detail)
 }

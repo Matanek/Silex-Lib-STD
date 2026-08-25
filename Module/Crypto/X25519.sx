@@ -1,0 +1,78 @@
+use STD.Crypto
+use STD.Crypto.Native
+
+public struct KeyPair {
+    let secret:uint8[32]
+    let public_key:uint8[32]
+}
+
+public func generate_key_pair() KeyPair {
+    while true {
+        let random = Crypto.random_bytes(32)
+        match key_pair(@random[0:random.count()]) {
+            success(pair) => { return pair }
+            failure(error) => {}
+        }
+    }
+    panic("X25519 key generation did not complete")
+}
+
+public func key_pair(secret:@uint8[..]) Result<KeyPair, Crypto.Error> {
+    match public_key(secret) {
+        success(value) => {
+            var secret_copy:uint8[32]
+            var index = 0
+            while index < 32 {
+                secret_copy[index] = secret[index]
+                index++
+            }
+            return Result<KeyPair, Crypto.Error>.success(KeyPair(
+                secret:secret_copy,
+                public_key:value
+            ))
+        }
+        failure(error) => { return Result<KeyPair, Crypto.Error>.failure(error) }
+    }
+    panic("X25519 key pair result was not handled")
+}
+
+public func public_key(secret:@uint8[..]) Result<uint8[32], Crypto.Error> {
+    if secret.count() != 32 {
+        return Result<uint8[32], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.invalid_key,
+            "crypto.x25519.public_key",
+            "X25519 secret keys must contain 32 bytes"
+        ))
+    }
+    let result = Native.public_key(secret)
+    if result.status != 0 {
+        return Result<uint8[32], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.invalid_key,
+            "crypto.x25519.public_key",
+            "X25519 rejected the secret key"
+        ))
+    }
+    return Result<uint8[32], Crypto.Error>.success(result.bytes)
+}
+
+public func shared_secret(
+    secret:@uint8[..],
+    peer_public_key:@uint8[..]
+) Result<uint8[32], Crypto.Error> {
+    if secret.count() != 32 || peer_public_key.count() != 32 {
+        return Result<uint8[32], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.invalid_key,
+            "crypto.x25519.shared_secret",
+            "X25519 keys must contain 32 bytes"
+        ))
+    }
+    let result = Native.shared_secret(secret, peer_public_key)
+    if result.status != 0 {
+        return Result<uint8[32], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.invalid_key,
+            "crypto.x25519.shared_secret",
+            "X25519 rejected the peer public key"
+        ))
+    }
+    return Result<uint8[32], Crypto.Error>.success(result.bytes)
+}

@@ -1,0 +1,26 @@
+use STD.Crypto
+use STD.Crypto.Native
+
+public func derive_sha256(
+    input:@uint8[..],
+    salt:@uint8[..],
+    context:@uint8[..],
+    output_count:int
+) Result<uint8[], Crypto.Error> {
+    if output_count < 0 || output_count > 8_160 {
+        return Result<uint8[], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.invalid_output_size,
+            "crypto.hkdf.derive_sha256",
+            "HKDF-SHA256 output must contain between 0 and 8160 bytes"
+        ))
+    }
+    let result = Native.derive_sha256(input, salt, context, output_count)
+    if result.status != 0 {
+        return Result<uint8[], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.provider_failure,
+            "crypto.hkdf.derive_sha256",
+            "HKDF-SHA256 derivation failed"
+        ))
+    }
+    return Result<uint8[], Crypto.Error>.success(result.bytes)
+}

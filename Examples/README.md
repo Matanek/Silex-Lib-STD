@@ -146,5 +146,7 @@ are not wanted in the project.
   request cryptographic random bytes.
 - [HashFile.sx](Crypto/HashFile.sx) — hash a complete binary file under an
   explicit size limit. Run `BinaryFile.sx` first to create its sample input.
+- [AuthenticatedMessage.sx](Crypto/AuthenticatedMessage.sx) — derive a shared
+  X25519 key and authenticate one encrypted message.
 - [CreateIdentifiers.sx](UUID/CreateIdentifiers.sx) — choose between opaque v4
   and time-sortable v7 identifiers.

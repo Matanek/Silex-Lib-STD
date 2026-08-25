@@ -1,0 +1,80 @@
+use STD.Crypto
+use STD.Crypto.Native
+
+public func seal(
+    key:@uint8[..],
+    nonce:@uint8[..],
+    associated_data:@uint8[..],
+    plaintext:@uint8[..]
+) Result<uint8[], Crypto.Error> {
+    match validate_key_and_nonce(key, nonce, "crypto.chacha20_poly1305.seal") {
+        failure(error) => { return Result<uint8[], Crypto.Error>.failure(error) }
+        success => {}
+    }
+    let result = Native.seal(key, nonce, associated_data, plaintext)
+    if result.status != 0 {
+        return Result<uint8[], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.provider_failure,
+            "crypto.chacha20_poly1305.seal",
+            "ChaCha20-Poly1305 encryption failed"
+        ))
+    }
+    return Result<uint8[], Crypto.Error>.success(result.bytes)
+}
+
+public func open(
+    key:@uint8[..],
+    nonce:@uint8[..],
+    associated_data:@uint8[..],
+    sealed:@uint8[..]
+) Result<uint8[], Crypto.Error> {
+    match validate_key_and_nonce(key, nonce, "crypto.chacha20_poly1305.open") {
+        failure(error) => { return Result<uint8[], Crypto.Error>.failure(error) }
+        success => {}
+    }
+    if sealed.count() < 16 {
+        return Result<uint8[], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.authentication_failed,
+            "crypto.chacha20_poly1305.open",
+            "sealed data is shorter than its authentication tag"
+        ))
+    }
+    let result = Native.open(key, nonce, associated_data, sealed)
+    if result.status == 2 {
+        return Result<uint8[], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.authentication_failed,
+            "crypto.chacha20_poly1305.open",
+            "ChaCha20-Poly1305 authentication failed"
+        ))
+    }
+    if result.status != 0 {
+        return Result<uint8[], Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.provider_failure,
+            "crypto.chacha20_poly1305.open",
+            "ChaCha20-Poly1305 decryption failed"
+        ))
+    }
+    return Result<uint8[], Crypto.Error>.success(result.bytes)
+}
+
+func validate_key_and_nonce(
+    key:@uint8[..],
+    nonce:@uint8[..],
+    operation:str
+) Result<void, Crypto.Error> {
+    if key.count() != 32 {
+        return Result<void, Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.invalid_key,
+            operation,
+            "ChaCha20-Poly1305 keys must contain 32 bytes"
+        ))
+    }
+    if nonce.count() != 12 {
+        return Result<void, Crypto.Error>.failure(Crypto.failure(
+            Crypto.ErrorKind.invalid_nonce,
+            operation,
+            "ChaCha20-Poly1305 nonces must contain 12 bytes"
+        ))
+    }
+    return Result<void, Crypto.Error>.success()
+}

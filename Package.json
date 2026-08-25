@@ -1,6 +1,6 @@
 {
   "name": "STD",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "The standard library for portable Silex applications.",
   "authors": ["Matanek"],
   "requires": {
@@ -18,6 +18,10 @@
         "FileWatch": {
           "frameworks": ["CoreFoundation", "CoreServices"]
         },
+        "TerminalSession": {
+          "archive": "Boundary/macos-arm64/libTerminalSession.a",
+          "libraries": ["System"]
+        },
         "Compression": {
           "archive": "Boundary/macos-arm64/libCompression.a"
         },
@@ -33,6 +37,10 @@
       "providers": {
         "System": {
           "libraries": ["c", "m", "pthread"]
+        },
+        "TerminalSession": {
+          "archive": "Boundary/linux-x64/libTerminalSession.a",
+          "libraries": ["c"]
         },
         "Compression": {
           "archive": "Boundary/linux-x64/libCompression.a"
@@ -62,6 +70,10 @@
         "Network": {
           "libraries": ["ws2_32"]
         },
+        "TerminalSession": {
+          "archive": "Boundary/windows-x64/TerminalSession.lib",
+          "libraries": ["kernel32"]
+        },
         "Compression": {
           "archive": "Boundary/windows-x64/Compression.lib"
         },
@@ -89,6 +101,10 @@
         },
         "Network": {
           "libraries": ["ws2_32"]
+        },
+        "TerminalSession": {
+          "archive": "Boundary/windows-arm64/TerminalSession.lib",
+          "libraries": ["kernel32"]
         },
         "Compression": {
           "archive": "Boundary/windows-arm64/Compression.lib"

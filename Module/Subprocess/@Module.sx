@@ -1,4 +1,5 @@
 use STD.Subprocess.Environment
+use STD.Subprocess.Terminal as TerminalPlatform
 use STD.Path.Path as Path
 use STD.Error
 use STD.Text.UTF8
@@ -7,6 +8,16 @@ public enum EnvironmentChange { set(str, str); remove(str) }
 public enum ExitStatus { exited(int); signaled(int) }
 public enum Stream { standard_output; standard_error }
 public enum Event { output(Stream, uint8[]); exited(ExitStatus) }
+public struct TerminalSize {
+    let columns:int
+    let rows:int
+
+    init(columns:int = 80, rows:int = 24) {
+        if columns <= 0 || rows <= 0 || columns > 32767 || rows > 32767 { panic("terminal dimensions must be between 1 and 32767 cells") }
+        self.columns = columns
+        self.rows = rows
+    }
+}
 
 public struct Command {
     let executable:Path
@@ -24,6 +35,15 @@ public struct SpawnCommand {
     let current_directory:Path?
     let inherit_environment:bool
     let environment:EnvironmentChange[]
+}
+
+public struct TerminalCommand {
+    let executable:Path
+    let arguments:str[]
+    let current_directory:Path?
+    let inherit_environment:bool
+    let environment:EnvironmentChange[]
+    let size:TerminalSize
 }
 
 public struct Output { let status:ExitStatus; let standard_output:uint8[]; let standard_error:uint8[] }
@@ -126,6 +146,64 @@ public class Child {
     }
 }
 
+public class TerminalChild {
+    private var handle:uint
+    private var running:bool
+    private var completion_emitted:bool
+
+    module init(handle:uint) {
+        self.handle = handle
+        self.running = true
+        self.completion_emitted = false
+    }
+
+    func write(buffer:@uint8[..]) Result<int, Error> {
+        if !self.running { return Result<int, Error>.failure(child_error(Error.Kind.broken_pipe(), "subprocess.terminal.write", null, "terminal child has exited")) }
+        if buffer.count() == 0 { return Result<int, Error>.success(0) }
+        let count = TerminalPlatform.write(self.handle, buffer)
+        if count > 0 { return Result<int, Error>.success(count) }
+        return Result<int, Error>.failure(child_error(Error.Kind.broken_pipe(), "subprocess.terminal.write", null, "terminal input write failed"))
+    }
+
+    func resize(size:TerminalSize) Result<void, Error> {
+        if TerminalPlatform.resize(self.handle, size.columns, size.rows) != 0 { return Result<void, Error>.success() }
+        return Result<void, Error>.failure(child_error(Error.Kind.other(), "subprocess.terminal.resize", null, "terminal resize failed with code " + decimal(TerminalPlatform.error(self.handle))))
+    }
+
+    func next_event(timeout_milliseconds:int) Result<Event?, Error> {
+        if timeout_milliseconds < 0 { return Result<Event?, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.terminal.next_event", null, "timeout_milliseconds must be non-negative")) }
+        if self.completion_emitted { return Result<Event?, Error>.success(null) }
+        let polled = TerminalPlatform.poll(self.handle, timeout_milliseconds)
+        if polled >= 7000 { return Result<Event?, Error>.failure(child_error(Error.Kind.other(), "subprocess.terminal.next_event", null, "terminal polling failed with code " + decimal(TerminalPlatform.error(self.handle)))) }
+        if polled > 0 && polled <= 4096 {
+            var bytes:uint8[] = []
+            var index = 0
+            while index < polled { bytes.append(TerminalPlatform.byte(self.handle, index)); index++ }
+            return Result<Event?, Error>.success(Event.output(Stream.standard_output(), bytes))
+        }
+        if polled == 5000 || polled == 6000 {
+            self.running = false
+            self.completion_emitted = true
+            let raw_status = TerminalPlatform.status(self.handle) as int
+            var status = ExitStatus.exited(raw_status)
+            if polled == 6000 { status = ExitStatus.signaled(raw_status) }
+            return Result<Event?, Error>.success(Event.exited(status))
+        }
+        return Result<Event?, Error>.success(null)
+    }
+
+    func terminate() Result<void, Error> {
+        if !self.running { return Result<void, Error>.success() }
+        if TerminalPlatform.terminate(self.handle) != 0 { return Result<void, Error>.success() }
+        return Result<void, Error>.failure(child_error(Error.Kind.other(), "subprocess.terminal.terminate", null, "terminal child termination failed"))
+    }
+
+    func is_running() bool { return self.running }
+
+    drop { TerminalPlatform.destroy(self.handle) }
+}
+
+
 public func spawn(command:SpawnCommand) Result<Child, Error> {
     if !valid_text(command.executable, false) {
         return Result<Child, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.spawn", command.executable, "executable must be non-empty and contain no null byte"))
@@ -157,6 +235,31 @@ public func spawn(command:SpawnCommand) Result<Child, Error> {
         Platform.child_output(raw),
         Platform.child_error_output(raw)
     ))
+}
+
+public func spawn_terminal(command:TerminalCommand) Result<TerminalChild, Error> {
+    if !valid_text(command.executable, false) {
+        return Result<TerminalChild, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.spawn_terminal", command.executable, "executable must be non-empty and contain no null byte"))
+    }
+    var directory = ""
+    var has_directory = false
+    if value = command.current_directory {
+        if !valid_text(value, false) { return Result<TerminalChild, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.spawn_terminal", command.executable, "current_directory must be non-empty and contain no null byte")) }
+        directory = value
+        has_directory = true
+    }
+    for argument in command.arguments {
+        if !valid_text(argument, true) { return Result<TerminalChild, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.spawn_terminal", command.executable, "an argument contains a null byte")) }
+    }
+    let environment = try resolved_environment(command.inherit_environment, command.environment, command.executable, "subprocess.spawn_terminal")
+    let argument_view = @command.arguments[0:command.arguments.count()]
+    let environment_view = @environment[0:environment.count()]
+    let raw = TerminalPlatform.spawn(command.executable, argument_view, has_directory, directory, environment_view, command.size.columns, command.size.rows)
+    if raw.error != 0 {
+        if raw.handle != 0 { TerminalPlatform.destroy(raw.handle) }
+        return Result<TerminalChild, Error>.failure(child_error(Error.Kind.other(), "subprocess.spawn_terminal", command.executable, "terminal process creation failed with code " + decimal(raw.error)))
+    }
+    return Result<TerminalChild, Error>.success(TerminalChild(raw.handle))
 }
 
 public func run(command:Command) Result<Output, Error> {

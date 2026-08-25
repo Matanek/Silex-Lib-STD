@@ -4,6 +4,7 @@ use STD.Process
 use STD.Subprocess
 use STD.System
 use STD.Text.UTF8
+use STD.Text
 
 test "capture child input and output" {
     func validate(output:Subprocess.Output) {
@@ -182,4 +183,60 @@ test "environment changes stay in the child" {
     }
 
     validate_environment_changes()
+}
+
+test "terminal child uses the portable terminal transport" {
+    func child() {
+        if value = Console.read_line() { Console.write("terminal:" + value) }
+    }
+
+    func parent(executable:str) Result<void, Error> {
+        let command = Subprocess.TerminalCommand(
+            executable:executable,
+            arguments:["--subprocess-terminal-child"],
+            current_directory:null,
+            inherit_environment:false,
+            environment:[],
+            size:Subprocess.TerminalSize(columns:80, rows:24)
+        )
+        var terminal = try Subprocess.spawn_terminal(command)
+        try terminal.resize(Subprocess.TerminalSize(columns:100, rows:30))
+        let input = UTF8.bytes("ready\n")
+        let input_view = @input[0:input.count()]
+        assert(try terminal.write(input_view) == input.count(), "complete terminal input")
+        var output:uint8[] = []
+        var exited = false
+        var attempts = 0
+        while !exited && attempts < 40 {
+            let next = try terminal.next_event(250)
+            if event = next {
+                match event {
+                    output(stream, bytes) => { for byte in bytes { output.append(byte) } }
+                    exited(status) => {
+                        match status { exited(code) => { assert(code == 0, "terminal child exit status") }; signaled(signal) => { panic("terminal child was signaled") } }
+                        exited = true
+                    }
+                }
+            }
+            attempts++
+        }
+        assert(exited, "terminal child completion")
+        let output_view = @output[0:output.count()]
+        match UTF8.decode(output_view) {
+            failure(error) => { panic("terminal output is invalid UTF-8") }
+            success(text) => { assert(Text.contains(text, "terminal:ready"), "terminal output") }
+        }
+        return Result<void, Error>.success()
+    }
+
+    func dispatch() Result<void, Error> {
+        let arguments = try Process.arguments()
+        if arguments.count() > 1 && arguments[1] == "--subprocess-terminal-child" {
+            child()
+            return Result<void, Error>.success()
+        }
+        return parent(try Process.executable_path())
+    }
+
+    match dispatch() { failure(error) => { panic(error.operation + ": " + error.detail) }; success => {} }
 }

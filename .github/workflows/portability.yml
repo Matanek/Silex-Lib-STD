@@ -68,6 +68,7 @@ jobs:
           "$silex" link "$GITHUB_WORKSPACE/STD"
           "$silex" test "$GITHUB_WORKSPACE/STD/Tests/CryptoPrimitives.sx" --nocache
           "$silex" test "$GITHUB_WORKSPACE/STD/Tests/Threading.sx" --nocache
+          "$silex" test "$GITHUB_WORKSPACE/STD/Tests/Subprocess.sx" --nocache
 
   windows-x64:
     if: inputs.target == 'all' || inputs.target == 'windows-x64'
@@ -117,3 +118,4 @@ jobs:
           & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/CryptoPrimitives.sx") --nocache
           & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/Threading.sx") --nocache
           & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/Process.sx") --nocache
+          & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/Subprocess.sx") --nocache

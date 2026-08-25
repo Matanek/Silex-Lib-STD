@@ -103,6 +103,8 @@ are not wanted in the project.
   environment without changing the parent.
 - [StreamChild.sx](Subprocess/StreamChild.sx) — exchange standard-input and
   streamed output with a running child before collecting its exit status.
+- [HostTerminal.sx](Subprocess/HostTerminal.sx) — host a child through the
+  portable PTY/ConPTY terminal transport.
 - [DescribeTarget.sx](System/DescribeTarget.sx) — distinguish the selected
   compilation target from the build machine.
 

@@ -1,0 +1,59 @@
+use Interop.C
+use Interop.Boundary
+
+package struct RawTerminal { let handle:uint; let error:int }
+
+package func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], columns:int, rows:int) RawTerminal {
+    if arguments.count() + 2 > 128 || environment.count() + 1 > 128 { return RawTerminal(handle:0, error:22) }
+    var argv:uint[128]
+    argv[0] = C.address_bits(C.terminated_pointer(executable))
+    var index = 0
+    while index < arguments.count() {
+        argv[index + 1] = C.address_bits(C.terminated_pointer(arguments[index]))
+        index++
+    }
+    argv[index + 1] = 0
+    var envp:uint[128]
+    index = 0
+    while index < environment.count() {
+        envp[index] = C.address_bits(C.terminated_pointer(environment[index]))
+        index++
+    }
+    envp[index] = 0
+    var directory_address:uint = 0
+    if has_directory { directory_address = C.address_bits(C.terminated_pointer(directory)) }
+    let handle = terminal_spawn(
+        C.address_bits(C.terminated_pointer(executable)),
+        C.address_bits(C.mutable_pointer(argv)),
+        directory_address,
+        C.address_bits(C.mutable_pointer(envp)),
+        columns as int32,
+        rows as int32
+    )
+    if handle == 0 { return RawTerminal(handle:0, error:12) }
+    return RawTerminal(handle:handle, error:terminal_error(handle))
+}
+
+package func write(handle:uint, buffer:@uint8[..]) int {
+    if buffer.count() == 0 { return 0 }
+    let compact = C.string(@buffer[0:buffer.count()])
+    return terminal_write(handle, C.address_bits(C.pointer(compact)), buffer.count() as int32) as int
+}
+
+package func resize(handle:uint, columns:int, rows:int) int { return terminal_resize(handle, columns as int32, rows as int32) as int }
+package func error(handle:uint) int { return terminal_error(handle) as int }
+package func poll(handle:uint, timeout_milliseconds:int) int { return terminal_poll_buffered(handle, timeout_milliseconds as int32) as int }
+package func byte(handle:uint, index:int) uint8 { return terminal_byte(handle, index as int32) as uint8 }
+package func status(handle:uint) uint { return terminal_status(handle) as uint }
+package func terminate(handle:uint) int { return terminal_terminate(handle) as int }
+package func destroy(handle:uint) { terminal_destroy(handle) }
+
+let terminal_spawn = C.function<func(uint, uint, uint, uint, int32, int32) uint>(library:Boundary.TerminalSession, name:"sx_terminal_spawn")
+let terminal_error = C.function<func(uint) int32>(library:Boundary.TerminalSession, name:"sx_terminal_error")
+let terminal_write = C.function<func(uint, uint, int32) int32>(library:Boundary.TerminalSession, name:"sx_terminal_write")
+let terminal_poll_buffered = C.function<func(uint, int32) int32>(library:Boundary.TerminalSession, name:"sx_terminal_poll_buffered")
+let terminal_byte = C.function<func(uint, int32) int32>(library:Boundary.TerminalSession, name:"sx_terminal_byte")
+let terminal_status = C.function<func(uint) uint32>(library:Boundary.TerminalSession, name:"sx_terminal_status")
+let terminal_resize = C.function<func(uint, int32, int32) int32>(library:Boundary.TerminalSession, name:"sx_terminal_resize")
+let terminal_terminate = C.function<func(uint) int32>(library:Boundary.TerminalSession, name:"sx_terminal_terminate")
+let terminal_destroy = C.function<func(uint) void>(library:Boundary.TerminalSession, name:"sx_terminal_destroy")

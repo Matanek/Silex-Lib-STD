@@ -48,6 +48,21 @@ the child after `fork`, such as an executable rejected by `exec`, is reported
 as exit code 127; Windows can reject the initial `spawn` directly. See
 [StreamChild.sx](../Examples/Subprocess/StreamChild.sx).
 
+## Host a terminal child
+
+`Subprocess.spawn_terminal` starts a child attached to an operating-system
+terminal: a PTY on macOS and Linux, and ConPTY on Windows. Standard output and
+error share the terminal byte stream, as they do in a real shell. The child
+therefore observes terminal line discipline and may emit ANSI/VT control
+sequences instead of plain redirected output.
+
+Choose the initial cell dimensions with `TerminalSize`, pass input bytes with
+`write`, and publish layout changes with `resize`. `next_event` returns output
+chunks followed by one exit event after the stream drains. Dropping a running
+`TerminalChild` terminates and reaps it. The API deliberately exposes terminal
+intent rather than PTY, ConPTY, file descriptors, or native handles. See
+[HostTerminal.sx](../Examples/Subprocess/HostTerminal.sx).
+
 ## Describe the selected target
 
 `System.platform()` and `System.target()` describe the program's selected

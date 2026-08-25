@@ -49,3 +49,20 @@ operations are fallible because malformed paths and platform rules are part of
 the observable contract. See [InspectPath.sx](../Examples/Files/InspectPath.sx).
 That program covers validation, normalization, absolute-path detection,
 joining, parent lookup, name, stem and extension.
+
+## Observe workspace changes
+
+`FileWatch.open(path, Options(recursive:...))` owns a native directory watcher.
+The watched path is canonicalized and must be a directory. `Watcher.next` waits
+up to a non-negative timeout and returns one `created`, `modified`, `removed`,
+`renamed` or `metadata` change, or `null` when no event arrives. Event paths are
+absolute canonical paths. A non-recursive watcher accepts only the directory
+itself and its direct children; a recursive watcher includes descendants.
+
+Native services can coalesce events, emit more than one change for one logical
+operation, or represent a rename as separate old/new notifications. Consumers
+should treat notifications as invalidations and reread the affected state.
+`rescan_required` means the native queue overflowed or otherwise lost detail;
+rebuild the complete application snapshot before continuing. `close` is
+idempotent, and dropping the owned watcher closes it. See
+[WatchWorkspace.sx](../Examples/FileWatch/WatchWorkspace.sx).

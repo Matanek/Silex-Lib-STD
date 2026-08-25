@@ -5,6 +5,8 @@ use STD.Text.UTF8
 
 public enum EnvironmentChange { set(str, str); remove(str) }
 public enum ExitStatus { exited(int); signaled(int) }
+public enum Stream { standard_output; standard_error }
+public enum Event { output(Stream, uint8[]); exited(ExitStatus) }
 
 public struct Command {
     let executable:Path
@@ -16,7 +18,146 @@ public struct Command {
     let maximum_output_bytes:int
 }
 
+public struct SpawnCommand {
+    let executable:Path
+    let arguments:str[]
+    let current_directory:Path?
+    let inherit_environment:bool
+    let environment:EnvironmentChange[]
+}
+
 public struct Output { let status:ExitStatus; let standard_output:uint8[]; let standard_error:uint8[] }
+
+public class Child {
+    private var process:uint
+    private var standard_input:uint
+    private var standard_output:uint
+    private var standard_error:uint
+    private var input_open:bool
+    private var output_open:bool
+    private var error_open:bool
+    private var running:bool
+
+    module init(process:uint, standard_input:uint, standard_output:uint, standard_error:uint) {
+        self.process = process
+        self.standard_input = standard_input
+        self.standard_output = standard_output
+        self.standard_error = standard_error
+        self.input_open = true
+        self.output_open = true
+        self.error_open = true
+        self.running = true
+    }
+
+    func write_standard_input(buffer:@uint8[..]) Result<int, Error> {
+        if !self.input_open {
+            return Result<int, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.child.write_standard_input", null, "standard input is closed"))
+        }
+        let result = Platform.write_input(self.standard_input, buffer)
+        if Platform.write_failed(result) {
+            self.input_open = false
+            return Result<int, Error>.failure(child_error(Error.Kind.broken_pipe(), "subprocess.child.write_standard_input", null, "system pipe write failed"))
+        }
+        return Result<int, Error>.success(Platform.written_count(result))
+    }
+
+    func close_standard_input() Result<void, Error> {
+        if !self.input_open { return Result<void, Error>.success() }
+        self.input_open = false
+        if Platform.close_pipe(self.standard_input) { return Result<void, Error>.success() }
+        return Result<void, Error>.failure(child_error(Error.Kind.other(), "subprocess.child.close_standard_input", null, "system pipe close failed"))
+    }
+
+    func next_event(timeout_milliseconds:int) Result<Event?, Error> {
+        if timeout_milliseconds < 0 {
+            return Result<Event?, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.child.next_event", null, "timeout_milliseconds must be non-negative"))
+        }
+        if !self.running && !self.output_open && !self.error_open {
+            return Result<Event?, Error>.success(null)
+        }
+        let raw = Platform.next_event(
+            self.process,
+            self.standard_output,
+            self.standard_error,
+            self.output_open,
+            self.error_open,
+            self.running,
+            timeout_milliseconds
+        )
+        self.output_open = Platform.event_output_open(raw)
+        self.error_open = Platform.event_error_open(raw)
+        self.running = Platform.event_running(raw)
+        if Platform.event_failed(raw) {
+            return Result<Event?, Error>.failure(child_error(Error.Kind.other(), "subprocess.child.next_event", null, "system process polling failed"))
+        }
+        let kind = Platform.event_kind(raw)
+        if kind == 1 {
+            return Result<Event?, Error>.success(Event.output(Stream.standard_output(), Platform.event_bytes(raw)))
+        }
+        if kind == 2 {
+            return Result<Event?, Error>.success(Event.output(Stream.standard_error(), Platform.event_bytes(raw)))
+        }
+        if kind == 3 {
+            var status = ExitStatus.exited(Platform.event_status(raw))
+            if Platform.event_signaled(raw) { status = ExitStatus.signaled(Platform.event_status(raw)) }
+            return Result<Event?, Error>.success(Event.exited(status))
+        }
+        return Result<Event?, Error>.success(null)
+    }
+
+    func terminate() Result<void, Error> {
+        if !self.running { return Result<void, Error>.success() }
+        if Platform.terminate_process(self.process) { return Result<void, Error>.success() }
+        return Result<void, Error>.failure(child_error(Error.Kind.other(), "subprocess.child.terminate", null, "system process termination failed"))
+    }
+
+    func is_running() bool { return self.running }
+
+    drop {
+        if self.input_open { let ignored_input = Platform.close_pipe(self.standard_input) }
+        Platform.destroy_child(
+            self.process,
+            self.standard_output,
+            self.standard_error,
+            self.output_open,
+            self.error_open,
+            self.running
+        )
+    }
+}
+
+public func spawn(command:SpawnCommand) Result<Child, Error> {
+    if !valid_text(command.executable, false) {
+        return Result<Child, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.spawn", command.executable, "executable must be non-empty and contain no null byte"))
+    }
+    var directory = ""
+    var has_directory = false
+    if value = command.current_directory {
+        if !valid_text(value, false) {
+            return Result<Child, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.spawn", command.executable, "current_directory must be non-empty and contain no null byte"))
+        }
+        directory = value
+        has_directory = true
+    }
+    for argument in command.arguments {
+        if !valid_text(argument, true) {
+            return Result<Child, Error>.failure(child_error(Error.Kind.invalid_input(), "subprocess.spawn", command.executable, "an argument contains a null byte"))
+        }
+    }
+    let environment = try resolved_environment(command.inherit_environment, command.environment, command.executable, "subprocess.spawn")
+    let argument_view = @command.arguments[0:command.arguments.count()]
+    let environment_view = @environment[0:environment.count()]
+    let raw = Platform.spawn(command.executable, argument_view, has_directory, directory, environment_view)
+    if Platform.child_error(raw) != 0 {
+        return Result<Child, Error>.failure(child_error(Error.Kind.other(), "subprocess.spawn", command.executable, "system process creation failed"))
+    }
+    return Result<Child, Error>.success(Child(
+        Platform.child_process(raw),
+        Platform.child_input(raw),
+        Platform.child_output(raw),
+        Platform.child_error_output(raw)
+    ))
+}
 
 public func run(command:Command) Result<Output, Error> {
     if command.maximum_output_bytes < 0 { return failed(command.executable, Error.Kind.invalid_input(), "maximum_output_bytes must be non-negative") }
@@ -59,6 +200,29 @@ public func run(command:Command) Result<Output, Error> {
         return Result<Output, Error>.success(Output(status:status, standard_output:Platform.output_stdout(raw), standard_error:Platform.output_stderr(raw)))
     }
     return failed(command.executable, Error.Kind.other(), "system process execution failed")
+}
+
+func resolved_environment(inherit:bool, changes:EnvironmentChange[], subject:str, operation:str) Result<str[], Error> {
+    var environment:str[] = []
+    if inherit { environment = inherited_environment() }
+    for change in changes {
+        match change {
+            set(name, value) => {
+                if !valid_name(name) || !valid_text(value, true) {
+                    return Result<str[], Error>.failure(child_error(Error.Kind.invalid_input(), operation, subject, "invalid environment assignment"))
+                }
+                environment = without_environment(environment, name)
+                environment.append(name + "=" + value)
+            }
+            remove(name) => {
+                if !valid_name(name) {
+                    return Result<str[], Error>.failure(child_error(Error.Kind.invalid_input(), operation, subject, "invalid environment variable name"))
+                }
+                environment = without_environment(environment, name)
+            }
+        }
+    }
+    return Result<str[], Error>.success(environment)
 }
 
 func inherited_environment() str[] {
@@ -108,6 +272,9 @@ func valid_text(value:str, empty:bool) bool {
 }
 func failed(subject:str, kind:Error.Kind, detail:str) Result<Output, Error> {
     return Result<Output, Error>.failure(Error(kind:kind, operation:"subprocess.run", subject:subject, detail:detail))
+}
+func child_error(kind:Error.Kind, operation:str, subject:str?, detail:str) Error {
+    return Error(kind:kind, operation:operation, subject:subject, detail:detail)
 }
 func decimal(value:int) str {
     if value == 0 { return "0" }

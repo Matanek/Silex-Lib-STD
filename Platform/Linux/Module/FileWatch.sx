@@ -1,0 +1,134 @@
+use Interop.Boundary
+use Interop.C
+use STD.FileSystem
+use STD.FileWatch
+use STD.Path as Paths
+use STD.Text.UTF8
+
+let inotify_initialize = C.function<func(int32) int32>(library:Boundary.System, name:"inotify_init1")
+let inotify_add = C.function<func(int32, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"inotify_add_watch")
+let system_poll = C.function<func(C.MutablePointer<int>, C.Size, int32) int32>(library:Boundary.System, name:"poll")
+let system_read = C.function<func(int32, C.MutablePointer<int>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
+
+func open(watcher:FileWatch.Watcher) bool {
+    let descriptor = inotify_initialize(0x80800)
+    if descriptor < 0 { return false }
+    watcher.set_first_native(descriptor as uint)
+    return true
+}
+
+func add_directory(watcher:FileWatch.Watcher, path:str) bool {
+    let identifier = inotify_add(
+        watcher.first_native() as int32,
+        C.terminated_pointer(path),
+        0x0000_4FCF
+    )
+    if identifier < 0 { return false }
+    watcher.record_native_watch(identifier, path)
+    return true
+}
+
+func lock(watcher:FileWatch.Watcher) {}
+func unlock(watcher:FileWatch.Watcher) {}
+
+func poll(watcher:FileWatch.Watcher, timeout_milliseconds:int) bool {
+    if watcher.has_events() { return true }
+    var descriptor:int[1]
+    let poll_address = C.address_bits(C.mutable_pointer(descriptor))
+    let ignored_fd = C.store<int32>(poll_address, 0 as uint, watcher.first_native() as int32)
+    let ignored_events = C.store<uint16>(poll_address, 4 as uint, 1)
+    let ready = system_poll(C.mutable_pointer(descriptor), 1 as C.Size, timeout_milliseconds as int32)
+    if ready == 0 { return true }
+    if ready < 0 { return false }
+    var buffer:int[512]
+    let count = system_read(watcher.first_native() as int32, C.mutable_pointer(buffer), 4096 as C.Size)
+    if count < 0 { return false }
+    let address = C.address_bits(C.mutable_pointer(buffer))
+    var offset = 0
+    while offset + 16 <= count {
+        let event = address + offset as uint
+        let identifier = C.load<int32>(event, 0 as uint) as int
+        let mask = C.load<uint32>(event, 4 as uint)
+        let length = C.load<uint32>(event, 12 as uint) as int
+        if length < 0 || offset + 16 + length > count { return false }
+        if (mask & 0x4000) != 0 {
+            watcher.enqueue_rescan()
+        } else {
+            if base = watcher.native_watch_path(identifier) {
+                var path = base
+                if length > 0 {
+                    let name = terminated_text(event + 16, length)
+                    if name.count() > 0 {
+                        match Paths.join(base, name) {
+                            failure(error) => { return false }
+                            success(joined) => { path = joined }
+                        }
+                    }
+                }
+                var kind = 5
+                if (mask & 0x100) != 0 { kind = 1 }
+                elif (mask & 0x200) != 0 { kind = 3 }
+                elif (mask & 0xC0) != 0 { kind = 4 }
+                elif (mask & 0xA) != 0 { kind = 2 }
+                watcher.enqueue_native(kind, path)
+                if watcher.watches_recursively() && (mask & 0x4000_0000) != 0 && (mask & 0x180) != 0 {
+                    add_tree(watcher, path)
+                }
+            }
+            if (mask & 0x8000) != 0 { watcher.remove_native_watch(identifier) }
+        }
+        offset += 16 + length
+    }
+    return true
+}
+
+func close(watcher:FileWatch.Watcher) {
+    let descriptor = watcher.first_native()
+    if descriptor != 0 {
+        let ignored = system_close(descriptor as int32)
+        watcher.set_first_native(0)
+    }
+}
+
+func add_tree(watcher:FileWatch.Watcher, path:str) {
+    if !add_directory(watcher, path) { watcher.enqueue_rescan(); return }
+    match FileSystem.list(path) {
+        failure(error) => { watcher.enqueue_rescan() }
+        success(entries) => {
+            for entry in entries {
+                match entry.kind {
+                    directory => {
+                        match Paths.join(path, entry.name) {
+                            failure(error) => { watcher.enqueue_rescan() }
+                            success(child) => { add_tree(watcher, child) }
+                        }
+                    }
+                    else => {}
+                }
+            }
+        }
+    }
+}
+
+func terminated_text(address:uint, maximum:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < maximum {
+        let byte = C.load<uint8>(address, index as uint)
+        if byte == 0 {
+            let view = @bytes[0:bytes.count()]
+            match UTF8.decode(view) {
+                success(text) => { return text }
+                failure(error) => { panic("file watch path contains invalid UTF-8") }
+            }
+        }
+        bytes.append(byte)
+        index++
+    }
+    let view = @bytes[0:bytes.count()]
+    match UTF8.decode(view) {
+        success(text) => { return text }
+        failure(error) => { panic("file watch path contains invalid UTF-8") }
+    }
+}

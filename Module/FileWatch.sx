@@ -1,0 +1,206 @@
+use STD.Error
+use STD.FileSystem
+use STD.Path as Paths
+use STD.Path.Path as Path
+
+public enum Kind { created; modified; removed; renamed; metadata }
+public enum Event { change(Kind, Path); rescan_required }
+
+public struct Options { let recursive:bool }
+
+public class Watcher {
+    private let root:Path
+    private let recursive:bool
+    private var open:bool
+    private var events:Event[]
+    private var event_cursor:int
+    private var native_one:uint
+    private var native_two:uint
+    private var native_three:uint
+    private var native_four:uint
+    private var native_pending:bool
+    private var native_ids:int[]
+    private var native_paths:Path[]
+
+    module init(root:Path, recursive:bool) {
+        self.root = root
+        self.recursive = recursive
+        self.open = true
+        self.events = []
+        self.event_cursor = 0
+        self.native_one = 0
+        self.native_two = 0
+        self.native_three = 0
+        self.native_four = 0
+        self.native_pending = false
+        self.native_ids = []
+        self.native_paths = []
+    }
+
+    func next(timeout_milliseconds:int) Result<Event?, Error> {
+        if timeout_milliseconds < 0 {
+            return Result<Event?, Error>.failure(watch_error(Error.Kind.invalid_input(), "file_watch.next", self.root, "timeout_milliseconds must be non-negative"))
+        }
+        if !self.open {
+            return Result<Event?, Error>.failure(watch_error(Error.Kind.invalid_input(), "file_watch.next", self.root, "watcher is closed"))
+        }
+        if event = self.dequeue() { return Result<Event?, Error>.success(event) }
+        if !Platform.poll(self, timeout_milliseconds) {
+            return Result<Event?, Error>.failure(watch_error(Error.Kind.other(), "file_watch.next", self.root, "system file watch failed"))
+        }
+        return Result<Event?, Error>.success(self.dequeue())
+    }
+
+    func close() {
+        if !self.open { return }
+        Platform.close(self)
+        self.open = false
+    }
+
+    func is_open() bool { return self.open }
+    func watched_path() Path { return self.root }
+
+    module func enqueue_native(kind:int, path:Path) {
+        if !self.accepts(path) { return }
+        Platform.lock(self)
+        if kind == 1 { self.events.append(Event.change(Kind.created(), path)) }
+        elif kind == 2 { self.events.append(Event.change(Kind.modified(), path)) }
+        elif kind == 3 { self.events.append(Event.change(Kind.removed(), path)) }
+        elif kind == 4 { self.events.append(Event.change(Kind.renamed(), path)) }
+        else { self.events.append(Event.change(Kind.metadata(), path)) }
+        Platform.unlock(self)
+    }
+
+    module func enqueue_rescan() {
+        Platform.lock(self)
+        self.events.append(Event.rescan_required())
+        Platform.unlock(self)
+    }
+    module func has_events() bool {
+        Platform.lock(self)
+        let result = self.event_cursor < self.events.count()
+        Platform.unlock(self)
+        return result
+    }
+    module func root_path() Path { return self.root }
+    module func watches_recursively() bool { return self.recursive }
+    module func first_native() uint { return self.native_one }
+    module func second_native() uint { return self.native_two }
+    module func third_native() uint { return self.native_three }
+    module func fourth_native() uint { return self.native_four }
+    module func native_is_pending() bool { return self.native_pending }
+    module func set_first_native(value:uint) { self.native_one = value }
+    module func set_second_native(value:uint) { self.native_two = value }
+    module func set_third_native(value:uint) { self.native_three = value }
+    module func set_fourth_native(value:uint) { self.native_four = value }
+    module func set_native_pending(value:bool) { self.native_pending = value }
+
+    module func record_native_watch(identifier:int, path:Path) {
+        var index = 0
+        while index < self.native_ids.count() {
+            if self.native_ids[index] == identifier {
+                self.native_paths[index] = path
+                return
+            }
+            index++
+        }
+        self.native_ids.append(identifier)
+        self.native_paths.append(path)
+    }
+
+    module func native_watch_path(identifier:int) Path? {
+        var index = 0
+        while index < self.native_ids.count() {
+            if self.native_ids[index] == identifier { return self.native_paths[index] }
+            index++
+        }
+        return null
+    }
+
+    module func remove_native_watch(identifier:int) {
+        var next_ids:int[] = []
+        var next_paths:Path[] = []
+        var index = 0
+        while index < self.native_ids.count() {
+            if self.native_ids[index] != identifier {
+                next_ids.append(self.native_ids[index])
+                next_paths.append(self.native_paths[index])
+            }
+            index++
+        }
+        self.native_ids = next_ids
+        self.native_paths = next_paths
+    }
+
+    private func dequeue() Event? {
+        Platform.lock(self)
+        if self.event_cursor >= self.events.count() {
+            Platform.unlock(self)
+            return null
+        }
+        let event = self.events[self.event_cursor]
+        self.event_cursor++
+        if self.event_cursor == self.events.count() {
+            self.events.clear()
+            self.event_cursor = 0
+        }
+        Platform.unlock(self)
+        return event
+    }
+
+    private func accepts(path:Path) bool {
+        if self.recursive || path == self.root { return true }
+        match Paths.parent(path) {
+            failure(error) => { return false }
+            success(parent) => {
+                if value = parent { return value == self.root }
+                return false
+            }
+        }
+    }
+
+    drop {
+        if self.open { Platform.close(self) }
+    }
+}
+
+public func open(path:Path, options:Options) Result<Watcher, Error> {
+    let root = try FileSystem.canonicalize(path)
+    let metadata = try FileSystem.metadata(root)
+    match metadata.kind {
+        directory => {}
+        else => { return Result<Watcher, Error>.failure(watch_error(Error.Kind.not_directory(), "file_watch.open", root, "watched path must be a directory")) }
+    }
+    var watcher = Watcher(root, options.recursive)
+    if !Platform.open(watcher) {
+        watcher.close()
+        return Result<Watcher, Error>.failure(watch_error(Error.Kind.other(), "file_watch.open", root, "system file watch creation failed"))
+    }
+    if !Platform.add_directory(watcher, root) {
+        watcher.close()
+        return Result<Watcher, Error>.failure(watch_error(Error.Kind.other(), "file_watch.open", root, "system directory watch creation failed"))
+    }
+    if options.recursive { try add_child_directories(watcher, root) }
+    return Result<Watcher, Error>.success(watcher)
+}
+
+func add_child_directories(watcher:Watcher, path:Path) Result<void, Error> {
+    let entries = try FileSystem.list(path)
+    for entry in entries {
+        match entry.kind {
+            directory => {
+                let child = try Paths.join(path, entry.name)
+                if !Platform.add_directory(watcher, child) {
+                    return Result<void, Error>.failure(watch_error(Error.Kind.other(), "file_watch.open", child, "system directory watch creation failed"))
+                }
+                try add_child_directories(watcher, child)
+            }
+            else => {}
+        }
+    }
+    return Result<void, Error>.success()
+}
+
+func watch_error(kind:Error.Kind, operation:str, subject:Path, detail:str) Error {
+    return Error(kind:kind, operation:operation, subject:subject, detail:detail)
+}

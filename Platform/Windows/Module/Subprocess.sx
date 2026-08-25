@@ -4,6 +4,9 @@ use STD.Text.Encoding
 use STD.Text.UTF8
 
 struct RawOutput { let status:int; let signaled:bool; let stdout:uint8[]; let stderr:uint8[]; let limited:bool; let error:int }
+struct RawChild { let process:uint; let input:uint; let output:uint; let error_output:uint; let error:int }
+struct RawEvent { let kind:int; let bytes:uint8[]; let status:int; let signaled:bool; let output_open:bool; let error_open:bool; let running:bool; let error:int }
+struct RawWrite { let count:int; let error:bool }
 struct PipeResult { let valid:bool; let read:uint; let write:uint }
 func output_status(value:RawOutput) int { return value.status }
 func output_signaled(value:RawOutput) bool { return value.signaled }
@@ -11,6 +14,21 @@ func output_stdout(value:RawOutput) uint8[] { return value.stdout }
 func output_stderr(value:RawOutput) uint8[] { return value.stderr }
 func output_limited(value:RawOutput) bool { return value.limited }
 func output_error(value:RawOutput) int { return value.error }
+func child_process(value:RawChild) uint { return value.process }
+func child_input(value:RawChild) uint { return value.input }
+func child_output(value:RawChild) uint { return value.output }
+func child_error_output(value:RawChild) uint { return value.error_output }
+func child_error(value:RawChild) int { return value.error }
+func event_kind(value:RawEvent) int { return value.kind }
+func event_bytes(value:RawEvent) uint8[] { return value.bytes }
+func event_status(value:RawEvent) int { return value.status }
+func event_signaled(value:RawEvent) bool { return value.signaled }
+func event_output_open(value:RawEvent) bool { return value.output_open }
+func event_error_open(value:RawEvent) bool { return value.error_open }
+func event_running(value:RawEvent) bool { return value.running }
+func event_failed(value:RawEvent) bool { return value.error != 0 }
+func written_count(value:RawWrite) int { return value.count }
+func write_failed(value:RawWrite) bool { return value.error }
 
 let system_create_pipe = C.function<func(C.MutablePointer<uint>, C.MutablePointer<uint>, C.Pointer<uint8>, uint32) int32>(library:Boundary.System, name:"CreatePipe")
 let system_set_handle = C.function<func(uint, uint32, uint32) int32>(library:Boundary.System, name:"SetHandleInformation")
@@ -22,7 +40,181 @@ let system_close = C.function<func(uint) int32>(library:Boundary.System, name:"C
 let system_terminate = C.function<func(uint, uint32) int32>(library:Boundary.System, name:"TerminateProcess")
 let system_exit_code = C.function<func(uint, C.MutablePointer<uint32>) int32>(library:Boundary.System, name:"GetExitCodeProcess")
 let system_wait = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
+let system_sleep = C.function<func(uint32) void>(library:Boundary.System, name:"Sleep")
 let system_error = C.function<func() uint32>(library:Boundary.System, name:"GetLastError")
+
+func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..]) RawChild {
+    var line = quote(executable)
+    for argument in arguments { line = line + " " + quote(argument) }
+    var application_bytes = wide(executable, true)
+    var line_bytes = wide(line, true)
+    var environment_bytes:uint8[] = []
+    for entry in environment {
+        let encoded = wide(entry, false)
+        for byte in encoded { environment_bytes.append(byte) }
+        environment_bytes.append(0 as uint8)
+        environment_bytes.append(0 as uint8)
+    }
+    environment_bytes.append(0 as uint8)
+    environment_bytes.append(0 as uint8)
+    if environment.count() == 0 {
+        environment_bytes.append(0 as uint8)
+        environment_bytes.append(0 as uint8)
+    }
+    var directory_bytes = wide(directory, true)
+    let application_packed = C.string(@application_bytes[0:application_bytes.count()])
+    var line_packed = C.string(@line_bytes[0:line_bytes.count()])
+    let environment_packed = C.string(@environment_bytes[0:environment_bytes.count()])
+    let directory_packed = C.string(@directory_bytes[0:directory_bytes.count()])
+    let input_pipe = make_pipe()
+    if !input_pipe.valid { return child_failure(system_error() as int) }
+    let output_pipe = make_pipe()
+    if !output_pipe.valid {
+        close_handle(input_pipe.read); close_handle(input_pipe.write)
+        return child_failure(system_error() as int)
+    }
+    let error_pipe = make_pipe()
+    if !error_pipe.valid {
+        close_handle(input_pipe.read); close_handle(input_pipe.write)
+        close_handle(output_pipe.read); close_handle(output_pipe.write)
+        return child_failure(system_error() as int)
+    }
+    let ignored_input = system_set_handle(input_pipe.write, 1, 0)
+    let ignored_output = system_set_handle(output_pipe.read, 1, 0)
+    let ignored_error = system_set_handle(error_pipe.read, 1, 0)
+    var startup:int[13]
+    let startup_address = C.address_bits(C.mutable_pointer(startup))
+    let ignored_cb = C.store<uint32>(startup_address, 0 as uint, 104)
+    let ignored_flags = C.store<uint32>(startup_address, 60 as uint, 0x100)
+    let ignored_stdin = C.store<uint>(startup_address, 80 as uint, input_pipe.read)
+    let ignored_stdout = C.store<uint>(startup_address, 88 as uint, output_pipe.write)
+    let ignored_stderr = C.store<uint>(startup_address, 96 as uint, error_pipe.write)
+    var process_info:int[3]
+    var directory_pointer = C.address_bits(C.pointer(directory_packed))
+    if !has_directory { directory_pointer = 0 }
+    let created = system_create_process(
+        C.pointer(application_packed), C.mutable_string_pointer(line_packed), C.pointer_bits(0 as uint), C.pointer_bits(0 as uint),
+        1, 0x400, C.pointer(environment_packed), C.pointer_bits(directory_pointer), C.mutable_pointer(startup), C.mutable_pointer(process_info)
+    )
+    close_handle(input_pipe.read)
+    close_handle(output_pipe.write)
+    close_handle(error_pipe.write)
+    if created == 0 {
+        let code = system_error()
+        close_handle(input_pipe.write)
+        close_handle(output_pipe.read)
+        close_handle(error_pipe.read)
+        return child_failure(code as int)
+    }
+    let info_address = C.address_bits(C.mutable_pointer(process_info))
+    let process = C.load<uint>(info_address, 0 as uint)
+    let thread = C.load<uint>(info_address, 8 as uint)
+    close_handle(thread)
+    return RawChild(process:process, input:input_pipe.write, output:output_pipe.read, error_output:error_pipe.read, error:0)
+}
+
+func write_input(handle:uint, buffer:@uint8[..]) RawWrite {
+    if buffer.count() == 0 { return RawWrite(count:0, error:false) }
+    var count = buffer.count()
+    if count > 4096 { count = 4096 }
+    let compact = C.string(@buffer[0:count])
+    var written:uint32 = 0
+    if system_write(handle, C.pointer(compact), count as uint32, C.mutable_pointer(written), C.pointer_bits(0 as uint)) == 0 {
+        return RawWrite(count:0, error:true)
+    }
+    return RawWrite(count:written as int, error:false)
+}
+
+func next_event(process:uint, output:uint, error_output:uint, output_open:bool, error_open:bool, running:bool, timeout_milliseconds:int) RawEvent {
+    if !running { return raw_event(0, [], 0, false, output_open, error_open, false, 0) }
+    var next_output_open = output_open
+    var next_error_open = error_open
+    var remaining = timeout_milliseconds
+    while true {
+        if next_output_open {
+            let chunk = read_available(output)
+            if chunk.failed { return raw_event(0, [], 0, false, next_output_open, next_error_open, true, 1) }
+            if chunk.ended {
+                close_handle(output)
+                next_output_open = false
+            } elif chunk.bytes.count() > 0 {
+                return raw_event(1, chunk.bytes, 0, false, true, next_error_open, true, 0)
+            }
+        }
+        if next_error_open {
+            let chunk = read_available(error_output)
+            if chunk.failed { return raw_event(0, [], 0, false, next_output_open, next_error_open, true, 1) }
+            if chunk.ended {
+                close_handle(error_output)
+                next_error_open = false
+            } elif chunk.bytes.count() > 0 {
+                return raw_event(2, chunk.bytes, 0, false, next_output_open, true, true, 0)
+            }
+        }
+        let ready = system_wait(process, 0)
+        if ready != 0 && ready != 258 { return raw_event(0, [], 0, false, next_output_open, next_error_open, true, 1) }
+        if ready == 0 && !next_output_open && !next_error_open {
+            var exit_code:uint32 = 0
+            if system_exit_code(process, C.mutable_pointer(exit_code)) == 0 {
+                close_handle(process)
+                return raw_event(0, [], 0, false, false, false, false, 1)
+            }
+            close_handle(process)
+            return raw_event(3, [], exit_code as int, false, false, false, false, 0)
+        }
+        if remaining == 0 { return raw_event(0, [], 0, false, next_output_open, next_error_open, true, 0) }
+        var interval = remaining
+        if interval > 10 { interval = 10 }
+        if ready == 258 { let ignored_wait = system_wait(process, interval as uint32) }
+        else { system_sleep(interval as uint32) }
+        remaining -= interval
+    }
+    panic("process polling terminated unexpectedly")
+}
+
+func terminate_process(process:uint) bool { return system_terminate(process, 1) != 0 }
+func close_pipe(handle:uint) bool { return system_close(handle) != 0 }
+
+func destroy_child(process:uint, output:uint, error_output:uint, output_open:bool, error_open:bool, running:bool) {
+    if output_open { close_handle(output) }
+    if error_open { close_handle(error_output) }
+    if running {
+        let ignored_terminate = system_terminate(process, 1)
+        let ignored_wait = system_wait(process, 0xFFFF_FFFF)
+        close_handle(process)
+    }
+}
+
+struct Chunk { let bytes:uint8[]; let ended:bool; let failed:bool }
+func read_available(handle:uint) Chunk {
+    var available:uint32 = 0
+    if system_peek(handle, C.pointer_bits(0 as uint), 0, C.pointer_bits(0 as uint), C.mutable_pointer(available), C.pointer_bits(0 as uint)) == 0 {
+        if system_error() == 109 { return Chunk(bytes:[], ended:true, failed:false) }
+        return Chunk(bytes:[], ended:false, failed:true)
+    }
+    if available == 0 { return Chunk(bytes:[], ended:false, failed:false) }
+    var requested = available
+    if requested > 4096 { requested = 4096 }
+    var storage:int[512]
+    var count:uint32 = 0
+    if system_read(handle, C.mutable_pointer(storage), requested, C.mutable_pointer(count), C.pointer_bits(0 as uint)) == 0 {
+        if system_error() == 109 { return Chunk(bytes:[], ended:true, failed:false) }
+        return Chunk(bytes:[], ended:false, failed:true)
+    }
+    let address = C.address_bits(C.mutable_pointer(storage))
+    var bytes:uint8[] = []
+    var index = 0
+    while index < count as int {
+        bytes.append(C.load<uint8>(address, index as uint))
+        index++
+    }
+    return Chunk(bytes:bytes, ended:false, failed:false)
+}
+
+func raw_event(kind:int, bytes:uint8[], status:int, signaled:bool, output_open:bool, error_open:bool, running:bool, error:int) RawEvent {
+    return RawEvent(kind:kind, bytes:bytes, status:status, signaled:signaled, output_open:output_open, error_open:error_open, running:running, error:error)
+}
+func child_failure(error:int) RawChild { return RawChild(process:0, input:0, output:0, error_output:0, error:error) }
 
 func run(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], input:@uint8[..], maximum:int) RawOutput? {
     var line = quote(executable)

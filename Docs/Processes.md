@@ -30,6 +30,24 @@ only explicit assignments are present. Executable paths remain platform
 specific; [ScopedEnvironment.sx](../Examples/Subprocess/ScopedEnvironment.sx)
 shows an intentional platform match.
 
+## Drive an interactive child
+
+`Subprocess.spawn` starts a `Child` with separate standard-input,
+standard-output and standard-error pipes. `write_standard_input` is a blocking
+pipe write and may accept fewer bytes than requested; retry the unwritten tail
+when complete delivery matters, then call `close_standard_input` to publish
+end-of-input. `next_event(timeout_milliseconds)` returns one output chunk, an
+exit status, or `null` when the non-negative timeout expires. Output remains
+bytes until the application explicitly decodes it.
+
+The exit event is emitted only after both output pipes have reached their end,
+so every preceding output chunk can be consumed before completion. Dropping a
+still-running `Child` terminates and reaps it; call `terminate` when that choice
+should be visible in application control flow. On POSIX targets, a failure in
+the child after `fork`, such as an executable rejected by `exec`, is reported
+as exit code 127; Windows can reject the initial `spawn` directly. See
+[StreamChild.sx](../Examples/Subprocess/StreamChild.sx).
+
 ## Describe the selected target
 
 `System.platform()` and `System.target()` describe the program's selected

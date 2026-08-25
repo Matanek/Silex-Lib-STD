@@ -86,6 +86,8 @@ Compile the complete catalogue from the workspace root with:
 - [PublishReport.sx](Files/PublishReport.sx) — create, copy, rename, protect,
   list and clean a publication tree.
 - [InspectPath.sx](Files/InspectPath.sx) — normalize and decompose a path.
+- [WatchWorkspace.sx](FileWatch/WatchWorkspace.sx) — consume native recursive
+  workspace invalidations with a bounded wait.
 
 The file examples create relative files or directories in their working
 directory. Run them from a disposable directory when the generated artifacts
@@ -99,6 +101,8 @@ are not wanted in the project.
   a child and decode captured output.
 - [ScopedEnvironment.sx](Subprocess/ScopedEnvironment.sx) — replace a child
   environment without changing the parent.
+- [StreamChild.sx](Subprocess/StreamChild.sx) — exchange standard-input and
+  streamed output with a running child before collecting its exit status.
 - [DescribeTarget.sx](System/DescribeTarget.sx) — distinguish the selected
   compilation target from the build machine.
 

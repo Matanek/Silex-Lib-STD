@@ -15,6 +15,9 @@
         "Security": {
           "frameworks": ["CoreFoundation", "Security"]
         },
+        "FileWatch": {
+          "frameworks": ["CoreFoundation", "CoreServices"]
+        },
         "Compression": {
           "archive": "Boundary/macos-arm64/libCompression.a"
         },

@@ -1,0 +1,193 @@
+use Interop.Boundary
+use Interop.C
+use STD.FileWatch
+use STD.Text.UTF8
+
+let cf_string_create = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, uint32) C.Pointer<uint8> >(
+    library:Boundary.FileWatch,
+    name:"CFStringCreateWithCString"
+)
+let cf_array_create = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, uint, C.Pointer<uint8>) C.Pointer<uint8> >(
+    library:Boundary.FileWatch,
+    name:"CFArrayCreate"
+)
+let cf_release = C.function<func(C.Pointer<uint8>) void>(library:Boundary.FileWatch, name:"CFRelease")
+let stream_create = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.MutablePointer<int>, C.Pointer<uint8>, uint, float64, uint32) C.Pointer<uint8> >(
+    library:Boundary.FileWatch,
+    name:"FSEventStreamCreate"
+)
+let stream_dispatch = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) void>(
+    library:Boundary.FileWatch,
+    name:"FSEventStreamSetDispatchQueue"
+)
+let stream_start = C.function<func(C.Pointer<uint8>) uint8>(library:Boundary.FileWatch, name:"FSEventStreamStart")
+let stream_stop = C.function<func(C.Pointer<uint8>) void>(library:Boundary.FileWatch, name:"FSEventStreamStop")
+let stream_invalidate = C.function<func(C.Pointer<uint8>) void>(library:Boundary.FileWatch, name:"FSEventStreamInvalidate")
+let stream_release = C.function<func(C.Pointer<uint8>) void>(library:Boundary.FileWatch, name:"FSEventStreamRelease")
+let queue_create = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) C.Pointer<uint8> >(
+    library:Boundary.System,
+    name:"dispatch_queue_create"
+)
+let semaphore_create = C.function<func(int) C.Pointer<uint8> >(library:Boundary.System, name:"dispatch_semaphore_create")
+let semaphore_wait = C.function<func(C.Pointer<uint8>, uint) int>(library:Boundary.System, name:"dispatch_semaphore_wait")
+let semaphore_signal = C.function<func(C.Pointer<uint8>) int>(library:Boundary.System, name:"dispatch_semaphore_signal")
+let dispatch_time = C.function<func(uint, int) uint>(library:Boundary.System, name:"dispatch_time")
+let dispatch_sync = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) void>(
+    library:Boundary.System,
+    name:"dispatch_sync_f"
+)
+let dispatch_release = C.function<func(C.Pointer<uint8>) void>(library:Boundary.System, name:"dispatch_release")
+let allocate = C.function<func(C.Size) C.Pointer<uint8> >(library:Boundary.System, name:"malloc")
+let release = C.function<func(C.Pointer<uint8>) void>(library:Boundary.System, name:"free")
+let unfair_lock = C.function<func(C.Pointer<uint8>) void>(library:Boundary.System, name:"os_unfair_lock_lock")
+let unfair_unlock = C.function<func(C.Pointer<uint8>) void>(library:Boundary.System, name:"os_unfair_lock_unlock")
+
+func open(watcher:FileWatch.Watcher) bool {
+    let path = C.address_bits(cf_string_create(
+        C.pointer_bits(0 as uint),
+        C.terminated_pointer(watcher.root_path()),
+        0x0800_0100
+    ))
+    if path == 0 { return false }
+    var paths:uint[1] = [path]
+    let array = C.address_bits(cf_array_create(
+        C.pointer_bits(0 as uint),
+        C.pointer_bits(C.address_bits(C.mutable_pointer(paths))),
+        1,
+        C.pointer_bits(0 as uint)
+    ))
+    if array == 0 {
+        cf_release(C.pointer_bits(path))
+        return false
+    }
+    let queue = C.address_bits(queue_create(C.terminated_pointer("silex.file-watch"), C.pointer_bits(0 as uint)))
+    let semaphore = C.address_bits(semaphore_create(0))
+    let guard = C.address_bits(allocate(4 as C.Size))
+    if queue == 0 || semaphore == 0 || guard == 0 {
+        if queue != 0 { dispatch_release(C.pointer_bits(queue)) }
+        if semaphore != 0 { dispatch_release(C.pointer_bits(semaphore)) }
+        if guard != 0 { release(C.pointer_bits(guard)) }
+        cf_release(C.pointer_bits(array))
+        cf_release(C.pointer_bits(path))
+        return false
+    }
+    let ignored_guard = C.store<uint32>(guard, 0 as uint, 0)
+    watcher.set_second_native(queue)
+    watcher.set_third_native(semaphore)
+    watcher.set_fourth_native(guard)
+    var context:int[5] = [0, 0, 0, 0, 0]
+    let context_address = C.address_bits(C.mutable_pointer(context))
+    let ignored_version = C.store<uint>(context_address, 0 as uint, 0)
+    let ignored_info = C.store<uint>(context_address, 8 as uint, C.object_address(watcher))
+    let callback:func(uint, uint, uint, uint, uint, uint) = receive_events
+    let stream = C.address_bits(stream_create(
+        C.pointer_bits(0 as uint),
+        C.pointer_bits(C.function_address(callback)),
+        C.mutable_pointer(context),
+        C.pointer_bits(array),
+        0xFFFF_FFFF_FFFF_FFFF,
+        0.01 as float64,
+        0x12
+    ))
+    cf_release(C.pointer_bits(array))
+    cf_release(C.pointer_bits(path))
+    if stream == 0 {
+        close_dispatch(watcher)
+        return false
+    }
+    stream_dispatch(C.pointer_bits(stream), C.pointer_bits(queue))
+    if stream_start(C.pointer_bits(stream)) == 0 {
+        stream_invalidate(C.pointer_bits(stream))
+        stream_release(C.pointer_bits(stream))
+        close_dispatch(watcher)
+        return false
+    }
+    watcher.set_first_native(stream)
+    return true
+}
+
+func add_directory(watcher:FileWatch.Watcher, path:str) bool { return true }
+
+func lock(watcher:FileWatch.Watcher) {
+    let guard = watcher.fourth_native()
+    if guard != 0 { unfair_lock(C.pointer_bits(guard)) }
+}
+
+func unlock(watcher:FileWatch.Watcher) {
+    let guard = watcher.fourth_native()
+    if guard != 0 { unfair_unlock(C.pointer_bits(guard)) }
+}
+
+func poll(watcher:FileWatch.Watcher, timeout_milliseconds:int) bool {
+    if watcher.has_events() { return true }
+    let deadline = dispatch_time(0, timeout_milliseconds * 1_000_000)
+    let ignored = semaphore_wait(C.pointer_bits(watcher.third_native()), deadline)
+    return true
+}
+
+func close(watcher:FileWatch.Watcher) {
+    let stream = watcher.first_native()
+    if stream != 0 {
+        stream_stop(C.pointer_bits(stream))
+        stream_invalidate(C.pointer_bits(stream))
+        let barrier:func(uint) = dispatch_barrier
+        dispatch_sync(
+            C.pointer_bits(watcher.second_native()),
+            C.pointer_bits(0 as uint),
+            C.pointer_bits(C.function_address(barrier))
+        )
+        stream_release(C.pointer_bits(stream))
+        watcher.set_first_native(0)
+    }
+    close_dispatch(watcher)
+}
+
+func dispatch_barrier(context:uint) {}
+
+func receive_events(stream:uint, context:uint, count:uint, paths:uint, flags:uint, identifiers:uint) {
+    var watcher = C.object_from_address<FileWatch.Watcher>(context)
+    var index:uint = 0
+    while index < count {
+        let event_path = C.load<uint>(paths, index * 8)
+        let event_flags = C.load<uint32>(flags, index * 4)
+        if (event_flags & 0x2F) != 0 {
+            watcher.enqueue_rescan()
+        } else {
+            var kind = 5
+            if (event_flags & 0x100) != 0 { kind = 1 }
+            elif (event_flags & 0x200) != 0 { kind = 3 }
+            elif (event_flags & 0x800) != 0 { kind = 4 }
+            elif (event_flags & 0x1000) != 0 { kind = 2 }
+            watcher.enqueue_native(kind, text_at(event_path, 32_768))
+        }
+        index++
+    }
+    let ignored_signal = semaphore_signal(C.pointer_bits(watcher.third_native()))
+}
+
+func close_dispatch(watcher:FileWatch.Watcher) {
+    if watcher.second_native() != 0 { dispatch_release(C.pointer_bits(watcher.second_native())) }
+    if watcher.third_native() != 0 { dispatch_release(C.pointer_bits(watcher.third_native())) }
+    if watcher.fourth_native() != 0 { release(C.pointer_bits(watcher.fourth_native())) }
+    watcher.set_second_native(0)
+    watcher.set_third_native(0)
+    watcher.set_fourth_native(0)
+}
+
+func text_at(address:uint, maximum:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < maximum {
+        let byte = C.load<uint8>(address, index as uint)
+        if byte == 0 {
+            let view = @bytes[0:bytes.count()]
+            match UTF8.decode(view) {
+                success(text) => { return text }
+                failure(error) => { panic("file watch path contains invalid UTF-8") }
+            }
+        }
+        bytes.append(byte)
+        index++
+    }
+    panic("file watch path exceeds the supported system limit")
+}

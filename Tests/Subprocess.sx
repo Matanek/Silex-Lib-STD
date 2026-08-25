@@ -1,4 +1,5 @@
 use STD.Console
+use STD.Error
 use STD.Process
 use STD.Subprocess
 use STD.System
@@ -45,6 +46,83 @@ test "capture child input and output" {
     match Process.arguments() {
         failure(error) => { panic(error.detail) }
         success(arguments) => { dispatch(arguments) }
+    }
+}
+
+test "stream child input and output before exit" {
+    func child() {
+        if value = Console.read_line() {
+            Console.write("stream:" + value)
+            Console.write_error("diagnostic")
+        }
+    }
+
+    func parent(executable:str) Result<void, Error> {
+        let command = Subprocess.SpawnCommand(
+            executable:executable,
+            arguments:["--subprocess-stream-child"],
+            current_directory:null,
+            inherit_environment:true,
+            environment:[]
+        )
+        var process = try Subprocess.spawn(command)
+        let input = UTF8.bytes("ready\n")
+        let input_view = @input[0:input.count()]
+        let written = try process.write_standard_input(input_view)
+        assert(written == input.count(), "interactive child input")
+        try process.close_standard_input()
+
+        var standard_output:uint8[] = []
+        var standard_error:uint8[] = []
+        var exited = false
+        var attempts = 0
+        while !exited && attempts < 20 {
+            let next = try process.next_event(250)
+            if event = next {
+                match event {
+                    output(stream, bytes) => {
+                        match stream {
+                            standard_output => { for byte in bytes { standard_output.append(byte) } }
+                            standard_error => { for byte in bytes { standard_error.append(byte) } }
+                        }
+                    }
+                    exited(status) => {
+                        match status {
+                            exited(code) => { assert(code == 0, "interactive child exit status") }
+                            signaled(signal) => { panic("interactive child was signaled") }
+                        }
+                        exited = true
+                    }
+                }
+            }
+            attempts++
+        }
+        assert(exited, "interactive child completion")
+        let output_view = @standard_output[0:standard_output.count()]
+        let error_view = @standard_error[0:standard_error.count()]
+        match UTF8.decode(output_view) {
+            failure(error) => { panic("interactive standard output is invalid UTF-8") }
+            success(text) => { assert(text == "stream:ready", "interactive standard output") }
+        }
+        match UTF8.decode(error_view) {
+            failure(error) => { panic("interactive standard error is invalid UTF-8") }
+            success(text) => { assert(text == "diagnostic", "interactive standard error") }
+        }
+        return Result<void, Error>.success()
+    }
+
+    func dispatch() Result<void, Error> {
+        let arguments = try Process.arguments()
+        if arguments.count() > 1 && arguments[1] == "--subprocess-stream-child" {
+            child()
+            return Result<void, Error>.success()
+        }
+        return parent(try Process.executable_path())
+    }
+
+    match dispatch() {
+        failure(error) => { panic(error.operation + ": " + error.detail) }
+        success => {}
     }
 }
 

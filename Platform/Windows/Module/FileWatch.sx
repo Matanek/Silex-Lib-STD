@@ -1,0 +1,189 @@
+use Interop.Boundary
+use Interop.C
+use STD.FileWatch
+use STD.Path as Paths
+use STD.Text.Encoding
+
+let create_file = C.function<func(C.Pointer<uint8>, uint32, uint32, C.Pointer<uint8>, uint32, uint32, uint) uint>(
+    library:Boundary.System,
+    name:"CreateFileW"
+)
+let create_event = C.function<func(C.Pointer<uint8>, int32, int32, C.Pointer<uint8>) uint>(
+    library:Boundary.System,
+    name:"CreateEventW"
+)
+let reset_event = C.function<func(uint) int32>(library:Boundary.System, name:"ResetEvent")
+let read_changes = C.function<func(uint, C.Pointer<uint8>, uint32, int32, uint32, C.Pointer<uint8>, C.Pointer<uint8>, C.Pointer<uint8>) int32>(
+    library:Boundary.System,
+    name:"ReadDirectoryChangesW"
+)
+let wait_for_event = C.function<func(uint, uint32) uint32>(library:Boundary.System, name:"WaitForSingleObject")
+let overlapped_result = C.function<func(uint, C.Pointer<uint8>, C.MutablePointer<uint32>, int32) int32>(
+    library:Boundary.System,
+    name:"GetOverlappedResult"
+)
+let cancel_io = C.function<func(uint, C.Pointer<uint8>) int32>(library:Boundary.System, name:"CancelIoEx")
+let close_handle = C.function<func(uint) int32>(library:Boundary.System, name:"CloseHandle")
+let system_error = C.function<func() uint32>(library:Boundary.System, name:"GetLastError")
+let allocate = C.function<func(C.Size) C.Pointer<uint8> >(library:Boundary.Runtime, name:"malloc")
+let release = C.function<func(C.Pointer<uint8>) void>(library:Boundary.Runtime, name:"free")
+
+func open(watcher:FileWatch.Watcher) bool {
+    let path = wide_string(watcher.root_path())
+    let directory = create_file(
+        C.pointer(path),
+        1,
+        7,
+        C.pointer_bits(0 as uint),
+        3,
+        0x4200_0000,
+        0
+    )
+    if directory == 0xFFFF_FFFF_FFFF_FFFF { return false }
+    let event = create_event(C.pointer_bits(0 as uint), 1, 0, C.pointer_bits(0 as uint))
+    if event == 0 {
+        let ignored = close_handle(directory)
+        return false
+    }
+    let buffer = C.address_bits(allocate(16_384 as C.Size))
+    let overlap = C.address_bits(allocate(32 as C.Size))
+    if buffer == 0 || overlap == 0 {
+        if buffer != 0 { release(C.pointer_bits(buffer)) }
+        if overlap != 0 { release(C.pointer_bits(overlap)) }
+        let ignored_event = close_handle(event)
+        let ignored_directory = close_handle(directory)
+        return false
+    }
+    watcher.set_first_native(directory)
+    watcher.set_second_native(event)
+    watcher.set_third_native(buffer)
+    watcher.set_fourth_native(overlap)
+    watcher.set_native_pending(false)
+    if !start_read(watcher) {
+        close(watcher)
+        return false
+    }
+    return true
+}
+
+func add_directory(watcher:FileWatch.Watcher, path:str) bool { return true }
+func lock(watcher:FileWatch.Watcher) {}
+func unlock(watcher:FileWatch.Watcher) {}
+
+func poll(watcher:FileWatch.Watcher, timeout_milliseconds:int) bool {
+    if watcher.has_events() { return true }
+    if !watcher.native_is_pending() && !start_read(watcher) { return false }
+    let ready = wait_for_event(watcher.second_native(), timeout_milliseconds as uint32)
+    if ready == 258 { return true }
+    if ready != 0 { return false }
+    var count:uint32 = 0
+    if overlapped_result(
+        watcher.first_native(),
+        C.pointer_bits(watcher.fourth_native()),
+        C.mutable_pointer(count),
+        0
+    ) == 0 {
+        watcher.set_native_pending(false)
+        return false
+    }
+    watcher.set_native_pending(false)
+    if count == 0 { watcher.enqueue_rescan() }
+    else { parse_events(watcher, count as int) }
+    return start_read(watcher)
+}
+
+func close(watcher:FileWatch.Watcher) {
+    let directory = watcher.first_native()
+    let overlap = watcher.fourth_native()
+    if directory != 0 && watcher.native_is_pending() {
+        let ignored_cancel = cancel_io(directory, C.pointer_bits(overlap))
+        let ignored_wait = wait_for_event(watcher.second_native(), 0xFFFF_FFFF)
+        watcher.set_native_pending(false)
+    }
+    if watcher.second_native() != 0 { let ignored_event = close_handle(watcher.second_native()) }
+    if directory != 0 { let ignored_directory = close_handle(directory) }
+    if watcher.third_native() != 0 { release(C.pointer_bits(watcher.third_native())) }
+    if overlap != 0 { release(C.pointer_bits(overlap)) }
+    watcher.set_first_native(0)
+    watcher.set_second_native(0)
+    watcher.set_third_native(0)
+    watcher.set_fourth_native(0)
+    watcher.set_native_pending(false)
+}
+
+func start_read(watcher:FileWatch.Watcher) bool {
+    let overlap = watcher.fourth_native()
+    let ignored_internal = C.store<uint>(overlap, 0 as uint, 0)
+    let ignored_high = C.store<uint>(overlap, 8 as uint, 0)
+    let ignored_offset = C.store<uint>(overlap, 16 as uint, 0)
+    let ignored_event = C.store<uint>(overlap, 24 as uint, watcher.second_native())
+    let ignored_reset = reset_event(watcher.second_native())
+    var recursive:int32 = 0
+    if watcher.watches_recursively() { recursive = 1 }
+    let started = read_changes(
+        watcher.first_native(),
+        C.pointer_bits(watcher.third_native()),
+        16_384,
+        recursive,
+        0x15F,
+        C.pointer_bits(0 as uint),
+        C.pointer_bits(overlap),
+        C.pointer_bits(0 as uint)
+    )
+    if started == 0 && system_error() != 997 { return false }
+    watcher.set_native_pending(true)
+    return true
+}
+
+func parse_events(watcher:FileWatch.Watcher, count:int) {
+    let buffer = watcher.third_native()
+    var offset = 0
+    var reading = true
+    while reading && offset + 12 <= count {
+        let entry = buffer + offset as uint
+        let next = C.load<uint32>(entry, 0 as uint) as int
+        let action = C.load<uint32>(entry, 4 as uint)
+        let byte_count = C.load<uint32>(entry, 8 as uint) as int
+        if byte_count < 0 || offset + 12 + byte_count > count {
+            watcher.enqueue_rescan()
+            return
+        }
+        let relative = wide_text(entry + 12, byte_count / 2)
+        match Paths.join(watcher.root_path(), relative) {
+            failure(error) => { watcher.enqueue_rescan() }
+            success(path) => {
+                var kind = 5
+                if action == 1 { kind = 1 }
+                elif action == 2 { kind = 3 }
+                elif action == 3 { kind = 2 }
+                elif action == 4 || action == 5 { kind = 4 }
+                watcher.enqueue_native(kind, path)
+            }
+        }
+        if next == 0 { reading = false }
+        else { offset += next }
+    }
+}
+
+func wide_text(address:uint, count:int) str {
+    var bytes:uint8[] = []
+    var index = 0
+    while index < count {
+        let unit = C.load<uint16>(address, (index as uint) * 2)
+        bytes.append((unit & 255) as uint8)
+        bytes.append((unit >> 8) as uint8)
+        index++
+    }
+    let view = @bytes[0:bytes.count()]
+    match Encoding.decode(view, Encoding.Kind.utf16_little_endian()) {
+        success(text) => { return text }
+        failure(error) => { panic("Windows file watch path contains invalid UTF-16") }
+    }
+}
+
+func wide_string(text:str) str {
+    var bytes = Encoding.encode(text, Encoding.Kind.utf16_little_endian())
+    bytes.append(0 as uint8)
+    let view = @bytes[0:bytes.count()]
+    return C.string(view)
+}

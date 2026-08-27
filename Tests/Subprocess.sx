@@ -4,7 +4,6 @@ use STD.Process
 use STD.Subprocess
 use STD.System
 use STD.Text.UTF8
-use STD.Text
 
 test "capture child input and output" {
     func validate(output:Subprocess.Output) {
@@ -186,6 +185,14 @@ test "environment changes stay in the child" {
 }
 
 test "terminal child uses the portable terminal transport" {
+    func contains_bytes_in_order(bytes:@uint8[..], expected:@uint8[..]) bool {
+        var expected_index = 0
+        for byte in bytes {
+            if expected_index < expected.count() && byte == expected[expected_index] { expected_index++ }
+        }
+        return expected_index == expected.count()
+    }
+
     func child() {
         if value = Console.read_line() { Console.write("terminal:" + value) }
     }
@@ -230,8 +237,11 @@ test "terminal child uses the portable terminal transport" {
         let output_view = @output[0:output.count()]
         match UTF8.decode(output_view) {
             failure(error) => { panic("terminal output is invalid UTF-8") }
-            success(text) => { assert(Text.contains(text, "terminal:ready"), "terminal output") }
+            success(text) => {}
         }
+        let expected = UTF8.bytes("terminal:ready")
+        let expected_view = @expected[0:expected.count()]
+        assert(contains_bytes_in_order(output_view, expected_view), "terminal output")
         return Result<void, Error>.success()
     }
 

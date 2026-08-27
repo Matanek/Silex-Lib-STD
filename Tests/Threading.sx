@@ -564,11 +564,11 @@ test "abandoned completed jobs recycle their slots" {
 
 test "completed fenced jobs recycle their slots" {
     var executor = Threading.Executor(worker_count:1)
-    complete_fenced_job(executor, 0)
-    let warmed = executor.submission_allocation_count()
-    for value in 1...128 { complete_fenced_job(executor, value) }
-    if executor.submission_allocation_count() != warmed {
-        panic("completed fenced jobs did not recycle")
+    for value in 0...8192 { complete_fenced_job(executor, value) }
+    let allocations = executor.submission_allocation_count()
+    if allocations > 2 {
+        print("SILEX_THREADING_FENCED_RECYCLING expected-at-most=2 actual=$(allocations)")
+        panic("completed fenced jobs did not remain bounded")
     }
 }
 

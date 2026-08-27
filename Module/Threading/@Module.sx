@@ -129,22 +129,22 @@ public class Executor {
     }
 
     func combine(fences:@Fence[]) Fence {
+        var runtime = self.runtime
         var dependencies:GraphState[] = []
         for fence in fences { dependencies.append(fence.shared_state()) }
-        var state = combine_states(self.runtime, dependencies)
-        var runtime = self.runtime
+        var state = combine_states(runtime, dependencies)
         return Fence(state, runtime)
     }
 
     func submit_parallel<T:ParallelJob>(count:int, job:T) Fence {
-        var state = enqueue_parallel(self.runtime, count, job)
         var runtime = self.runtime
+        var state = enqueue_parallel(runtime, count, job)
         return Fence(state, runtime)
     }
 
     func submit_parallel<T:ParallelJob>(count:int, job:T, after:Fence) Fence {
-        var state = enqueue_parallel_after(self.runtime, count, job, after.shared_state())
         var runtime = self.runtime
+        var state = enqueue_parallel_after(runtime, count, job, after.shared_state())
         return Fence(state, runtime)
     }
 

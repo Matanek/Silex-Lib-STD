@@ -267,12 +267,10 @@ class DependencyEntry<T:Job>:DependencyTarget {
 }
 
 class StatePool<T:Job>:PoolResource {
-    private var runtime:Runtime
     private var states:JobState<T>[]
     private var entries:WorkEntry<T>[]
 
-    private init(runtime:Runtime) {
-        self.runtime = runtime
+    private init() {
         self.states = []
         self.entries = []
     }
@@ -283,7 +281,7 @@ class StatePool<T:Job>:PoolResource {
         if address != 0 {
             return C.object_from_address<StatePool<T>>(address)
         }
-        var created = StatePool<T>(runtime)
+        var created = StatePool<T>()
         runtime.register_pool(key, C.object_address(created), created)
         return created
     }

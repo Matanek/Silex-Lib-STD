@@ -575,10 +575,11 @@ test "completed fenced jobs recycle their slots" {
 test "stored completed fences recycle after their array is cleared" {
     var queue = FenceQueue()
     for value in 0...256 { queue.cycle(value) }
-    let warmed = queue.allocation_count()
-    for value in 0...1024 { queue.cycle(value) }
-    if queue.allocation_count() != warmed {
-        panic("cleared fence arrays retained completed submissions")
+    for value in 0...8192 { queue.cycle(value) }
+    let allocations = queue.allocation_count()
+    if allocations > 2 {
+        print("SILEX_THREADING_FENCE_RECYCLING expected-at-most=2 actual=$(allocations)")
+        panic("cleared fence arrays did not keep completed submissions bounded")
     }
 }
 

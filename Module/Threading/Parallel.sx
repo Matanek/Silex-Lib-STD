@@ -141,11 +141,9 @@ class ParallelBatch<T:ParallelJob>:DependencyTarget {
 }
 
 class ParallelPool<T:ParallelJob>:PoolResource {
-    private var runtime:Runtime
     private var batches:ParallelBatch<T>[]
 
-    private init(runtime:Runtime) {
-        self.runtime = runtime
+    private init() {
         self.batches = []
     }
 
@@ -153,7 +151,7 @@ class ParallelPool<T:ParallelJob>:PoolResource {
         let key = parallel_pool_type_key<T>()
         let address = runtime.pool_address(key)
         if address != 0 { return C.object_from_address<ParallelPool<T>>(address) }
-        var created = ParallelPool<T>(runtime)
+        var created = ParallelPool<T>()
         runtime.register_pool(key, C.object_address(created), created)
         return created
     }

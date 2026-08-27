@@ -127,6 +127,29 @@ class ManualGate {
     }
 }
 
+class FenceQueue {
+    var executor:Threading.Executor
+    var fences:Threading.Fence[]
+
+    init() {
+        self.executor = Threading.Executor(worker_count:1)
+        self.fences = []
+    }
+
+    func cycle(value:int) {
+        self.fences.clear()
+        var handle = self.executor.submit(Counter(value:value))
+        self.fences.append(handle.fence())
+        var fence = self.fences[0]
+        fence.complete()
+        self.fences.clear()
+    }
+
+    func allocation_count() int {
+        return self.executor.submission_allocation_count()
+    }
+}
+
 struct BlockingJob:Threading.Job {
     var gate:ManualGate
     func execute() { self.gate.wait_until_released() }
@@ -297,6 +320,13 @@ func abandon_one(executor:Threading.Executor, value:int) {
 
 func abandon_wave(executor:Threading.Executor, count:int) {
     for i in 0...count { abandon_one(executor, i) }
+}
+
+func complete_fenced_job(executor:Threading.Executor, value:int) {
+    var shared = executor
+    var handle = shared.submit(Counter(value:value))
+    var fence = handle.fence()
+    fence.complete()
 }
 
 func consume_with_copy(executor:Threading.Executor) int {
@@ -530,6 +560,26 @@ test "abandoned completed jobs recycle their slots" {
     abandon_wave(executor, 64)
     executor.wait_idle()
     if executor.submission_allocation_count() != warmed { panic("abandoned completed jobs did not recycle") }
+}
+
+test "completed fenced jobs recycle their slots" {
+    var executor = Threading.Executor(worker_count:1)
+    complete_fenced_job(executor, 0)
+    let warmed = executor.submission_allocation_count()
+    for value in 1...128 { complete_fenced_job(executor, value) }
+    if executor.submission_allocation_count() != warmed {
+        panic("completed fenced jobs did not recycle")
+    }
+}
+
+test "stored completed fences recycle after their array is cleared" {
+    var queue = FenceQueue()
+    for value in 0...256 { queue.cycle(value) }
+    let warmed = queue.allocation_count()
+    for value in 0...1024 { queue.cycle(value) }
+    if queue.allocation_count() != warmed {
+        panic("cleared fence arrays retained completed submissions")
+    }
 }
 
 test "handle copies delay recycling and share consumption" {

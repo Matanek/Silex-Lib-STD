@@ -108,23 +108,23 @@ public class Executor {
     }
 
     func submit<T:Job>(job:T) JobHandle<T> {
-        var state = enqueue(self.runtime, job)
         var runtime = self.runtime
+        var state = enqueue(runtime, job)
         return JobHandle<T>(state, runtime)
     }
 
     func submit<T:Job>(job:T, after:Fence) JobHandle<T> {
-        var dependencies:GraphState[] = [after.shared_state()]
-        var state = enqueue_after(self.runtime, job, dependencies)
         var runtime = self.runtime
+        var dependencies:GraphState[] = [after.shared_state()]
+        var state = enqueue_after(runtime, job, dependencies)
         return JobHandle<T>(state, runtime)
     }
 
     func submit<T:Job>(job:T, after:@Fence[]) JobHandle<T> {
+        var runtime = self.runtime
         var dependencies:GraphState[] = []
         for fence in after { dependencies.append(fence.shared_state()) }
-        var state = enqueue_after(self.runtime, job, dependencies)
-        var runtime = self.runtime
+        var state = enqueue_after(runtime, job, dependencies)
         return JobHandle<T>(state, runtime)
     }
 

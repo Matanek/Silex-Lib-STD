@@ -174,11 +174,13 @@ vectorisation.
 Comme les jobs ordinaires, un lot parallèle réutilise après échauffement son
 état de batch, ses entrées de travail et son signal. Une nouvelle allocation de
 planification n'est nécessaire que pour un nouveau type de lot ou un pic de
-lots simultanément vivants. Le benchmark interne `Benchmarks/Threading.sx`
-vérifie ce régime, le résultat déterministe et la montée en charge à un, deux
-et quatre workers ; `Benchmarks/CheckThreading.py` contrôle les séries répétées
-sans transformer le temps en assertion de test unitaire. Il reste dans STD car
-il inspecte volontairement les compteurs `package` du pool de workers.
+lots simultanément vivants. Le test interne
+`Tests/ThreadingPerformance.sx` vérifie ce régime, le résultat déterministe et
+la montée en charge à un, deux et quatre workers. L'outil
+`Tools/CheckThreadingPerformance.py` peut contrôler des séries répétées sans
+transformer le temps en assertion fragile dans le test Silex. Ce test reste
+dans STD car il inspecte volontairement les compteurs `package` du pool de
+workers.
 
 Les workers, entrées de file et signaux des adaptateurs natifs macOS ARM64,
 Linux X64 et Windows X64 restent internes. La surface publique n'expose ni

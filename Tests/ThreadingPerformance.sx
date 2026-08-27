@@ -35,7 +35,7 @@ func make_samples(count:int) Samples {
     return Samples(source:source, destination:destination)
 }
 
-func benchmark_case(executor:Threading.Executor, count:int, rounds:int) {
+func performance_case(executor:Threading.Executor, count:int, rounds:int) {
     var samples = make_samples(count)
 
     var sequential = Stopwatch()
@@ -58,23 +58,23 @@ func benchmark_case(executor:Threading.Executor, count:int, rounds:int) {
     let submitted_work = shared.parallel_work_count() - before_work
     let maximum_useful_work = rounds * shared.worker_count() * 4
     if shared.parallel_allocation_count() != warmed_allocations {
-        panic("parallel benchmark regressed to allocating batch state after warmup")
+        panic("parallel performance test allocated batch state after warmup")
     }
     if submitted_work > maximum_useful_work {
-        panic("parallel benchmark regressed toward one submission per element")
+        panic("parallel performance test submitted excessive work ranges")
     }
     var checksum = 0
     var index = 0
     while index < count {
         if samples.destination[index] != (samples.source[index] * 17 + 31) % 65521 {
-            panic("parallel benchmark changed its deterministic result")
+            panic("parallel performance test changed its deterministic result")
         }
         checksum += samples.destination[index]
         index++
     }
 
     print(
-        "SILEX_THREADING_BENCHMARK mode=release workers=$(executor.worker_count()) " +
+        "SILEX_THREADING_PERFORMANCE_TEST mode=test workers=$(executor.worker_count()) " +
         "count=$(count) rounds=$(rounds) " +
         "sequential_ms=$(sequential.get_elapsed_milliseconds()) " +
         "parallel_ms=$(parallel.get_elapsed_milliseconds()) " +
@@ -83,17 +83,17 @@ func benchmark_case(executor:Threading.Executor, count:int, rounds:int) {
     )
 }
 
-func benchmark_workers(worker_count:int) {
+func test_worker_count(worker_count:int) {
     var executor = Threading.Executor(worker_count:worker_count)
     executor.submit(Warmup(marker:0)).complete()
-    benchmark_case(executor, 1_024, 256)
-    benchmark_case(executor, 4_096, 64)
-    benchmark_case(executor, 16_384, 16)
-    benchmark_case(executor, 262_144, 16)
+    performance_case(executor, 1_024, 256)
+    performance_case(executor, 4_096, 64)
+    performance_case(executor, 16_384, 16)
+    performance_case(executor, 262_144, 16)
 }
 
-test "deterministic indexed batches with one two and four workers" {
-    benchmark_workers(1)
-    benchmark_workers(2)
-    benchmark_workers(4)
+test "parallel batches stay bounded and deterministic across worker counts" {
+    test_worker_count(1)
+    test_worker_count(2)
+    test_worker_count(4)
 }

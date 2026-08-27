@@ -4,13 +4,13 @@ use Interop.Boundary
 package struct RawTerminal { let handle:uint; let error:int }
 
 package func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], columns:int, rows:int) RawTerminal {
-    if arguments.count() + 2 > 128 || environment.count() + 1 > 128 { return RawTerminal(handle:0, error:22) }
+    if arguments.count() + 2 > 128 || environment.count() + 1 > 512 { return RawTerminal(handle:0, error:22) }
     var argv:uint[128]
     argv[0] = C.address_bits(C.terminated_pointer(executable))
     var index = 0
     while index < arguments.count() { argv[index + 1] = C.address_bits(C.terminated_pointer(arguments[index])); index++ }
     argv[index + 1] = 0
-    var envp:uint[128]
+    var envp:uint[512]
     index = 0
     while index < environment.count() { envp[index] = C.address_bits(C.terminated_pointer(environment[index])); index++ }
     envp[index] = 0

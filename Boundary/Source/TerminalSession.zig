@@ -453,13 +453,16 @@ fn spawnWindows(
         return;
     };
     var environment: [32768]u16 = undefined;
-    const environment_pointer = environmentBlock(environment_address, &environment) orelse {
-        handle.error_code = 206;
-        ClosePseudoConsole(pseudo_console);
-        closeWindowsHandle(input_write);
-        closeWindowsHandle(output_read);
-        return;
-    };
+    var environment_pointer: ?[*]u16 = null;
+    if (environment_address != 0) {
+        environment_pointer = environmentBlock(environment_address, &environment) orelse {
+            handle.error_code = 206;
+            ClosePseudoConsole(pseudo_console);
+            closeWindowsHandle(input_write);
+            closeWindowsHandle(output_read);
+            return;
+        };
+    }
     var directory_utf16: [32768]u16 = undefined;
     const directory = if (directory_address == 0) null else utf16String(directory_address, &directory_utf16);
     if (directory_address != 0 and directory == null) {
@@ -474,14 +477,17 @@ fn spawnWindows(
     startup.startup.cb = @sizeOf(StartupInfoExW);
     startup.attributes = attributes;
     var process = std.mem.zeroes(ProcessInformation);
+    const raw_environment: ?*anyopaque = if (environment_pointer) |pointer| @ptrCast(pointer) else null;
+    var creation_flags: u32 = 0x0008_0000;
+    if (raw_environment != null) creation_flags |= 0x0000_0400;
     if (CreateProcessW(
         null,
         command,
         null,
         null,
         0,
-        0x0008_0000 | 0x0000_0400,
-        @ptrCast(environment_pointer),
+        creation_flags,
+        raw_environment,
         directory,
         &startup.startup,
         &process,

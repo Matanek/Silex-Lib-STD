@@ -254,7 +254,8 @@ public func spawn_terminal(command:TerminalCommand) Result<TerminalChild, Error>
     let environment = try resolved_environment(command.inherit_environment, command.environment, command.executable, "subprocess.spawn_terminal")
     let argument_view = @command.arguments[0:command.arguments.count()]
     let environment_view = @environment[0:environment.count()]
-    let raw = TerminalPlatform.spawn(command.executable, argument_view, has_directory, directory, environment_view, command.size.columns, command.size.rows)
+    let inherit_host_environment = command.inherit_environment && command.environment.count() == 0
+    let raw = TerminalPlatform.spawn(command.executable, argument_view, has_directory, directory, environment_view, command.size.columns, command.size.rows, inherit_host_environment)
     if raw.error != 0 {
         if raw.handle != 0 { TerminalPlatform.destroy(raw.handle) }
         return Result<TerminalChild, Error>.failure(child_error(Error.Kind.other(), "subprocess.spawn_terminal", command.executable, "terminal process creation failed with code " + decimal(raw.error)))

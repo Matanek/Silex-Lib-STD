@@ -3,7 +3,7 @@ use Interop.Boundary
 
 package struct RawTerminal { let handle:uint; let error:int }
 
-package func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], columns:int, rows:int) RawTerminal {
+package func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], columns:int, rows:int, inherit_host_environment:bool) RawTerminal {
     if arguments.count() + 2 > 128 || environment.count() + 1 > 512 { return RawTerminal(handle:0, error:22) }
     var argv:uint[128]
     argv[0] = C.address_bits(C.terminated_pointer(executable))
@@ -16,7 +16,9 @@ package func spawn(executable:str, arguments:@str[..], has_directory:bool, direc
     envp[index] = 0
     var directory_address:uint = 0
     if has_directory { directory_address = C.address_bits(C.terminated_pointer(directory)) }
-    let handle = terminal_spawn(C.address_bits(C.terminated_pointer(executable)), C.address_bits(C.mutable_pointer(argv)), directory_address, C.address_bits(C.mutable_pointer(envp)), columns as int32, rows as int32)
+    var environment_address = C.address_bits(C.mutable_pointer(envp))
+    if inherit_host_environment { environment_address = 0 }
+    let handle = terminal_spawn(C.address_bits(C.terminated_pointer(executable)), C.address_bits(C.mutable_pointer(argv)), directory_address, environment_address, columns as int32, rows as int32)
     if handle == 0 { return RawTerminal(handle:0, error:12) }
     return RawTerminal(handle:handle, error:terminal_error(handle))
 }

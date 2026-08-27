@@ -3,7 +3,7 @@ use Interop.Boundary
 
 package struct RawTerminal { let handle:uint; let error:int }
 
-package func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], columns:int, rows:int) RawTerminal {
+package func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..], columns:int, rows:int, inherit_host_environment:bool) RawTerminal {
     if arguments.count() + 2 > 128 || environment.count() + 1 > 512 { return RawTerminal(handle:0, error:22) }
     var argv:uint[128]
     argv[0] = C.address_bits(C.terminated_pointer(executable))

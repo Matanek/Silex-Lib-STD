@@ -22,9 +22,9 @@ const WindowsHandle = struct {
     output: usize = 0,
     pseudo_console: usize = 0,
     pseudo_console_released: bool = false,
+    close_thread: usize = 0,
     running: bool = false,
     status: u32 = 0,
-    exit_observed_at: u64 = 0,
     error_code: i32 = 0,
     buffer: [4096]u8 = undefined,
 };
@@ -393,6 +393,7 @@ extern "kernel32" fn WriteFile(file: usize, buffer: *const anyopaque, count: u32
 extern "kernel32" fn WaitForSingleObject(handle: usize, milliseconds: u32) callconv(.winapi) u32;
 extern "kernel32" fn GetExitCodeProcess(process: usize, exit_code: *u32) callconv(.winapi) i32;
 extern "kernel32" fn TerminateProcess(process: usize, exit_code: u32) callconv(.winapi) i32;
+extern "kernel32" fn CreateThread(attributes: ?*anyopaque, stack_size: usize, start_address: *const fn (?*anyopaque) callconv(.winapi) u32, parameter: ?*anyopaque, flags: u32, thread_id: ?*u32) callconv(.winapi) usize;
 extern "kernel32" fn CloseHandle(handle: usize) callconv(.winapi) i32;
 extern "kernel32" fn GetLastError() callconv(.winapi) u32;
 extern "kernel32" fn GetTickCount64() callconv(.winapi) u64;
@@ -519,6 +520,20 @@ fn releaseWindowsPseudoConsole(pseudo_console: usize) bool {
     return release(pseudo_console) == 0;
 }
 
+fn beginWindowsPseudoConsoleClose(handle: *WindowsHandle) bool {
+    if (handle.pseudo_console == 0 or handle.close_thread != 0) return true;
+    handle.close_thread = CreateThread(null, 0, closeWindowsPseudoConsole, @ptrFromInt(handle.pseudo_console), 0, null);
+    if (handle.close_thread != 0) return true;
+    handle.error_code = @intCast(GetLastError());
+    return false;
+}
+
+fn closeWindowsPseudoConsole(parameter: ?*anyopaque) callconv(.winapi) u32 {
+    const pseudo_console = @intFromPtr(parameter orelse return 0);
+    ClosePseudoConsole(pseudo_console);
+    return 0;
+}
+
 fn writeWindows(handle: *WindowsHandle, bytes_address: usize, byte_count: i32) i32 {
     var written: u32 = 0;
     const bytes: *const anyopaque = @ptrFromInt(bytes_address);
@@ -557,7 +572,7 @@ fn pollWindows(handle: *WindowsHandle, bytes_address: usize, byte_capacity: i32,
         }
         refreshWindowsExit(handle);
         const now = GetTickCount64();
-        if (!handle.running and !handle.pseudo_console_released and now >= handle.exit_observed_at + 500) return -1000;
+        if (!handle.running and !handle.pseudo_console_released and !beginWindowsPseudoConsoleClose(handle)) return -1;
         if (now >= deadline) return 0;
         Sleep(1);
     }
@@ -588,7 +603,6 @@ fn refreshWindowsExit(handle: *WindowsHandle) void {
     }
     handle.status = status;
     handle.running = false;
-    handle.exit_observed_at = GetTickCount64();
 }
 
 fn destroyWindows(handle: *WindowsHandle) void {
@@ -597,7 +611,12 @@ fn destroyWindows(handle: *WindowsHandle) void {
         _ = WaitForSingleObject(handle.process, 5000);
         handle.running = false;
     }
-    if (handle.pseudo_console != 0) ClosePseudoConsole(handle.pseudo_console);
+    if (handle.close_thread != 0) {
+        _ = WaitForSingleObject(handle.close_thread, 5000);
+        closeWindowsHandle(handle.close_thread);
+    } else if (handle.pseudo_console != 0) {
+        ClosePseudoConsole(handle.pseudo_console);
+    }
     closeWindowsHandle(handle.input);
     closeWindowsHandle(handle.output);
     closeWindowsHandle(handle.process);

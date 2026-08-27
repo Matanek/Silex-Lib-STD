@@ -115,7 +115,7 @@ jobs:
           $silex = Join-Path $env:RUNNER_TEMP "silex-prefix/bin/silex.exe"
           & $silex setup
           & $silex link (Join-Path $env:GITHUB_WORKSPACE "STD")
+          & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/Subprocess.sx") --nocache
           & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/CryptoPrimitives.sx") --nocache
           & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/Threading.sx") --nocache
           & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/Process.sx") --nocache
-          & $silex test (Join-Path $env:GITHUB_WORKSPACE "STD/Tests/Subprocess.sx") --nocache

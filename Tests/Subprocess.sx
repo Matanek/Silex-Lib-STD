@@ -190,10 +190,10 @@ test "terminal child uses the portable terminal transport" {
         if value = Console.read_line() { Console.write("terminal:" + value) }
     }
 
-    func parent(executable:str) Result<void, Error> {
+    func parent(executable:str, arguments:str[]) Result<void, Error> {
         let command = Subprocess.TerminalCommand(
             executable:executable,
-            arguments:["--subprocess-terminal-child"],
+            arguments:arguments,
             current_directory:null,
             inherit_environment:true,
             environment:[],
@@ -241,7 +241,11 @@ test "terminal child uses the portable terminal transport" {
             child()
             return Result<void, Error>.success()
         }
-        return parent(try Process.executable_path())
+        match System.platform() {
+            windows => { return parent("cmd.exe", ["/d", "/q", "/c", "set /p value=& echo terminal:%value%"]) }
+            macos => { return parent(try Process.executable_path(), ["--subprocess-terminal-child"]) }
+            linux => { return parent(try Process.executable_path(), ["--subprocess-terminal-child"]) }
+        }
     }
 
     match dispatch() { failure(error) => { panic(error.operation + ": " + error.detail) }; success => {} }

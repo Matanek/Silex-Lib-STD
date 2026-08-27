@@ -235,13 +235,12 @@ test "terminal child uses the portable terminal transport" {
         }
         assert(exited, "terminal child completion")
         let output_view = @output[0:output.count()]
-        match UTF8.decode(output_view) {
-            failure(error) => { panic("terminal output is invalid UTF-8") }
-            success(text) => {}
-        }
         let expected = UTF8.bytes("terminal:ready")
         let expected_view = @expected[0:expected.count()]
-        assert(contains_bytes_in_order(output_view, expected_view), "terminal output")
+        match UTF8.decode(output_view) {
+            failure(error) => { panic("terminal output is invalid UTF-8") }
+            success(text) => { assert(contains_bytes_in_order(output_view, expected_view), "terminal output: " + text) }
+        }
         return Result<void, Error>.success()
     }
 

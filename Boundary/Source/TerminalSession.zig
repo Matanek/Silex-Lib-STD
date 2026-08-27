@@ -433,7 +433,7 @@ fn spawnWindows(
     var attribute_size: usize = @sizeOf(@TypeOf(attribute_bytes));
     const attributes: *anyopaque = @ptrCast(&attribute_bytes);
     if (InitializeProcThreadAttributeList(attributes, 1, 0, &attribute_size) == 0 or
-        UpdateProcThreadAttribute(attributes, 0, 0x0002_0016, @ptrCast(&pseudo_console), @sizeOf(usize), null, null) == 0)
+        UpdateProcThreadAttribute(attributes, 0, 0x0002_0016, @ptrFromInt(pseudo_console), @sizeOf(usize), null, null) == 0)
     {
         handle.error_code = @intCast(GetLastError());
         ClosePseudoConsole(pseudo_console);

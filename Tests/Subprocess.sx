@@ -195,7 +195,7 @@ test "terminal child uses the portable terminal transport" {
             executable:executable,
             arguments:["--subprocess-terminal-child"],
             current_directory:null,
-            inherit_environment:false,
+            inherit_environment:true,
             environment:[],
             size:Subprocess.TerminalSize(columns:80, rows:24)
         )

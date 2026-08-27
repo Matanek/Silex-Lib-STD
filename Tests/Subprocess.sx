@@ -242,7 +242,7 @@ test "terminal child uses the portable terminal transport" {
             return Result<void, Error>.success()
         }
         match System.platform() {
-            windows => { return parent("cmd.exe", ["/d", "/q", "/c", "set /p value=& echo terminal:%value%"]) }
+            windows => { return parent("cmd.exe", ["/d", "/q", "/v:on", "/c", "set /p value=& echo terminal:!value!"]) }
             macos => { return parent(try Process.executable_path(), ["--subprocess-terminal-child"]) }
             linux => { return parent(try Process.executable_path(), ["--subprocess-terminal-child"]) }
         }

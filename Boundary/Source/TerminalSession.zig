@@ -23,6 +23,7 @@ const WindowsHandle = struct {
     pseudo_console: usize = 0,
     running: bool = false,
     status: u32 = 0,
+    exit_observed_at: u64 = 0,
     error_code: i32 = 0,
     buffer: [4096]u8 = undefined,
 };
@@ -518,7 +519,6 @@ fn writeWindows(handle: *WindowsHandle, bytes_address: usize, byte_count: i32) i
 }
 
 fn pollWindows(handle: *WindowsHandle, bytes_address: usize, byte_capacity: i32, timeout_milliseconds: i32) i32 {
-    if (!handle.running) return -1000;
     const deadline = GetTickCount64() + @as(u64, @intCast(timeout_milliseconds));
     while (true) {
         var available: u32 = 0;
@@ -533,8 +533,9 @@ fn pollWindows(handle: *WindowsHandle, bytes_address: usize, byte_capacity: i32,
             return @intCast(read_count);
         }
         refreshWindowsExit(handle);
-        if (!handle.running) return -1000;
-        if (GetTickCount64() >= deadline) return 0;
+        const now = GetTickCount64();
+        if (!handle.running and now >= handle.exit_observed_at + 250) return -1000;
+        if (now >= deadline) return 0;
         Sleep(1);
     }
 }
@@ -564,6 +565,7 @@ fn refreshWindowsExit(handle: *WindowsHandle) void {
     }
     handle.status = status;
     handle.running = false;
+    handle.exit_observed_at = GetTickCount64();
 }
 
 fn destroyWindows(handle: *WindowsHandle) void {

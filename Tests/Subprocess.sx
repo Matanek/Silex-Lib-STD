@@ -201,7 +201,7 @@ test "terminal child uses the portable terminal transport" {
         )
         var terminal = try Subprocess.spawn_terminal(command)
         try terminal.resize(Subprocess.TerminalSize(columns:100, rows:30))
-        let input = UTF8.bytes("ready\n")
+        let input = UTF8.bytes("ready\r")
         let input_view = @input[0:input.count()]
         assert(try terminal.write(input_view) == input.count(), "complete terminal input")
         var output:uint8[] = []

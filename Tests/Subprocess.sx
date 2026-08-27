@@ -213,7 +213,13 @@ test "terminal child uses the portable terminal transport" {
                 match event {
                     output(stream, bytes) => { for byte in bytes { output.append(byte) } }
                     exited(status) => {
-                        match status { exited(code) => { assert(code == 0, "terminal child exit status") }; signaled(signal) => { panic("terminal child was signaled") } }
+                        match status {
+                            exited(code) => {
+                                if code != 0 { print("SILEX_SUBPROCESS_TERMINAL_EXIT code=$(code)") }
+                                assert(code == 0, "terminal child exit status")
+                            }
+                            signaled(signal) => { panic("terminal child was signaled") }
+                        }
                         exited = true
                     }
                 }

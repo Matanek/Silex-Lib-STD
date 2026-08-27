@@ -384,7 +384,7 @@ extern "kernel32" fn ClosePseudoConsole(pseudo_console: usize) callconv(.winapi)
 extern "kernel32" fn InitializeProcThreadAttributeList(attributes: ?*anyopaque, count: u32, flags: u32, size: *usize) callconv(.winapi) i32;
 extern "kernel32" fn UpdateProcThreadAttribute(attributes: *anyopaque, flags: u32, attribute: usize, value: *const anyopaque, size: usize, previous: ?*anyopaque, returned_size: ?*usize) callconv(.winapi) i32;
 extern "kernel32" fn DeleteProcThreadAttributeList(attributes: *anyopaque) callconv(.winapi) void;
-extern "kernel32" fn CreateProcessW(application: [*:0]const u16, command_line: [*:0]u16, process_attributes: ?*anyopaque, thread_attributes: ?*anyopaque, inherit_handles: i32, creation_flags: u32, environment: ?*anyopaque, directory: ?[*:0]const u16, startup: *StartupInfoW, process: *ProcessInformation) callconv(.winapi) i32;
+extern "kernel32" fn CreateProcessW(application: ?[*:0]const u16, command_line: [*:0]u16, process_attributes: ?*anyopaque, thread_attributes: ?*anyopaque, inherit_handles: i32, creation_flags: u32, environment: ?*anyopaque, directory: ?[*:0]const u16, startup: *StartupInfoW, process: *ProcessInformation) callconv(.winapi) i32;
 extern "kernel32" fn PeekNamedPipe(pipe: usize, buffer: ?*anyopaque, buffer_size: u32, bytes_read: ?*u32, available: ?*u32, remaining: ?*u32) callconv(.winapi) i32;
 extern "kernel32" fn ReadFile(file: usize, buffer: *anyopaque, count: u32, read_count: *u32, overlapped: ?*anyopaque) callconv(.winapi) i32;
 extern "kernel32" fn WriteFile(file: usize, buffer: *const anyopaque, count: u32, written_count: *u32, overlapped: ?*anyopaque) callconv(.winapi) i32;
@@ -443,14 +443,7 @@ fn spawnWindows(
     }
     defer DeleteProcThreadAttributeList(attributes);
 
-    var executable_utf16: [32768]u16 = undefined;
-    const executable = utf16String(executable_address, &executable_utf16) orelse {
-        handle.error_code = 1113;
-        ClosePseudoConsole(pseudo_console);
-        closeWindowsHandle(input_write);
-        closeWindowsHandle(output_read);
-        return;
-    };
+    _ = executable_address;
     var command_line: [32768]u16 = undefined;
     const command = commandLine(arguments_address, &command_line) orelse {
         handle.error_code = 206;
@@ -482,7 +475,7 @@ fn spawnWindows(
     startup.attributes = attributes;
     var process = std.mem.zeroes(ProcessInformation);
     if (CreateProcessW(
-        executable,
+        null,
         command,
         null,
         null,

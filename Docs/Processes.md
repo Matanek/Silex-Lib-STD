@@ -6,7 +6,7 @@
 because platform text and filesystem access can fail. `id()` is immediate.
 `set_current_directory` changes the process-wide working directory, so prefer
 explicit paths in concurrent applications. See
-[InspectRuntime.sx](../Examples/Process/InspectRuntime.sx).
+[InspectRuntime.sx](Recipes/Process/InspectRuntime.md).
 
 ## Run a child process
 
@@ -23,11 +23,11 @@ explicit paths in concurrent applications. See
 standard error, and either `ExitStatus.exited(code)` or `signaled(signal)`.
 Decode captured bytes explicitly when text is expected. Output beyond the
 configured maximum returns `limit_exceeded`. See
-[CaptureChild.sx](../Examples/Subprocess/CaptureChild.sx).
+[CaptureChild.sx](Recipes/Subprocess/CaptureChild.md).
 
 Environment changes affect only the child. With `inherit_environment:false`,
 only explicit assignments are present. Executable paths remain platform
-specific; [ScopedEnvironment.sx](../Examples/Subprocess/ScopedEnvironment.sx)
+specific; [ScopedEnvironment.sx](Recipes/Subprocess/ScopedEnvironment.md)
 shows an intentional platform match.
 
 ## Drive an interactive child
@@ -46,7 +46,7 @@ still-running `Child` terminates and reaps it; call `terminate` when that choice
 should be visible in application control flow. On POSIX targets, a failure in
 the child after `fork`, such as an executable rejected by `exec`, is reported
 as exit code 127; Windows can reject the initial `spawn` directly. See
-[StreamChild.sx](../Examples/Subprocess/StreamChild.sx).
+[StreamChild.sx](Recipes/Subprocess/StreamChild.md).
 
 ## Host a terminal child
 
@@ -61,11 +61,11 @@ Choose the initial cell dimensions with `TerminalSize`, pass input bytes with
 chunks followed by one exit event after the stream drains. Dropping a running
 `TerminalChild` terminates and reaps it. The API deliberately exposes terminal
 intent rather than PTY, ConPTY, file descriptors, or native handles. See
-[HostTerminal.sx](../Examples/Subprocess/HostTerminal.sx).
+[HostTerminal.sx](Recipes/Subprocess/HostTerminal.md).
 
 ## Describe the selected target
 
 `System.platform()` and `System.target()` describe the program's selected
 compilation target, not necessarily the compiler host. Use `platform_name` and
 `target_name` for stable display strings. See
-[DescribeTarget.sx](../Examples/System/DescribeTarget.sx).
+[DescribeTarget.sx](Recipes/System/DescribeTarget.md).

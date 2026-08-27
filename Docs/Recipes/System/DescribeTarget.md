@@ -1,0 +1,22 @@
+# DescribeTarget
+
+[Retour au catalogue des recettes](../README.md).
+
+```sx
+use STD.System
+
+func architecture_name(value:System.Architecture) str {
+    return match value {
+        arm64 => "arm64"
+        x64 => "x64"
+    }
+}
+
+func main() {
+    let platform:System.OperatingSystem = System.platform()
+    let target = System.target()
+    print("Platform: $(System.platform_name(platform))")
+    print("Architecture: $(architecture_name(target.architecture))")
+    print("Target: $(System.target_name(target))")
+}
+```

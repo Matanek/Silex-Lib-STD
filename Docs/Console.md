@@ -8,7 +8,7 @@ The forms without `_line` add no newline. Console writes currently cross the
 system boundary immediately; `flush()` exists for a stable calling convention
 and performs no additional work.
 
-Use [StyledStatus.sx](../Examples/Console/StyledStatus.sx) for color, emphasis
+Use [StyledStatus.sx](Recipes/Console/StyledStatus.md) for color, emphasis
 and terminal dimensions. Always call `reset_style()` after styled output.
 `get_dimensions()` returns `null` when dimensions are unavailable, including
 ordinary redirected output. Cursor coordinates passed to `move_cursor` are
@@ -18,9 +18,9 @@ zero-origin.
 
 `read_line()` returns one UTF-8 line without its newline, or `null` when input
 ends before any byte is read. Invalid UTF-8 is a programming-ending input
-error. [PromptForName.sx](../Examples/Console/PromptForName.sx) shows the
+error. [PromptForName.sx](Recipes/Console/PromptForName.md) shows the
 complete optional-input path.
-[WaitForConfirmation.sx](../Examples/Console/WaitForConfirmation.sx) covers the
+[WaitForConfirmation.sx](Recipes/Console/WaitForConfirmation.md) covers the
 separate `wait_for_enter()` confirmation pattern.
 
 ## Own an interactive terminal session
@@ -36,9 +36,9 @@ for the first event and then drains immediately available events into a queue.
 
 `enter_alternate_screen()` provides a disposable full-screen surface; pair it
 with `leave_alternate_screen()` or simply close the session. Use
-[SessionKeyViewer.sx](../Examples/Console/SessionKeyViewer.sx) as the minimal
+[SessionKeyViewer.sx](Recipes/Console/SessionKeyViewer.md) as the minimal
 event-loop application.
-[SessionKeyBatch.sx](../Examples/Console/SessionKeyBatch.sx) demonstrates timed
+[SessionKeyBatch.sx](Recipes/Console/SessionKeyBatch.md) demonstrates timed
 polling and bounded event draining without an indefinitely blocking read.
 
 Key events distinguish characters, navigation, editing, function keys and

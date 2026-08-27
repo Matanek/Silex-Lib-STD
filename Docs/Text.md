@@ -8,19 +8,19 @@ Unicode-scalar slicing, splitting, joining and title casing.
 `str.count()`. Search operations are case-sensitive. Use `case_fold` to build a
 locale-independent caseless comparison key. Normalization supports NFC, NFD,
 NFKC and NFKD; choose compatibility forms only when their semantic folding is
-intended. [CleanNames.sx](../Examples/Text/CleanNames.sx) shows a small input
-cleaning pipeline; [CompareUnicode.sx](../Examples/Text/CompareUnicode.sx)
+intended. [CleanNames.sx](Recipes/Text/CleanNames.md) shows a small input
+cleaning pipeline; [CompareUnicode.sx](Recipes/Text/CompareUnicode.md)
 builds normalized search keys.
 
 Unicode scalars are not always user-visible characters. `Text.Grapheme`
 returns extended grapheme-cluster boundaries, counts and strings for cursor
 movement or UI truncation. See
-[CountGraphemes.sx](../Examples/Text/CountGraphemes.sx).
+[CountGraphemes.sx](Recipes/Text/CountGraphemes.md).
 
 Use `Text.UTF8.bytes` and `decode` only at byte-oriented boundaries. `decode`
 reports the invalid byte position instead of replacing malformed input.
 `scalars` and `from_scalars` expose explicit Unicode scalar conversion. See
-[Utf8RoundTrip.sx](../Examples/Text/Utf8RoundTrip.sx).
+[Utf8RoundTrip.sx](Recipes/Text/Utf8RoundTrip.md).
 
 ## Read and write explicitly encoded text
 
@@ -31,6 +31,6 @@ encoding when a recognized signature is present. `decode` accepts either a
 matching BOM or a BOM-free payload and reports an error kind plus byte offset
 for invalid length, invalid sequences or a conflicting BOM.
 
-[DecodeDocument.sx](../Examples/Text/DecodeDocument.sx) detects and decodes a
+[DecodeDocument.sx](Recipes/Text/DecodeDocument.md) detects and decodes a
 UTF-16 document. The executable encoding test round-trips every supported
 encoding with and without a BOM.

@@ -9,9 +9,9 @@ use STD.Console
 ```
 
 Start with [Docs/README.md](Docs/README.md) to choose a capability, then use the
-focused programs in [Examples/README.md](Examples/README.md) as executable
-starting points. Examples are organized by application intent rather than by
-platform implementation details.
+focused [documentation recipes](Docs/Recipes/README.md) as complete starting
+points. Recipes are organized by application intent rather than by platform
+implementation details.
 
 The repository root is the `STD` package root. `Package.json` declares the
 package, `Module/` contains its portable Silex API and `Platform/` supplies the
@@ -162,8 +162,8 @@ while entry = entries.next() {
 
 `Dictionary`, `Set`, `Queue` and `Stack`, their traversal order, snapshot
 operations and iteration algorithms are documented in
-[Docs/Collections.md](Docs/Collections.md). Focused executable walkthroughs
-live under [Examples/Collections](Examples/Collections/).
+[Docs/Collections.md](Docs/Collections.md). Focused walkthroughs live under
+[Docs/Recipes/Collections](Docs/Recipes/Collections/).
 
 CPU jobs use the persistent executor exposed by `STD.Threading`:
 
@@ -298,18 +298,12 @@ func retryable(kind:Error.Kind) bool {
 }
 ```
 
-`Tests/` groups each capability in one focused program. The workspace helper
-rebuilds the compiler, runs every test natively, then compiles every example
-without reusing compilation cache entries:
+`Tests/` groups each capability in one focused executable proof. The workspace
+helper rebuilds the compiler and runs every test natively without reusing
+compilation cache entries:
 
 ```sh
 ./silex-dev test-std
-```
-
-During documentation work, compile only the executable catalogue with:
-
-```sh
-./silex-dev examples-std
 ```
 
 The Silex sources are the primary API reference. Usage guides belong under

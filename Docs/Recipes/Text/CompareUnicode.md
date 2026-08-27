@@ -1,0 +1,18 @@
+# CompareUnicode
+
+[Retour au catalogue des recettes](../README.md).
+
+```sx
+use STD.Text
+
+func comparison_key(value:str) str {
+    return Text.case_fold(Text.normalize(value, Text.Normalization.nfc()))
+}
+
+func main() {
+    let first = comparison_key("CAFÉ")
+    let second = comparison_key("Cafe\u{301}")
+    print("Equivalent search keys: $(first == second)")
+    print("Unicode data: $(Text.unicode_version())")
+}
+```

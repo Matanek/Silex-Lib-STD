@@ -181,4 +181,4 @@ Le compilateur accepte aussi l'inférence avec
 `Iteration.count_where(scores.iterator(), passing)`. La forme explicite est
 utile lorsque le type d'entrée constitue une information importante pour le
 lecteur. Voir
-[CountPassingEntries.sx](../Examples/Collections/CountPassingEntries.sx).
+[CountPassingEntries.sx](Recipes/Collections/CountPassingEntries.md).

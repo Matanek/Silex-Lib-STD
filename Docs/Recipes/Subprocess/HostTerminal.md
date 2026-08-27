@@ -1,0 +1,62 @@
+# HostTerminal
+
+[Retour au catalogue des recettes](../README.md).
+
+```sx
+use STD.Console
+use STD.Process
+use STD.Subprocess
+use STD.Text.UTF8
+
+func child() {
+    if line = Console.read_line() { Console.write("terminal:" + line) }
+}
+
+func parent(executable:str) {
+    let command = Subprocess.TerminalCommand(
+        executable:executable,
+        arguments:["--terminal-child"],
+        current_directory:null,
+        inherit_environment:true,
+        environment:[Subprocess.EnvironmentChange.set("TERM", "xterm-256color")],
+        size:Subprocess.TerminalSize(columns:100, rows:30)
+    )
+    match Subprocess.spawn_terminal(command) {
+        failure(error) => { panic(error.operation + ": " + error.detail) }
+        success(var terminal) => {
+            let input = UTF8.bytes("ready\n")
+            let view = @input[0:input.count()]
+            match terminal.write(view) { failure(error) => { panic(error.detail) }; success(count) => {} }
+            var running = true
+            while running {
+                match terminal.next_event(1000) {
+                    failure(error) => { panic(error.detail) }
+                    success(event) => {
+                        if value = event {
+                            match value {
+                                output(stream, bytes) => {
+                                    let output = @bytes[0:bytes.count()]
+                                    match UTF8.decode(output) { failure(error) => {}; success(text) => { Console.write(text) } }
+                                }
+                                exited(status) => { running = false }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+func main() {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            if arguments.count() > 1 && arguments[1] == "--terminal-child" { child() }
+            else {
+                match Process.executable_path() { failure(error) => { panic(error.detail) }; success(executable) => { parent(executable) } }
+            }
+        }
+    }
+}
+```

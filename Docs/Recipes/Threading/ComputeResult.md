@@ -1,0 +1,18 @@
+# ComputeResult
+
+[Retour au catalogue des recettes](../README.md).
+
+```sx
+use STD.Threading
+
+struct Square:Threading.Job {
+    var value:int
+    func execute() { self.value = self.value * self.value }
+}
+
+func main() {
+    var executor = Threading.Executor(worker_count:2)
+    var handle = executor.submit(Square(value:12))
+    print("Result: $(handle.complete().value)")
+}
+```

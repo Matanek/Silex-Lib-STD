@@ -8,7 +8,7 @@ choices for adversarial input. None of these functions stores passwords safely.
 `Crypto.random_bytes(count)` reads system entropy and is appropriate for
 application secrets when the surrounding protocol uses raw random bytes
 correctly. Negative counts are rejected. See
-[ContentFingerprint.sx](../Examples/Crypto/ContentFingerprint.sx).
+[ContentFingerprint.sx](Recipes/Crypto/ContentFingerprint.md).
 
 `Crypto.X25519` creates ephemeral key pairs and derives a shared secret from a
 local secret key and a peer public key. `Crypto.HKDF.derive_sha256` turns that
@@ -23,7 +23,7 @@ or rotate secrets according to its threat model and never reuse a 12-byte
 ChaCha20-Poly1305 nonce with the same key. Applications that only need a secure
 Sync connection should use `Sync.SecureSession` instead of assembling these
 operations directly. See
-[AuthenticatedMessage.sx](../Examples/Crypto/AuthenticatedMessage.sx) for the
+[AuthenticatedMessage.sx](Recipes/Crypto/AuthenticatedMessage.md) for the
 smallest complete exchange.
 
 `UUID.v4()` produces an opaque random identifier. `UUID.v7()` prefixes random
@@ -31,4 +31,4 @@ data with a Unix-millisecond timestamp and is useful when creation-order
 locality matters. `to_str()` returns canonical lowercase text; `to_bytes()` and
 the byte constructor preserve an exact 16-byte representation. UUIDs identify
 values but are not authentication tokens. See
-[CreateIdentifiers.sx](../Examples/UUID/CreateIdentifiers.sx).
+[CreateIdentifiers.sx](Recipes/UUID/CreateIdentifiers.md).

@@ -81,8 +81,8 @@ if found = pair.first("language=Silex") {
 replacements are deliberately literal: `$1` and backslashes have no hidden
 replacement-language meaning; use a callback when captures are needed.
 
-[ExtractContacts.sx](../Examples/Regex/ExtractContacts.sx) demonstrates direct
-lazy iteration and named captures. [NormalizeLog.sx](../Examples/Regex/NormalizeLog.sx)
+[ExtractContacts.sx](Recipes/Regex/ExtractContacts.md) demonstrates direct
+lazy iteration and named captures. [NormalizeLog.sx](Recipes/Regex/NormalizeLog.md)
 demonstrates options, callback replacement and splitting.
 
 ## Pattern language

@@ -1,0 +1,14 @@
+# WaitForConfirmation
+
+[Retour au catalogue des recettes](../README.md).
+
+```sx
+use STD.Console
+
+func main() {
+    Console.write_line("The preview is ready.")
+    Console.write("Press Enter to publish...")
+    Console.wait_for_enter()
+    Console.write_line("Published")
+}
+```

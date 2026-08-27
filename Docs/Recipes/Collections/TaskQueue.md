@@ -1,0 +1,18 @@
+# TaskQueue
+
+[Retour au catalogue des recettes](../README.md).
+
+```sx
+use STD.Collections.Queue
+
+func main() {
+    var pending = Queue<str>()
+    pending.add("compile")
+    pending.add("test")
+    pending.add("package")
+
+    while task = pending.take() {
+        print("Run: $(task)")
+    }
+}
+```

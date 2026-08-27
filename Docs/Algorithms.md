@@ -14,7 +14,7 @@ slices enter this model through `Iterator.iterate`.
 
 Create a new iterator to repeat a traversal. Collections return snapshot
 iterators, so advancing one does not mutate the source collection. See
-[AnalyzeValues.sx](../Examples/Collections/AnalyzeValues.sx).
+[AnalyzeValues.sx](Recipes/Collections/AnalyzeValues.md).
 
 `Algorithms.Sort.sort` orders a mutable slice in place using the supplied
 strict ordering callback. `Algorithms.Random.choose` requires a non-empty

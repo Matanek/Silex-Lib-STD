@@ -1,9 +1,9 @@
 # Using STD
 
 STD is organized by developer intention. Start with the guide for the task at
-hand, then open its focused programs under [Examples](../Examples/README.md).
-Every example is compiled as a package consumer; non-interactive examples are
-also smoke-run during documentation validation.
+hand, then open its focused [recipes](Recipes/README.md). Executable proofs of
+the public contract belong under `Tests/`; recipes illustrate usage without
+becoming a second validation catalogue.
 
 The [public API coverage matrix](Coverage.md) records the executable proof for
 every intended public module. It distinguishes consumer API from public

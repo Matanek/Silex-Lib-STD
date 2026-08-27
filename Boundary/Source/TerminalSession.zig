@@ -21,6 +21,7 @@ const WindowsHandle = struct {
     input: usize = 0,
     output: usize = 0,
     pseudo_console: usize = 0,
+    pseudo_console_released: bool = false,
     running: bool = false,
     status: u32 = 0,
     exit_observed_at: u64 = 0,
@@ -395,6 +396,8 @@ extern "kernel32" fn TerminateProcess(process: usize, exit_code: u32) callconv(.
 extern "kernel32" fn CloseHandle(handle: usize) callconv(.winapi) i32;
 extern "kernel32" fn GetLastError() callconv(.winapi) u32;
 extern "kernel32" fn GetTickCount64() callconv(.winapi) u64;
+extern "kernel32" fn GetModuleHandleA(module_name: ?[*:0]const u8) callconv(.winapi) usize;
+extern "kernel32" fn GetProcAddress(module: usize, procedure_name: [*:0]const u8) callconv(.winapi) ?*const anyopaque;
 extern "kernel32" fn Sleep(milliseconds: u32) callconv(.winapi) void;
 
 fn spawnWindows(
@@ -504,7 +507,16 @@ fn spawnWindows(
     handle.input = input_write;
     handle.output = output_read;
     handle.pseudo_console = pseudo_console;
+    handle.pseudo_console_released = releaseWindowsPseudoConsole(pseudo_console);
     handle.running = true;
+}
+
+fn releaseWindowsPseudoConsole(pseudo_console: usize) bool {
+    const kernel32 = GetModuleHandleA("kernel32.dll");
+    if (kernel32 == 0) return false;
+    const address = GetProcAddress(kernel32, "ReleasePseudoConsole") orelse return false;
+    const release: *const fn (usize) callconv(.winapi) i32 = @ptrCast(@alignCast(address));
+    return release(pseudo_console) == 0;
 }
 
 fn writeWindows(handle: *WindowsHandle, bytes_address: usize, byte_count: i32) i32 {
@@ -522,19 +534,30 @@ fn pollWindows(handle: *WindowsHandle, bytes_address: usize, byte_capacity: i32,
     const deadline = GetTickCount64() + @as(u64, @intCast(timeout_milliseconds));
     while (true) {
         var available: u32 = 0;
-        if (PeekNamedPipe(handle.output, null, 0, null, &available, null) != 0 and available > 0) {
-            var read_count: u32 = 0;
-            const count: u32 = @min(available, @as(u32, @intCast(byte_capacity)));
-            const bytes: *anyopaque = @ptrFromInt(bytes_address);
-            if (ReadFile(handle.output, bytes, count, &read_count, null) == 0) {
-                handle.error_code = @intCast(GetLastError());
+        if (PeekNamedPipe(handle.output, null, 0, null, &available, null) != 0) {
+            if (available > 0) {
+                var read_count: u32 = 0;
+                const count: u32 = @min(available, @as(u32, @intCast(byte_capacity)));
+                const bytes: *anyopaque = @ptrFromInt(bytes_address);
+                if (ReadFile(handle.output, bytes, count, &read_count, null) == 0) {
+                    handle.error_code = @intCast(GetLastError());
+                    return -1;
+                }
+                return @intCast(read_count);
+            }
+        } else {
+            const pipe_error = GetLastError();
+            if (pipe_error == 109 or pipe_error == 233) {
+                refreshWindowsExit(handle);
+                if (!handle.running) return -1000;
+            } else {
+                handle.error_code = @intCast(pipe_error);
                 return -1;
             }
-            return @intCast(read_count);
         }
         refreshWindowsExit(handle);
         const now = GetTickCount64();
-        if (!handle.running and now >= handle.exit_observed_at + 250) return -1000;
+        if (!handle.running and !handle.pseudo_console_released and now >= handle.exit_observed_at + 500) return -1000;
         if (now >= deadline) return 0;
         Sleep(1);
     }

@@ -1,0 +1,14 @@
+# TlsAvailability
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Network.TLS
+
+func main() {
+    // Applications may disable HTTPS features explicitly when a target has no
+    // certificate-verifying provider instead of attempting cleartext fallback.
+    let provider_available = TLS.available()
+    if provider_available { assert(provider_available) }
+}
+```

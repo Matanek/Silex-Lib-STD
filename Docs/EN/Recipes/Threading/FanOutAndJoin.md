@@ -1,0 +1,31 @@
+# FanOutAndJoin
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Threading
+
+class Results {
+    var first:int
+    var second:int
+}
+
+struct First:Threading.Job {
+    var results:Results
+    func execute() { self.results.first = 21 }
+}
+
+struct Second:Threading.Job {
+    var results:Results
+    func execute() { self.results.second = 2 }
+}
+
+func main() {
+    var results = Results(first:0, second:0)
+    var executor = Threading.Executor(worker_count:2)
+    var first = executor.submit(First(results:results))
+    var second = executor.submit(Second(results:results))
+    executor.combine([first.fence(), second.fence()]).complete()
+    print("Combined result: $(results.first * results.second)")
+}
+```

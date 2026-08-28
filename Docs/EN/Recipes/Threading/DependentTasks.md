@@ -1,0 +1,34 @@
+# DependentTasks
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Threading
+
+class BuildState {
+    var compiled:bool
+    var packaged:bool
+}
+
+struct Compile:Threading.Job {
+    var state:BuildState
+    func execute() { self.state.compiled = true }
+}
+
+struct Package:Threading.Job {
+    var state:BuildState
+    func execute() {
+        if !self.state.compiled { panic("Package started before compilation") }
+        self.state.packaged = true
+    }
+}
+
+func main() {
+    var executor = Threading.Executor(worker_count:2)
+    var state = BuildState(compiled:false, packaged:false)
+    var compile = executor.submit(Compile(state:state))
+    var packaging = executor.submit(Package(state:state), after:compile.fence())
+    packaging.fence().complete()
+    print("Packaged: $(state.packaged)")
+}
+```

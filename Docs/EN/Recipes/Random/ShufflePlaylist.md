@@ -1,0 +1,15 @@
+# ShufflePlaylist
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Algorithms.Random
+use STD.Randomizer
+
+func main() {
+    var tracks = ["intro", "theme", "finale", "encore"]
+    var randomizer = Randomizer()
+    Random.shuffle<str>(randomizer, &tracks[0:tracks.count()])
+    for track in tracks { print(track) }
+}
+```

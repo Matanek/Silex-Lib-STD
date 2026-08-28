@@ -1,0 +1,18 @@
+# UndoHistory
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Collections.Stack
+
+func main() {
+    var history = Stack<str>()
+    history.add("open document")
+    history.add("insert title")
+    history.add("save document")
+
+    while action = history.take() {
+        print("Undo: $(action)")
+    }
+}
+```

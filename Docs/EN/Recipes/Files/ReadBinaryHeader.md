@@ -1,0 +1,35 @@
+# ReadBinaryHeader
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Error
+use STD.File
+use STD.File.File as OpenFile
+use STD.IO
+
+func inspect_header() Result<void, Error> {
+    let path = "image-header.bin"
+    let sample:uint8[4] = [83, 88, 1, 0]
+    try File.write_all(path, @sample[0:sample.count()])
+
+    let options = File.OpenOptions(
+        access:File.Access.read(),
+        creation:File.Creation.open_existing(),
+        append:false
+    )
+    var input:OpenFile = try File.open(path, options)
+    var header:uint8[2] = [0, 0]
+    try IO.read_exact<OpenFile>(input, &header[0:header.count()])
+    try File.close(move input)
+    print("Signature: $(header[0]), $(header[1])")
+    return Result<void, Error>.success()
+}
+
+func main() {
+    match inspect_header() {
+        failure(error) => { panic(error.operation + ": " + error.detail) }
+        success => {}
+    }
+}
+```

@@ -1,0 +1,15 @@
+# CountGraphemes
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Text.Grapheme
+
+func main() {
+    let label = "Café 👩🏽‍💻"
+    print("Unicode scalars: $(label.count())")
+    print("User-visible characters: $(Grapheme.count(label))")
+    for boundary in Grapheme.boundaries(label) { print("Boundary: $(boundary)") }
+    for character in Grapheme.split(label) { print("[$(character)]") }
+}
+```

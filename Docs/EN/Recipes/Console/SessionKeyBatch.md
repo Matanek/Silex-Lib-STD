@@ -1,0 +1,23 @@
+# SessionKeyBatch
+
+[Back to the recipe catalog](../README.md).
+
+```sx
+use STD.Console
+use STD.Console.Session
+
+func main() {
+    var session = Session()
+    Console.write_line("Press keys for two seconds")
+
+    if first = session.poll_key(1000) {
+        Console.write_line("Received the first key")
+    } else {
+        Console.write_line("No first key was available")
+    }
+
+    let pending = session.poll_keys(16, 1000)
+    Console.write_line("Queued events: $(pending.count())")
+    session.close()
+}
+```

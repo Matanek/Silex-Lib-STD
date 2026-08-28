@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SILEX_CHECKPOINT: e3d08900398f85e2552825a9c60f5e85a7f1e459
+  SILEX_CHECKPOINT: 49d3e3d5664098fce59b9bf5e6337c3c084f37b8
 
 jobs:
   linux-x64:

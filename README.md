@@ -13,6 +13,6 @@ silex install STD
 - [Documentation française](Docs/FR/README.md)
 - [English documentation](Docs/EN/README.md)
 
-Le package nécessite Silex 0.39 ou une version ultérieure.
+Le package nécessite Silex 0.43.0 ou une version ultérieure.
 
 STD est distribué sous licence Apache 2.0 avec exceptions LLVM.

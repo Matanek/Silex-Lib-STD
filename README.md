@@ -21,14 +21,27 @@ modules is explicitly package-visible. Neither category belongs to the public
 API: applications import capabilities such as `STD.File` or `STD.Network.TCP`,
 never an operating-system module.
 
-Within every `Module/` root, STD writes the complete logical module path in the
-`.sx` filename. Dots make the source tree mirror `use` declarations directly:
+STD writes a one-file module's complete logical path in its `.sx` filename.
+Dots make the source tree mirror `use` declarations directly:
 
 ```text
 Module/Console.Session.sx                 -> use STD.Console.Session
 Module/Network.TCP.sx                     -> use STD.Network.TCP
 Platform/MacOS/Module/Network.TCP.sx
 ```
+
+A module split by responsibility uses invisible source atoms instead. `Math`
+is composed from scalar operations and its geometric values without exposing
+those physical filenames as module paths:
+
+```text
+Module/Math/@Scalar.sx                    -> STD.Math
+Module/Math/@Vec3.sx                      -> STD.Math
+Module/Math/@Mat4.sx                      -> STD.Math
+```
+
+Applications still write `use STD.Math` and reach `Math.Vec3` or `Math.Mat4`.
+The `@` filenames only atomize the implementation of the logical module.
 
 Portable sources and their selected platform or target implementations use the
 same logical module name. For example, `Module/Randomizer.sx` and
@@ -38,9 +51,9 @@ reaches the specialized helper explicitly as `Platform.system_seed()`.
 fragment.
 
 The structural package directories (`Module`, `Platform`, platform names,
-`Target`, target names, `Tests`, and `Tools`) remain hierarchical. This dotted
-source layout is a convention of STD only; other Silex packages may represent
-module segments with directories.
+`Target`, target names, `Tests`, and `Tools`) remain hierarchical. Dotted
+one-file modules and atom folders are source-organization conventions; neither
+changes the public module paths.
 
 The current bootstrap composes `macos-arm64`, `linux-x64`, `windows-x64` and
 `windows-arm64`. The macOS implementation is exercised natively; the other

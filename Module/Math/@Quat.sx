@@ -1,9 +1,6 @@
 use STD.Math
-use STD.Math.Vec3 as Vec3
-use STD.Math.Mat3 as Mat3
 
 public struct Quat {
-
     var x:float
     var y:float
     var z:float

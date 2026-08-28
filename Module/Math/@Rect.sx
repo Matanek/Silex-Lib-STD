@@ -1,5 +1,4 @@
 use STD.Math
-use STD.Math.Vec2 as Vec2
 
 public struct Rect {
     var x:float

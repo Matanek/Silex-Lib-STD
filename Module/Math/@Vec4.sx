@@ -1,8 +1,6 @@
 use STD.Math
-use STD.Math.Vec3 as Vec3
 
 public struct Vec4 {
-
     var x:float
     var y:float
     var z:float

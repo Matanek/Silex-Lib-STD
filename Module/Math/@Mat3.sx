@@ -1,8 +1,6 @@
 use STD.Math
-use STD.Math.Vec3 as Vec3
 
 public struct Mat3 {
-
     var x:Vec3
     var y:Vec3
     var z:Vec3

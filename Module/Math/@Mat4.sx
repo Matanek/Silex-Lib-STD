@@ -1,10 +1,6 @@
 use STD.Math
-use STD.Math.Vec3 as Vec3
-use STD.Math.Vec4 as Vec4
-use STD.Math.Mat3 as Mat3
 
 public struct Mat4 {
-
     var x:Vec4
     var y:Vec4
     var z:Vec4

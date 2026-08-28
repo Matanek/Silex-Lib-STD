@@ -1,10 +1,13 @@
 {
   "name": "STD",
   "version": "0.20.0",
-  "description": "The standard library for portable Silex applications.",
+  "description": {
+    "en": "The standard library for portable Silex applications.",
+    "fr": "La bibliothèque standard des applications Silex portables."
+  },
   "authors": ["Matanek"],
   "requires": {
-    "silex": ">=0.39.0"
+    "silex": ">=0.42.0"
   },
   "boundary": {
     "macos-arm64": {

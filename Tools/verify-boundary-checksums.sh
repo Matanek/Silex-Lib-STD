@@ -13,8 +13,8 @@ for manifest in \
   Boundary/TerminalSession.SHA256SUMS.txt
 do
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -c "$manifest"
+    sed 's/\r$//' "$manifest" | sha256sum -c -
   else
-    shasum -a 256 -c "$manifest"
+    sed 's/\r$//' "$manifest" | shasum -a 256 -c -
   fi
 done

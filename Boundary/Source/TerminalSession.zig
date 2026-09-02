@@ -51,6 +51,19 @@ export fn sx_terminal_spawn(
     return @intFromPtr(handle);
 }
 
+export fn sx_terminal_spawn_packed(request_address: usize) callconv(.c) usize {
+    if (request_address == 0) return 0;
+    const request: *const [6]usize = @ptrFromInt(request_address);
+    return sx_terminal_spawn(
+        request[0],
+        request[1],
+        request[2],
+        request[3],
+        @bitCast(@as(u32, @truncate(request[4]))),
+        @bitCast(@as(u32, @truncate(request[5]))),
+    );
+}
+
 export fn sx_terminal_error(handle_address: usize) callconv(.c) i32 {
     const handle = terminalHandle(handle_address) orelse return 22;
     return handle.error_code;
@@ -785,14 +798,8 @@ test "PTY accepts an empty environment and can be resized" {
             @intFromPtr(command.ptr),
             0,
         };
-        const handle = sx_terminal_spawn(
-            @intFromPtr(executable.ptr),
-            @intFromPtr(&arguments),
-            0,
-            0,
-            80,
-            24,
-        );
+        var request = [_]usize{ @intFromPtr(executable.ptr), @intFromPtr(&arguments), 0, 0, 80, 24 };
+        const handle = sx_terminal_spawn_packed(@intFromPtr(&request));
         try std.testing.expect(handle != 0);
         defer sx_terminal_destroy(handle);
         try std.testing.expectEqual(@as(i32, 0), sx_terminal_error(handle));

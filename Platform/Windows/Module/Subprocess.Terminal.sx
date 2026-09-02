@@ -18,7 +18,14 @@ package func spawn(executable:str, arguments:@str[..], has_directory:bool, direc
     if has_directory { directory_address = C.address_bits(C.terminated_pointer(directory)) }
     var environment_address = C.address_bits(C.mutable_pointer(envp))
     if inherit_host_environment { environment_address = 0 }
-    let handle = terminal_spawn(C.address_bits(C.terminated_pointer(executable)), C.address_bits(C.mutable_pointer(argv)), directory_address, environment_address, columns as int32, rows as int32)
+    var request:uint[6]
+    request[0] = C.address_bits(C.terminated_pointer(executable))
+    request[1] = C.address_bits(C.mutable_pointer(argv))
+    request[2] = directory_address
+    request[3] = environment_address
+    request[4] = columns as uint
+    request[5] = rows as uint
+    let handle = terminal_spawn(C.address_bits(C.mutable_pointer(request)))
     if handle == 0 { return RawTerminal(handle:0, error:12) }
     return RawTerminal(handle:handle, error:terminal_error(handle))
 }
@@ -36,7 +43,7 @@ package func status(handle:uint) uint { return terminal_status(handle) as uint }
 package func terminate(handle:uint) int { return terminal_terminate(handle) as int }
 package func destroy(handle:uint) { terminal_destroy(handle) }
 
-let terminal_spawn = C.function<func(uint, uint, uint, uint, int32, int32) uint>(library:Boundary.TerminalSession, name:"sx_terminal_spawn")
+let terminal_spawn = C.function<func(uint) uint>(library:Boundary.TerminalSession, name:"sx_terminal_spawn_packed")
 let terminal_error = C.function<func(uint) int32>(library:Boundary.TerminalSession, name:"sx_terminal_error")
 let terminal_write = C.function<func(uint, uint, int32) int32>(library:Boundary.TerminalSession, name:"sx_terminal_write")
 let terminal_poll_buffered = C.function<func(uint, int32) int32>(library:Boundary.TerminalSession, name:"sx_terminal_poll_buffered")

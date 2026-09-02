@@ -36,7 +36,9 @@ case "$target" in
   windows-*) extension=".exe" ;;
 esac
 executable="$temporary_directory/std-portability$extension"
+echo "Compiling the isolated consumer for $target"
 "$silex" compile "$consumer/Main.sx" --target "$target" --release --nocache -o "$executable"
+echo "Running the isolated consumer for $target"
 output="$("$executable")"
 if [ "$output" != "$target" ]; then
   echo "expected consumer target '$target', got '$output'" >&2

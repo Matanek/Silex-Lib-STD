@@ -70,6 +70,30 @@ jobs:
           STD/Tools/run-portability-smoke.sh \
             "$RUNNER_TEMP/silex-prefix/bin/silex" macos-arm64 "$RUNNER_TEMP/std-smoke"
 
+      - name: Diagnose a failed macOS ARM64 consumer
+        if: failure()
+        shell: bash
+        run: |
+          executable="$RUNNER_TEMP/std-smoke/std-portability"
+          if [ ! -x "$executable" ]; then
+            echo "The consumer executable was not produced."
+            exit 0
+          fi
+          file "$executable"
+          lldb --batch \
+            -o run \
+            -o "thread backtrace all" \
+            -- "$executable"
+
+      - name: Preserve the failed macOS ARM64 consumer
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: std-macos-arm64-failed-consumer
+          path: ${{ runner.temp }}/std-smoke/std-portability
+          retention-days: 1
+          if-no-files-found: ignore
+
   macos-x64:
     if: inputs.target == 'all' || inputs.target == 'macos-x64'
     runs-on: macos-15-intel

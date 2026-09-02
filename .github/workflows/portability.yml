@@ -362,3 +362,34 @@ jobs:
           STD/Tools/verify-boundary-checksums.sh
           STD/Tools/run-portability-smoke.sh \
             "$RUNNER_TEMP/silex-prefix/bin/silex.exe" windows-arm64 "$RUNNER_TEMP/std-smoke"
+
+      - name: Diagnose the failed Windows ARM64 native test
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $test = Get-ChildItem -Path "STD/.silex/test" -Filter "*.exe" -Recurse |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $test) {
+            Write-Host "No retained native test executable was found."
+            exit 0
+          }
+          Write-Host "Retained native test: $($test.FullName)"
+          $cdb = Get-ChildItem -Path "C:/Program Files (x86)/Windows Kits/10/Debuggers" -Filter "cdb.exe" -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "arm64" } |
+            Select-Object -First 1
+          if (-not $cdb) {
+            Write-Host "The ARM64 Windows debugger is not installed on this runner."
+            exit 0
+          }
+          & $cdb.FullName -lines -c ".symfix; .reload; g; !analyze -v; k; q" $test.FullName
+
+      - name: Preserve the failed Windows ARM64 native test
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: std-windows-arm64-failed-native-test
+          path: STD/.silex/test/*.exe
+          retention-days: 1
+          if-no-files-found: ignore

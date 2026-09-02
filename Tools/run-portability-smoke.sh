@@ -19,14 +19,27 @@ mkdir -p "$temporary_directory"
 "$silex" link "$repository_root" --workspace "$consumer" --target "$target"
 "$silex" packages resolve "$consumer"
 
-for source in \
-  System.sx \
-  Compression.sx \
-  CryptoPrimitives.sx \
-  NetworkSockets.sx \
-  Threading.sx \
-  Subprocess.sx \
+sources=(
+  System.sx
+  Compression.sx
+  CryptoPrimitives.sx
+  NetworkSockets.sx
+  Threading.sx
+  Subprocess.sx
   Process.sx
+)
+if [ -n "${SILEX_PORTABILITY_TEST_SOURCE:-}" ]; then
+  case "$SILEX_PORTABILITY_TEST_SOURCE" in
+    System.sx|Compression.sx|CryptoPrimitives.sx|NetworkSockets.sx|Threading.sx|Subprocess.sx|Process.sx) ;;
+    *)
+      echo "unsupported portability test source '$SILEX_PORTABILITY_TEST_SOURCE'" >&2
+      exit 2
+      ;;
+  esac
+  sources=("$SILEX_PORTABILITY_TEST_SOURCE")
+fi
+
+for source in "${sources[@]}"
 do
   "$silex" test "$repository_root/Tests/$source" --nocache
 done

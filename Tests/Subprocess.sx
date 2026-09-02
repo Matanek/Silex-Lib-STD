@@ -200,9 +200,9 @@ test "terminal child uses the portable terminal transport" {
             size:Subprocess.TerminalSize(columns:80, rows:24)
         )
         var terminal = try Subprocess.spawn_terminal(command)
-        print("SILEX_SUBPROCESS_TERMINAL spawned")
+        Console.write_error("SILEX_SUBPROCESS_TERMINAL spawned\n")
         try terminal.resize(Subprocess.TerminalSize(columns:100, rows:30))
-        print("SILEX_SUBPROCESS_TERMINAL resized")
+        Console.write_error("SILEX_SUBPROCESS_TERMINAL resized\n")
         let input = match System.platform() {
             windows => "ready\r\n"
             macos => "ready\r"
@@ -211,7 +211,7 @@ test "terminal child uses the portable terminal transport" {
         let input_bytes = UTF8.bytes(input)
         let input_view = @input_bytes[0:input_bytes.count()]
         let written = try terminal.write(input_view)
-        print("SILEX_SUBPROCESS_TERMINAL written=$(written)")
+        Console.write_error("SILEX_SUBPROCESS_TERMINAL written=$(written)\n")
         assert(written == input_bytes.count(), "complete terminal input")
         var output:uint8[] = []
         var exited = false
@@ -221,7 +221,7 @@ test "terminal child uses the portable terminal transport" {
             if event = next {
                 match event {
                     output(stream, bytes) => {
-                        print("SILEX_SUBPROCESS_TERMINAL output=$(bytes.count())")
+                        Console.write_error("SILEX_SUBPROCESS_TERMINAL output=$(bytes.count())\n")
                         for byte in bytes { output.append(byte) }
                     }
                     exited(status) => {
@@ -268,7 +268,7 @@ test "terminal child uses the portable terminal transport" {
 
     match dispatch() {
         failure(error) => {
-            print("SILEX_SUBPROCESS_TERMINAL_ERROR operation=$(error.operation) detail=$(error.detail)")
+            Console.write_error("SILEX_SUBPROCESS_TERMINAL_ERROR operation=$(error.operation) detail=$(error.detail)\n")
             panic(error.operation + ": " + error.detail)
         }
         success => {}

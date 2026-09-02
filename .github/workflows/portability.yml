@@ -339,6 +339,8 @@ jobs:
 
       - name: Exercise STD on Windows ARM64
         shell: bash
+        env:
+          SILEX_PORTABILITY_TEST_SOURCE: Subprocess.sx
         run: |
           set -euo pipefail
           STD/Tools/verify-boundary-checksums.sh

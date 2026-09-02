@@ -410,7 +410,22 @@ fn spawnWindows(
     columns: i32,
     rows: i32,
 ) void {
-    std.debug.print("SILEX_TERMINAL_SESSION spawn-entered\n", .{});
+    const command_line = allocator.create([32768]u16) catch {
+        handle.error_code = 12;
+        return;
+    };
+    defer allocator.destroy(command_line);
+    const environment = allocator.create([32768]u16) catch {
+        handle.error_code = 12;
+        return;
+    };
+    defer allocator.destroy(environment);
+    const directory_utf16 = allocator.create([32768]u16) catch {
+        handle.error_code = 12;
+        return;
+    };
+    defer allocator.destroy(directory_utf16);
+
     var input_read: usize = 0;
     var input_write: usize = 0;
     var output_read: usize = 0;
@@ -423,7 +438,6 @@ fn spawnWindows(
         closeWindowsHandle(output_write);
         return;
     }
-    std.debug.print("SILEX_TERMINAL_SESSION pipes-created\n", .{});
     var pseudo_console: usize = 0;
     if (CreatePseudoConsole(.{ .x = @intCast(columns), .y = @intCast(rows) }, input_read, output_write, 0, &pseudo_console) != 0) {
         handle.error_code = @intCast(GetLastError());
@@ -433,7 +447,6 @@ fn spawnWindows(
         closeWindowsHandle(output_write);
         return;
     }
-    std.debug.print("SILEX_TERMINAL_SESSION pseudoconsole-created\n", .{});
     closeWindowsHandle(input_read);
     closeWindowsHandle(output_write);
 
@@ -449,23 +462,19 @@ fn spawnWindows(
         closeWindowsHandle(output_read);
         return;
     }
-    std.debug.print("SILEX_TERMINAL_SESSION attributes-ready\n", .{});
     defer DeleteProcThreadAttributeList(attributes);
 
     _ = executable_address;
-    var command_line: [32768]u16 = undefined;
-    const command = commandLine(arguments_address, &command_line) orelse {
+    const command = commandLine(arguments_address, command_line) orelse {
         handle.error_code = 206;
         ClosePseudoConsole(pseudo_console);
         closeWindowsHandle(input_write);
         closeWindowsHandle(output_read);
         return;
     };
-    std.debug.print("SILEX_TERMINAL_SESSION command-ready\n", .{});
-    var environment: [32768]u16 = undefined;
     var environment_pointer: ?[*]u16 = null;
     if (environment_address != 0) {
-        environment_pointer = environmentBlock(environment_address, &environment) orelse {
+        environment_pointer = environmentBlock(environment_address, environment) orelse {
             handle.error_code = 206;
             ClosePseudoConsole(pseudo_console);
             closeWindowsHandle(input_write);
@@ -473,8 +482,7 @@ fn spawnWindows(
             return;
         };
     }
-    var directory_utf16: [32768]u16 = undefined;
-    const directory = if (directory_address == 0) null else utf16String(directory_address, &directory_utf16);
+    const directory = if (directory_address == 0) null else utf16String(directory_address, directory_utf16);
     if (directory_address != 0 and directory == null) {
         handle.error_code = 1113;
         ClosePseudoConsole(pseudo_console);
@@ -488,7 +496,6 @@ fn spawnWindows(
     startup.attributes = attributes;
     var process = std.mem.zeroes(ProcessInformation);
     const raw_environment: ?*anyopaque = if (environment_pointer) |pointer| @ptrCast(pointer) else null;
-    std.debug.print("SILEX_TERMINAL_SESSION environment-ready\n", .{});
     var creation_flags: u32 = 0x0008_0000;
     if (raw_environment != null) creation_flags |= 0x0000_0400;
     if (CreateProcessW(
@@ -509,21 +516,13 @@ fn spawnWindows(
         closeWindowsHandle(output_read);
         return;
     }
-    std.debug.print("SILEX_TERMINAL_SESSION process-created\n", .{});
     closeWindowsHandle(process.thread);
     handle.process = process.process;
     handle.input = input_write;
     handle.output = output_read;
     handle.pseudo_console = pseudo_console;
-    // Windows ARM64 currently exits the caller while dynamically invoking
-    // ReleasePseudoConsole. The existing asynchronous close path provides the
-    // documented legacy lifecycle without requiring that optional API.
-    handle.pseudo_console_released = if (builtin.cpu.arch == .aarch64)
-        false
-    else
-        releaseWindowsPseudoConsole(pseudo_console);
+    handle.pseudo_console_released = releaseWindowsPseudoConsole(pseudo_console);
     handle.running = true;
-    std.debug.print("SILEX_TERMINAL_SESSION spawn-complete\n", .{});
 }
 
 fn releaseWindowsPseudoConsole(pseudo_console: usize) bool {

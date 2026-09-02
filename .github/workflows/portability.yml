@@ -270,6 +270,11 @@ jobs:
     timeout-minutes: 25
 
     steps:
+      - name: Check out STD
+        uses: actions/checkout@v6
+        with:
+          path: STD
+
       - name: Check out the Silex compiler
         uses: actions/checkout@v6
         with:
@@ -294,6 +299,11 @@ jobs:
           zig build -Dtarget=aarch64-windows -Doptimize=ReleaseFast -Dcpu=baseline \
             --prefix "$RUNNER_TEMP/silex-prefix" \
             --build-file _silex/Toolchain/build.zig
+          zig test STD/Boundary/Source/TerminalSession.zig \
+            -O ReleaseSmall \
+            -target aarch64-windows \
+            --test-no-exec \
+            -femit-bin="$RUNNER_TEMP/silex-prefix/bin/terminal-session-test.exe"
 
       - name: Transfer the Windows ARM64 compiler
         uses: actions/upload-artifact@v4
@@ -336,6 +346,12 @@ jobs:
           if ($machine -ne 0xaa64) {
             throw "expected an ARM64 Silex executable"
           }
+
+      - name: Exercise the native Windows ARM64 terminal boundary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & "$env:RUNNER_TEMP/silex-prefix/bin/terminal-session-test.exe"
 
       - name: Exercise STD on Windows ARM64
         shell: bash

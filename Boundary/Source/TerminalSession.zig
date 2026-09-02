@@ -771,7 +771,34 @@ fn appendUnit(output: *[32768]u16, target: *usize, value: u16) bool {
 }
 
 test "PTY accepts an empty environment and can be resized" {
-    if (is_windows) return;
+    if (is_windows) {
+        const executable: [:0]const u8 = "cmd.exe";
+        const option_disable_autorun: [:0]const u8 = "/d";
+        const option_quiet: [:0]const u8 = "/q";
+        const option_command: [:0]const u8 = "/c";
+        const command: [:0]const u8 = "exit 0";
+        var arguments = [_]usize{
+            @intFromPtr(executable.ptr),
+            @intFromPtr(option_disable_autorun.ptr),
+            @intFromPtr(option_quiet.ptr),
+            @intFromPtr(option_command.ptr),
+            @intFromPtr(command.ptr),
+            0,
+        };
+        const handle = sx_terminal_spawn(
+            @intFromPtr(executable.ptr),
+            @intFromPtr(&arguments),
+            0,
+            0,
+            80,
+            24,
+        );
+        try std.testing.expect(handle != 0);
+        defer sx_terminal_destroy(handle);
+        try std.testing.expectEqual(@as(i32, 0), sx_terminal_error(handle));
+        try std.testing.expectEqual(@as(i32, 1), sx_terminal_resize(handle, 100, 30));
+        return;
+    }
     const executable: [:0]const u8 = "/bin/cat";
     var arguments = [_]usize{ @intFromPtr(executable.ptr), 0 };
     var environment = [_]usize{0};

@@ -186,6 +186,8 @@ test "environment changes stay in the child" {
 }
 
 test "terminal child uses the portable terminal transport" {
+    Console.write_error("SILEX_SUBPROCESS_TERMINAL entered\n")
+
     func child() {
         if value = Console.read_line() { Console.write("terminal:" + value) }
     }

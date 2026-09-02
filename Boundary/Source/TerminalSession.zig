@@ -508,7 +508,13 @@ fn spawnWindows(
     handle.input = input_write;
     handle.output = output_read;
     handle.pseudo_console = pseudo_console;
-    handle.pseudo_console_released = releaseWindowsPseudoConsole(pseudo_console);
+    // Windows ARM64 currently exits the caller while dynamically invoking
+    // ReleasePseudoConsole. The existing asynchronous close path provides the
+    // documented legacy lifecycle without requiring that optional API.
+    handle.pseudo_console_released = if (builtin.cpu.arch == .aarch64)
+        false
+    else
+        releaseWindowsPseudoConsole(pseudo_console);
     handle.running = true;
 }
 
@@ -720,10 +726,19 @@ fn decodeUtf8(input: [*]const u8) ?Decoded {
     var length: usize = 0;
     var codepoint: u32 = 0;
     var minimum: u32 = 0;
-    if ((first & 0xE0) == 0xC0) { length = 2; codepoint = first & 0x1F; minimum = 0x80; }
-    else if ((first & 0xF0) == 0xE0) { length = 3; codepoint = first & 0x0F; minimum = 0x800; }
-    else if ((first & 0xF8) == 0xF0) { length = 4; codepoint = first & 0x07; minimum = 0x10000; }
-    else return null;
+    if ((first & 0xE0) == 0xC0) {
+        length = 2;
+        codepoint = first & 0x1F;
+        minimum = 0x80;
+    } else if ((first & 0xF0) == 0xE0) {
+        length = 3;
+        codepoint = first & 0x0F;
+        minimum = 0x800;
+    } else if ((first & 0xF8) == 0xF0) {
+        length = 4;
+        codepoint = first & 0x07;
+        minimum = 0x10000;
+    } else return null;
     var index: usize = 1;
     while (index < length) : (index += 1) {
         const byte = input[index];

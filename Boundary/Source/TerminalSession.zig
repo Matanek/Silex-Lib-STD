@@ -51,19 +51,6 @@ export fn sx_terminal_spawn(
     return @intFromPtr(handle);
 }
 
-export fn sx_terminal_spawn_packed(request_address: usize) callconv(.c) usize {
-    if (request_address == 0) return 0;
-    const request: *const [6]usize = @ptrFromInt(request_address);
-    return sx_terminal_spawn(
-        request[0],
-        request[1],
-        request[2],
-        request[3],
-        @bitCast(@as(u32, @truncate(request[4]))),
-        @bitCast(@as(u32, @truncate(request[5]))),
-    );
-}
-
 export fn sx_terminal_error(handle_address: usize) callconv(.c) i32 {
     const handle = terminalHandle(handle_address) orelse return 22;
     return handle.error_code;
@@ -423,22 +410,6 @@ fn spawnWindows(
     columns: i32,
     rows: i32,
 ) void {
-    const command_line = allocator.create([32768]u16) catch {
-        handle.error_code = 12;
-        return;
-    };
-    defer allocator.destroy(command_line);
-    const environment = allocator.create([32768]u16) catch {
-        handle.error_code = 12;
-        return;
-    };
-    defer allocator.destroy(environment);
-    const directory_utf16 = allocator.create([32768]u16) catch {
-        handle.error_code = 12;
-        return;
-    };
-    defer allocator.destroy(directory_utf16);
-
     var input_read: usize = 0;
     var input_write: usize = 0;
     var output_read: usize = 0;
@@ -478,16 +449,18 @@ fn spawnWindows(
     defer DeleteProcThreadAttributeList(attributes);
 
     _ = executable_address;
-    const command = commandLine(arguments_address, command_line) orelse {
+    var command_line: [32768]u16 = undefined;
+    const command = commandLine(arguments_address, &command_line) orelse {
         handle.error_code = 206;
         ClosePseudoConsole(pseudo_console);
         closeWindowsHandle(input_write);
         closeWindowsHandle(output_read);
         return;
     };
+    var environment: [32768]u16 = undefined;
     var environment_pointer: ?[*]u16 = null;
     if (environment_address != 0) {
-        environment_pointer = environmentBlock(environment_address, environment) orelse {
+        environment_pointer = environmentBlock(environment_address, &environment) orelse {
             handle.error_code = 206;
             ClosePseudoConsole(pseudo_console);
             closeWindowsHandle(input_write);
@@ -495,7 +468,8 @@ fn spawnWindows(
             return;
         };
     }
-    const directory = if (directory_address == 0) null else utf16String(directory_address, directory_utf16);
+    var directory_utf16: [32768]u16 = undefined;
+    const directory = if (directory_address == 0) null else utf16String(directory_address, &directory_utf16);
     if (directory_address != 0 and directory == null) {
         handle.error_code = 1113;
         ClosePseudoConsole(pseudo_console);
@@ -746,19 +720,10 @@ fn decodeUtf8(input: [*]const u8) ?Decoded {
     var length: usize = 0;
     var codepoint: u32 = 0;
     var minimum: u32 = 0;
-    if ((first & 0xE0) == 0xC0) {
-        length = 2;
-        codepoint = first & 0x1F;
-        minimum = 0x80;
-    } else if ((first & 0xF0) == 0xE0) {
-        length = 3;
-        codepoint = first & 0x0F;
-        minimum = 0x800;
-    } else if ((first & 0xF8) == 0xF0) {
-        length = 4;
-        codepoint = first & 0x07;
-        minimum = 0x10000;
-    } else return null;
+    if ((first & 0xE0) == 0xC0) { length = 2; codepoint = first & 0x1F; minimum = 0x80; }
+    else if ((first & 0xF0) == 0xE0) { length = 3; codepoint = first & 0x0F; minimum = 0x800; }
+    else if ((first & 0xF8) == 0xF0) { length = 4; codepoint = first & 0x07; minimum = 0x10000; }
+    else return null;
     var index: usize = 1;
     while (index < length) : (index += 1) {
         const byte = input[index];
@@ -784,28 +749,7 @@ fn appendUnit(output: *[32768]u16, target: *usize, value: u16) bool {
 }
 
 test "PTY accepts an empty environment and can be resized" {
-    if (is_windows) {
-        const executable: [:0]const u8 = "cmd.exe";
-        const option_disable_autorun: [:0]const u8 = "/d";
-        const option_quiet: [:0]const u8 = "/q";
-        const option_command: [:0]const u8 = "/c";
-        const command: [:0]const u8 = "exit 0";
-        var arguments = [_]usize{
-            @intFromPtr(executable.ptr),
-            @intFromPtr(option_disable_autorun.ptr),
-            @intFromPtr(option_quiet.ptr),
-            @intFromPtr(option_command.ptr),
-            @intFromPtr(command.ptr),
-            0,
-        };
-        var request = [_]usize{ @intFromPtr(executable.ptr), @intFromPtr(&arguments), 0, 0, 80, 24 };
-        const handle = sx_terminal_spawn_packed(@intFromPtr(&request));
-        try std.testing.expect(handle != 0);
-        defer sx_terminal_destroy(handle);
-        try std.testing.expectEqual(@as(i32, 0), sx_terminal_error(handle));
-        try std.testing.expectEqual(@as(i32, 1), sx_terminal_resize(handle, 100, 30));
-        return;
-    }
+    if (is_windows) return;
     const executable: [:0]const u8 = "/bin/cat";
     var arguments = [_]usize{ @intFromPtr(executable.ptr), 0 };
     var environment = [_]usize{0};

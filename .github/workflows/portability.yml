@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SILEX_CHECKPOINT: cdce4e89f70c6bc18f74f3daf53680002550faf8
+  SILEX_CHECKPOINT: 160f2a411fb6e37adeef36d87382a7dc958e6f3b
 
 jobs:
   macos-arm64:

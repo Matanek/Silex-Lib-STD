@@ -18,5 +18,8 @@ partagent le flux terminal et peuvent contenir ANSI/VT. L’API expose taille,
 écriture, resize et événements sans handle natif.
 
 `System.platform()` et `target()` décrivent la cible sélectionnée, pas
-nécessairement l’hôte du compilateur. Voir les
+nécessairement l’hôte du compilateur. `target_name()` renvoie l’un des six noms
+stables `macos-arm64`, `macos-x64`, `linux-arm64`, `linux-x64`,
+`windows-arm64` ou `windows-x64`, sans exposer le triple du compilateur natif.
+Voir les
 [recettes processus](Recipes/Process/) et [subprocess](Recipes/Subprocess/).

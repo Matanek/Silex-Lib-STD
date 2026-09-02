@@ -28,8 +28,14 @@ test "TCP and UDP loopback" {
         var tcp_view = &tcp_buffer[0:3]
         let read = try accepted.stream.read(tcp_view)
         assert(read == 3 && tcp_view[0] == 116 && tcp_view[2] == 112, "TCP loopback payload")
-        try client.shutdown_write()
-        try accepted.stream.shutdown_read()
+        match accepted.stream.shutdown_read() {
+            success => {}
+            failure(error) => { panic("accepted shutdown_read: " + error.detail) }
+        }
+        match client.shutdown_write() {
+            success => {}
+            failure(error) => { panic("client shutdown_write: " + error.detail) }
+        }
         try TCP.close(client)
         try TCP.close(accepted.stream)
         try TCP.close(listener)

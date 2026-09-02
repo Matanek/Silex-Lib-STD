@@ -23,4 +23,6 @@ Depuis la racine du workspace :
 
 La commande exécute la suite STD et compile tous les consommateurs. Les tests
 loopback peuvent demander un environnement qui autorise les sockets locales ;
-le catalogue des recettes indique les prérequis externes.
+le catalogue des recettes indique les prérequis externes. Le workflow de
+portabilité rejoue le même smoke système nativement sur macOS, Linux et
+Windows, en ARM64 et x64.

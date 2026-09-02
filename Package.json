@@ -36,6 +36,52 @@
         }
       }
     },
+    "macos-x64": {
+      "providers": {
+        "System": {
+          "libraries": ["System"]
+        },
+        "Security": {
+          "frameworks": ["CoreFoundation", "Security"]
+        },
+        "FileWatch": {
+          "frameworks": ["CoreFoundation", "CoreServices"]
+        },
+        "TerminalSession": {
+          "archive": "Boundary/macos-x64/libTerminalSession.a",
+          "libraries": ["System"]
+        },
+        "Compression": {
+          "archive": "Boundary/macos-x64/libCompression.a"
+        },
+        "CryptoPrimitives": {
+          "archive": "Boundary/macos-x64/libCryptoPrimitives.a"
+        },
+        "NetworkRuntime": {
+          "archive": "Boundary/macos-x64/libNetworkRuntime.a"
+        }
+      }
+    },
+    "linux-arm64": {
+      "providers": {
+        "System": {
+          "libraries": ["c", "m", "pthread"]
+        },
+        "TerminalSession": {
+          "archive": "Boundary/linux-arm64/libTerminalSession.a",
+          "libraries": ["c"]
+        },
+        "Compression": {
+          "archive": "Boundary/linux-arm64/libCompression.a"
+        },
+        "CryptoPrimitives": {
+          "archive": "Boundary/linux-arm64/libCryptoPrimitives.a"
+        },
+        "NetworkRuntime": {
+          "archive": "Boundary/linux-arm64/libNetworkRuntime.a"
+        }
+      }
+    },
     "linux-x64": {
       "providers": {
         "System": {

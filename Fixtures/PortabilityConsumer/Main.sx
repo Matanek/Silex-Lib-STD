@@ -1,0 +1,5 @@
+use STD.System
+
+func main() {
+    print(System.target_name(System.target()))
+}

@@ -47,5 +47,6 @@ Run the complete verification from the workspace root:
 
 This runs the STD test suite and compiles every consumer example. Network
 loopback execution may require a sandbox that permits local sockets; the
-example catalogue states which programs require a terminal, listener or name
-resolution.
+example catalogue states which programs require a terminal, listener, or name
+resolution. The portability workflow repeats the same native system smoke on
+macOS, Linux, and Windows, on both ARM64 and X64.

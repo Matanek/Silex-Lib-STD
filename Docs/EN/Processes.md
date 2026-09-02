@@ -67,5 +67,7 @@ intent rather than PTY, ConPTY, file descriptors, or native handles. See
 
 `System.platform()` and `System.target()` describe the program's selected
 compilation target, not necessarily the compiler host. Use `platform_name` and
-`target_name` for stable display strings. See
+`target_name` for stable display strings. `target_name` returns one of
+`macos-arm64`, `macos-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, or
+`windows-x64` without exposing the native compiler triple. See
 [DescribeTarget.sx](Recipes/System/DescribeTarget.md).

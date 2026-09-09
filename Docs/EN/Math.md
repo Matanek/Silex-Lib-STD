@@ -13,9 +13,9 @@ assert(surface_normal == Math.Vec3.back())
 ## Calculate with operators
 
 `Vec2`, `Vec3`, and `Vec4` support addition, subtraction, negation,
-component-wise multiplication, and component-wise division. They also support
-scalar multiplication and division; scalar multiplication works in both
-orientations.
+component-wise multiplication, and component-wise division. A scalar used
+with `+`, `-`, `*`, or `/` is broadcast to every component in either
+orientation.
 
 ```sx
 var velocity = Math.Vec2(1.0, 5.0) * 10
@@ -23,10 +23,21 @@ velocity += Math.Vec2(3.0, 7.0)
 let leftward = Math.Vec2.left() * 5
 ```
 
+Prefer the vector on the left for `+`, `-`, and `/` when both spellings are
+available. Scalar multiplication is canonical in either orientation. Forms
+such as `2 / vector` remain available when operand order is part of the
+component-wise calculation.
+
 `Mat3` and `Mat4` support `+`, `-`, negation, scaling through `*` or `/`,
 matrix-matrix products, and matrix-vector products. `Quat` supports `+`, `-`,
 negation, quaternion products, and scaling. Compound assignments automatically
 reuse operations whose result preserves the left-hand type.
+
+Complete scalar broadcasting for vectors does not extend to matrices or
+quaternions. For those types, only scalar multiplication accepts either
+orientation; division keeps the composite value on the left. Ambiguous forms
+such as `scalar / matrix`, `matrix + scalar`, and `vector * matrix` are not
+defined.
 
 Named methods such as `add`, `multiply`, and `rotate` remain available.
 `Quat * Vec3` is deliberately undefined: use `rotation.rotate(vector)` to keep

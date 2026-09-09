@@ -13,9 +13,9 @@ assert(surface_normal == Math.Vec3.back())
 ## Calculer avec les opérateurs
 
 `Vec2`, `Vec3` et `Vec4` acceptent l'addition, la soustraction, la négation,
-le produit et la division composante par composante. Ils acceptent aussi la
-multiplication et la division par un scalaire ; la multiplication scalaire
-fonctionne dans les deux sens.
+le produit et la division composante par composante. Un scalaire employé avec
+`+`, `-`, `*` ou `/` est diffusé sur chaque composante, dans les deux
+orientations.
 
 ```sx
 var velocity = Math.Vec2(1.0, 5.0) * 10
@@ -23,11 +23,22 @@ velocity += Math.Vec2(3.0, 7.0)
 let leftward = Math.Vec2.left() * 5
 ```
 
+Préférez le vecteur à gauche pour `+`, `-` et `/` lorsque les deux écritures
+sont possibles. La multiplication scalaire est canonique dans les deux sens.
+Les formes comme `2 / vector` restent disponibles lorsque l'ordre fait partie
+du calcul composante par composante.
+
 `Mat3` et `Mat4` acceptent `+`, `-`, la négation, la mise à l'échelle par `*`
 ou `/`, le produit matrice-matrice et le produit matrice-vecteur. `Quat`
 accepte `+`, `-`, la négation, le produit de quaternions et la mise à l'échelle.
 Les affectations composées réemploient automatiquement les opérations dont le
 résultat conserve le type de gauche.
+
+La diffusion scalaire complète des vecteurs ne s'étend pas aux matrices ni aux
+quaternions. Pour eux, seule la multiplication scalaire accepte les deux
+orientations ; la division garde la valeur composée à gauche. Les formes
+ambiguës comme `scalar / matrix`, `matrix + scalar` et `vector * matrix` ne sont
+pas définies.
 
 Les méthodes nommées comme `add`, `multiply` et `rotate` restent disponibles.
 `Quat * Vec3` n'est volontairement pas défini : utilisez `rotation.rotate(vector)`

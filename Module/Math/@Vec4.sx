@@ -180,10 +180,15 @@ extend Vec4 {
 }
 
 public func operator +(left:Vec4, right:Vec4) Vec4 { return left.add(right) }
+public func operator +(left:Vec4, right:float) Vec4 { return left.add(Vec4(right)) }
+public func operator +(left:float, right:Vec4) Vec4 { return Vec4(left).add(right) }
 public func operator -(left:Vec4, right:Vec4) Vec4 { return left.subtract(right) }
+public func operator -(left:Vec4, right:float) Vec4 { return left.subtract(Vec4(right)) }
+public func operator -(left:float, right:Vec4) Vec4 { return Vec4(left).subtract(right) }
 public func operator -(value:Vec4) Vec4 { return value.negated() }
 public func operator *(left:Vec4, right:Vec4) Vec4 { return left.multiply(right) }
 public func operator *(left:Vec4, right:float) Vec4 { return left.multiply(right) }
 public func operator *(left:float, right:Vec4) Vec4 { return right.multiply(left) }
 public func operator /(left:Vec4, right:Vec4) Vec4 { return left.divide(right) }
 public func operator /(left:Vec4, right:float) Vec4 { return left.divide(right) }
+public func operator /(left:float, right:Vec4) Vec4 { return Vec4(left).divide(right) }

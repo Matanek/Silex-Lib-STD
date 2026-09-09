@@ -137,10 +137,15 @@ extend Vec2 {
 }
 
 public func operator +(left:Vec2, right:Vec2) Vec2 { return left.add(right) }
+public func operator +(left:Vec2, right:float) Vec2 { return left.add(Vec2(right)) }
+public func operator +(left:float, right:Vec2) Vec2 { return Vec2(left).add(right) }
 public func operator -(left:Vec2, right:Vec2) Vec2 { return left.subtract(right) }
+public func operator -(left:Vec2, right:float) Vec2 { return left.subtract(Vec2(right)) }
+public func operator -(left:float, right:Vec2) Vec2 { return Vec2(left).subtract(right) }
 public func operator -(value:Vec2) Vec2 { return value.negated() }
 public func operator *(left:Vec2, right:Vec2) Vec2 { return left.multiply(right) }
 public func operator *(left:Vec2, right:float) Vec2 { return left.multiply(right) }
 public func operator *(left:float, right:Vec2) Vec2 { return right.multiply(left) }
 public func operator /(left:Vec2, right:Vec2) Vec2 { return left.divide(right) }
 public func operator /(left:Vec2, right:float) Vec2 { return left.divide(right) }
+public func operator /(left:float, right:Vec2) Vec2 { return Vec2(left).divide(right) }

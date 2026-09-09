@@ -10,6 +10,29 @@ let surface_normal = Math.Vec3.right().cross(Math.Vec3.up())
 assert(surface_normal == Math.Vec3.back())
 ```
 
+## Calculer avec les opérateurs
+
+`Vec2`, `Vec3` et `Vec4` acceptent l'addition, la soustraction, la négation,
+le produit et la division composante par composante. Ils acceptent aussi la
+multiplication et la division par un scalaire ; la multiplication scalaire
+fonctionne dans les deux sens.
+
+```sx
+var velocity = Math.Vec2(1.0, 5.0) * 10
+velocity += Math.Vec2(3.0, 7.0)
+let leftward = Math.Vec2.left() * 5
+```
+
+`Mat3` et `Mat4` acceptent `+`, `-`, la négation, la mise à l'échelle par `*`
+ou `/`, le produit matrice-matrice et le produit matrice-vecteur. `Quat`
+accepte `+`, `-`, la négation, le produit de quaternions et la mise à l'échelle.
+Les affectations composées réemploient automatiquement les opérations dont le
+résultat conserve le type de gauche.
+
+Les méthodes nommées comme `add`, `multiply` et `rotate` restent disponibles.
+`Quat * Vec3` n'est volontairement pas défini : utilisez `rotation.rotate(vector)`
+pour rendre l'intention explicite.
+
 ## Matrices et transformations
 
 `Mat3` et `Mat4` stockent leurs colonnes dans `x`, `y`, `z` et `w`. Les

@@ -370,3 +370,12 @@ extend Mat4 {
         )
     }
 }
+
+public func operator +(left:Mat4, right:Mat4) Mat4 { return left.add(right) }
+public func operator -(left:Mat4, right:Mat4) Mat4 { return left.subtract(right) }
+public func operator -(value:Mat4) Mat4 { return value.multiply(-1.0) }
+public func operator *(left:Mat4, right:float) Mat4 { return left.multiply(right) }
+public func operator *(left:float, right:Mat4) Mat4 { return right.multiply(left) }
+public func operator *(left:Mat4, right:Vec4) Vec4 { return left.multiply(right) }
+public func operator *(left:Mat4, right:Mat4) Mat4 { return left.multiply(right) }
+public func operator /(left:Mat4, right:float) Mat4 { return left.multiply(1.0 / right) }

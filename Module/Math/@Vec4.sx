@@ -178,3 +178,12 @@ extend Vec4 {
     static func unit_z() Vec4 { return Vec4(0.0, 0.0, 1.0, 0.0) }
     static func unit_w() Vec4 { return Vec4(0.0, 0.0, 0.0, 1.0) }
 }
+
+public func operator +(left:Vec4, right:Vec4) Vec4 { return left.add(right) }
+public func operator -(left:Vec4, right:Vec4) Vec4 { return left.subtract(right) }
+public func operator -(value:Vec4) Vec4 { return value.negated() }
+public func operator *(left:Vec4, right:Vec4) Vec4 { return left.multiply(right) }
+public func operator *(left:Vec4, right:float) Vec4 { return left.multiply(right) }
+public func operator *(left:float, right:Vec4) Vec4 { return right.multiply(left) }
+public func operator /(left:Vec4, right:Vec4) Vec4 { return left.divide(right) }
+public func operator /(left:Vec4, right:float) Vec4 { return left.divide(right) }

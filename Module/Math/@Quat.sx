@@ -133,3 +133,11 @@ extend Quat {
         ).normalized()
     }
 }
+
+public func operator +(left:Quat, right:Quat) Quat { return left.add(right) }
+public func operator -(left:Quat, right:Quat) Quat { return left.subtract(right) }
+public func operator -(value:Quat) Quat { return value.multiply(-1.0) }
+public func operator *(left:Quat, right:float) Quat { return left.multiply(right) }
+public func operator *(left:float, right:Quat) Quat { return right.multiply(left) }
+public func operator *(left:Quat, right:Quat) Quat { return left.multiply(right) }
+public func operator /(left:Quat, right:float) Quat { return left.multiply(1.0 / right) }

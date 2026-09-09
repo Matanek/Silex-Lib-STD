@@ -375,6 +375,32 @@ test "Vec2" {
     assert(Math.Vec2.right().to_str() == "{ 1.0 0.0 }", "Vec2 extensions")
 }
 
+test "math operator overloads" {
+    let component_product = Math.Vec2(1.0, 5.0) * Math.Vec2(2.0, 10.0)
+    assert(component_product == Math.Vec2(2.0, 50.0), "Vec2 component product")
+    assert(Math.Vec2(1.0, 5.0) * 10 == Math.Vec2(10.0, 50.0), "Vec2 right scalar")
+    assert(10 * Math.Vec2(1.0, 5.0) == Math.Vec2(10.0, 50.0), "Vec2 left scalar")
+    assert(Math.Vec2.left() * 5 == Math.Vec2(-5.0, 0.0), "Vec2 direction scale")
+    assert(-Math.Vec3(1.0, -2.0, 3.0) == Math.Vec3(-1.0, 2.0, -3.0), "Vec3 unary minus")
+    assert(Math.Vec4.one() / 2 == Math.Vec4(0.5), "Vec4 scalar division")
+
+    var value = Math.Vec2(1.0, 5.0)
+    value += Math.Vec2(3.0, 7.0)
+    value *= 2
+    value -= Math.Vec2(2.0, 4.0)
+    value /= 2
+    assert(value == Math.Vec2(3.0, 10.0), "derived compound assignments")
+
+    let matrix3 = Math.Mat3(2.0)
+    assert(matrix3 * Math.Vec3.one() == Math.Vec3(2.0), "Mat3 vector product")
+    assert(matrix3 / 2 == Math.Mat3.identity(), "Mat3 scalar division")
+    let matrix4 = Math.Mat4(2.0)
+    assert((0.5 * matrix4) * Math.Vec4.one() == Math.Vec4.one(), "Mat4 products")
+
+    let rotation = Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back())
+    assert((rotation * rotation.inverted()).rotate(Math.Vec3.right()).nearly_equal(Math.Vec3.right()), "Quat product")
+}
+
 test "Vec3" {
     let right = Math.Vec3.right()
     let up = Math.Vec3.up()

@@ -1,0 +1,150 @@
+use STD.Threading
+
+struct Counter:Threading.Job {
+    var value:int
+    func execute() { self.value++ }
+}
+
+class StoredObservers {
+    var handles:Threading.JobHandle<Counter>[] = []
+    var fences:Threading.Fence[] = []
+}
+
+struct Snapshot {
+    var address:uint
+    var generation:int
+}
+
+func check_copies_in_scope(executor:Threading.Executor) Snapshot {
+    var shared = executor
+    var first = shared.submit(Counter(value:3))
+    var alias = first
+    assert(first.complete().value == 4)
+    shared.wait_idle()
+    assert(alias.is_consumed())
+    let address = first.state_address()
+    assert(consume_one(shared) != address)
+    return Snapshot(address:address, generation:first.generation_value())
+}
+
+func check_copies_and_generation() {
+    var executor = Threading.Executor(worker_count:1)
+    let previous = check_copies_in_scope(executor)
+    executor.wait_idle()
+    assert(consume_one(executor) == previous.address)
+    assert(!Threading.generation_matches<Counter>(previous.address, previous.generation))
+    assert(executor.submission_allocation_count() == 2)
+}
+
+func retain_completed(executor:Threading.Executor, observers:StoredObservers, fence_only:bool) uint {
+    var shared = executor
+    var stored = observers
+    var handle = shared.submit(Counter(value:41))
+    let address = handle.state_address()
+    if fence_only { stored.fences.append(handle.fence()) }
+    else { stored.handles.append(handle) }
+    assert(handle.complete().value == 42)
+    return address
+}
+
+func consume_one(executor:Threading.Executor) uint {
+    var shared = executor
+    var handle = shared.submit(Counter(value:12))
+    let address = handle.state_address()
+    assert(handle.complete().value == 13)
+    return address
+}
+
+func check_stored_observer(fence_only:bool) {
+    var executor = Threading.Executor(worker_count:1)
+    var observers = StoredObservers()
+    let held = retain_completed(executor, observers, fence_only)
+    executor.wait_idle()
+    assert(consume_one(executor) != held)
+    executor.wait_idle()
+    assert(executor.submission_allocation_count() == 2)
+    if fence_only { assert(observers.fences[0].is_complete()) }
+    else { assert(observers.handles[0].is_consumed()) }
+    observers.handles.clear()
+    observers.fences.clear()
+    assert(consume_one(executor) == held)
+    assert(executor.submission_allocation_count() == 2)
+}
+
+func combine_one(executor:Threading.Executor) {
+    var shared = executor
+    var ready = shared.combine([])
+    ready.complete()
+}
+
+func retain_combination(executor:Threading.Executor, observers:StoredObservers) {
+    var shared = executor
+    var stored = observers
+    stored.fences.append(shared.combine([]))
+}
+
+func check_combinations() {
+    var executor = Threading.Executor(worker_count:1)
+    var observers = StoredObservers()
+    retain_combination(executor, observers)
+    for wave in 0...100 { combine_one(executor) }
+    assert(executor.combination_allocation_count() == 2)
+    assert(observers.fences[0].is_complete())
+    observers.fences.clear()
+    for wave in 0...100 { combine_one(executor) }
+    assert(executor.combination_allocation_count() == 2)
+}
+
+func complete_wave(executor:Threading.Executor) {
+    var shared = executor
+    var handles:Threading.JobHandle<Counter>[] = []
+    var fences:Threading.Fence[] = []
+    for index in 0...4 {
+        var handle = shared.submit(Counter(value:index))
+        fences.append(handle.fence())
+        handles.append(handle)
+    }
+    for fence in fences { fence.complete() }
+    var index = 0
+    while index < handles.count() {
+        var handle = handles[index]
+        assert(handle.complete().value == index + 1)
+        index++
+    }
+}
+
+func check_waves(worker_count:int) {
+    var executor = Threading.Executor(worker_count:worker_count)
+    complete_wave(executor)
+    executor.wait_idle()
+    let warm = executor.submission_allocation_count()
+    assert(warm == 4)
+    for wave in 0...100 {
+        complete_wave(executor)
+        executor.wait_idle()
+    }
+    let final = executor.submission_allocation_count()
+    print("SILEX_THREADING_RECYCLING workers=$(worker_count) warm=$(warm) final=$(final)")
+    assert(final == warm)
+}
+
+test "completed handle and fence arrays reuse their slots" {
+    check_waves(1)
+    check_waves(2)
+    check_waves(4)
+}
+test "copied handles preserve their generation until released" { check_copies_and_generation() }
+test "heap stored handles prevent slot reuse until released" { check_stored_observer(false) }
+test "heap stored fences prevent slot reuse until released" { check_stored_observer(true) }
+test "combined fences preserve stored observers and reuse released slots" { check_combinations() }
+
+func main() {
+    check_waves(1)
+    check_waves(2)
+    check_waves(4)
+    check_copies_and_generation()
+    check_stored_observer(false)
+    check_stored_observer(true)
+    check_combinations()
+    print("SILEX_THREADING_RECYCLING observers=ok combinations=ok")
+}

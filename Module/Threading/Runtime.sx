@@ -24,11 +24,6 @@ class GraphState:CompletionState,DependencyTarget {
         self.continuations = []
     }
 
-    func recyclable(expected_roots:int) bool {
-        let address = C.object_address(self)
-        return self.completed && Native.class_root_count(address) <= expected_roots && Native.class_is_revivable(address)
-    }
-
     func prepare(remaining:int) {
         Native.revive_class(C.object_address(self))
         while Native.try_wait(self.completion_signal) {}
@@ -110,15 +105,6 @@ class JobState<T:Job>:CompletionState {
     func is_consumed() bool { return self.consumed }
     func object_address() uint { return C.object_address(self) }
 
-    func recyclable(expected_roots:int) bool {
-        let address = C.object_address(self)
-        if self.graph_address != 0 {
-            var graph = self.graph_state()
-            if !graph.recyclable(2) { return false }
-        }
-        return self.handle_published && self.completed && Native.class_root_count(address) <= expected_roots && Native.class_is_revivable(address)
-    }
-
     func consume(expected:int) T? { return take_completed<T>(self, expected) }
     func graph_state() GraphState {
         if self.graph_address == 0 { panic("STD.Threading job has no graph state") }
@@ -140,6 +126,30 @@ class JobState<T:Job>:CompletionState {
     func is_completed() bool { return self.completed }
     func wait_for_completion() { Native.wait(self.completion_signal) }
     func notify_waiter() { Native.signal(self.completion_signal) }
+}
+
+// The pool owns one stored edge. Any root or additional stored edge belongs
+// to a handle, fence, worker, or another observer and prevents reuse.
+// Inspect borrowed array elements so the check creates no temporary root.
+func pooled_state_is_unobserved(address:uint) bool {
+    let edges = C.load<uint>(C.pointer_bits(address), 16 as uint)
+    return Native.class_root_count(address) == 0 && edges == 1 && Native.class_is_revivable(address)
+}
+
+func graph_is_recyclable(state:@GraphState) bool {
+    return state.completed && pooled_state_is_unobserved(C.object_address(state))
+}
+
+func job_is_recyclable<T:Job>(state:@JobState<T>) bool {
+    if !state.handle_published || !state.completed { return false }
+    if !pooled_state_is_unobserved(C.object_address(state)) { return false }
+    if state.graph_address != 0 {
+        // Check ownership before acquiring the local root used to read it.
+        if !pooled_state_is_unobserved(state.graph_address) { return false }
+        var graph = C.object_from_address<GraphState>(state.graph_address)
+        if !graph.completed { return false }
+    }
+    return true
 }
 
 func prepare_state<T:Job>(state:JobState<T>, job:T) {
@@ -290,8 +300,7 @@ class StatePool<T:Job>:PoolResource {
         var available = -1
         var index = 0
         while index < self.states.count() {
-            var state = C.object_from_address<JobState<T>>(C.object_address(self.states[index]))
-            if state.recyclable(1) {
+            if job_is_recyclable<T>(self.states[index]) {
                 available = index
                 break
             }
@@ -482,8 +491,7 @@ class Runtime {
         var selected = -1
         var index = 0
         while index < self.combination_states.count() {
-            var candidate = self.combination_states[index]
-            if candidate.recyclable(1) {
+            if graph_is_recyclable(self.combination_states[index]) {
                 selected = index
                 break
             }
@@ -539,8 +547,7 @@ class Runtime {
         var selected = -1
         var index = 0
         while index < self.parallel_graph_states.count() {
-            var candidate = self.parallel_graph_states[index]
-            if candidate.recyclable(1) {
+            if graph_is_recyclable(self.parallel_graph_states[index]) {
                 selected = index
                 break
             }

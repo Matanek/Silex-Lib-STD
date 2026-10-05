@@ -23,6 +23,7 @@ enum SyntaxKind {
     repeat
     word_boundary
     non_word_boundary
+    negative_lookahead
 }
 
 struct SyntaxNode {
@@ -179,9 +180,11 @@ class Parser {
         self.position++
         var capture_index = 0
         var capture_name = ""
+        var lookahead = false
         if self.at(63) {
             self.position++
             if self.at(58) { self.position++ }
+            elif self.at(33) { lookahead = true; self.position++ }
             elif self.at(60) {
                 self.position++
                 let name_start = self.position
@@ -216,7 +219,7 @@ class Parser {
         } else {
             capture_name = ""
         }
-        if !self.values_group_is_non_capturing(opening) {
+        if !lookahead && !self.values_group_is_non_capturing(opening) {
             self.capture_total++
             capture_index = self.capture_total
             self.capture_labels.append(capture_name)
@@ -227,11 +230,21 @@ class Parser {
             return self.fail(CompileErrorKind.unclosed_group(), opening, "group is not closed")
         }
         self.position++
-        if capture_index == 0 { return child }
+        if lookahead {
+            let child_kind = self.nodes[child].kind
+            if child_kind != SyntaxKind.literal && child_kind != SyntaxKind.any &&
+                child_kind != SyntaxKind.character_class {
+                return self.fail(CompileErrorKind.unsupported_construct(), opening + 1,
+                    "negative lookahead requires one literal, dot or character class")
+            }
+        }
+        if capture_index == 0 && !lookahead { return child }
+        var kind = SyntaxKind.capture
+        if lookahead { kind = SyntaxKind.negative_lookahead }
         var children:int[] = []
         children.append(child)
         return self.emit_node(SyntaxNode(
-            kind:SyntaxKind.capture,
+            kind:kind,
             scalar:0,
             ranges:[],
             negated:false,

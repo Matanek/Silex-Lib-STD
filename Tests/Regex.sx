@@ -277,3 +277,46 @@ test "compile errors are structured" {
     rejected("\\p{Unknown}", Regex.CompileErrorKind.invalid_escape(), 0)
     rejected("\\1", Regex.CompileErrorKind.invalid_escape(), 0)
 }
+
+test "negative scalar assertion consumes no input and preserves empty progression" {
+    assert(compiled("a(?!b)c").match("ac"))
+    assert(!compiled("a(?!b)").contains("ab"))
+    assert(compiled("a(?!b)").contains("ax"))
+    assert(compiled("a(?!b)").match("a"))
+    assert(compiled("(?!x)").all("é").count() == 2)
+    assert(compiled("a(?!.)(?:$)").match("a"))
+    assert(!compiled("a(?!.)(?:b)").contains("ab"))
+    assert(compiled("a(?!.)").contains("a\n"))
+    let dot = compiled_with("a(?!.)", Regex.Options(dot_matches_newline:true))
+    assert(!dot.contains("a\n"))
+    rejected("(?!bc)", Regex.CompileErrorKind.unsupported_construct(), 1)
+    rejected("(?!b+)", Regex.CompileErrorKind.unsupported_construct(), 1)
+    rejected("(?!)", Regex.CompileErrorKind.unsupported_construct(), 1)
+    rejected("(?!(b))", Regex.CompileErrorKind.unsupported_construct(), 1)
+}
+
+test "negative scalar assertion preserves surrounding captures and bounded repetition" {
+    let expression = compiled("(?<head>a)(?!c)b{1,6}")
+    let found = expression.first("abbbbb")!
+    assert(found.text() == "abbbbb")
+    assert(found.capture("head")!.text() == "a")
+    assert(!expression.contains("acbbbb"))
+    assert(compiled("(?![xy])a+").match("aaaa"))
+    assert(compiled("(?:a(?!b)){2}").match("aa"))
+}
+
+test "negative scalar assertion respects Unicode options and explicit byte offsets" {
+    let expression = compiled("(?<word>é+)(?!界)")
+    let found = expression.first("🙂éé!")!
+    assert(found.start() == 1 && found.end() == 3)
+    assert(found.byte_start() == 4 && found.byte_end() == 8)
+    let capture = found.capture("word")!
+    assert(capture.start() == 1 && capture.end() == 3)
+    assert(capture.byte_start() == 4 && capture.byte_end() == 8)
+    assert(!compiled("é(?!界)").contains("é界"))
+    let insensitive = compiled_with("a(?!B)", Regex.Options(case_insensitive:true))
+    assert(!insensitive.contains("Ab"))
+    assert(insensitive.contains("Ac"))
+    assert(compiled("\\s+(?!\\S)").first("   x")!.text() == "  ")
+    assert(compiled("\\s+(?!\\S)").first(" \t\n")!.text() == " \t\n")
+}

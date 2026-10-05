@@ -28,6 +28,8 @@ public struct Capture {
     func start() int { return self.first }
     func end() int { return self.last }
     func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
+    func byte_start() int { return self.first_byte }
+    func byte_end() int { return self.last_byte }
 }
 
 public struct Match {
@@ -64,8 +66,8 @@ public struct Match {
     func end() int { return self.last }
     func text() str { return byte_slice(self.source, self.first_byte, self.last_byte) }
     func capture_count() int { return self.capture_names.count() - 1 }
-    module func byte_start() int { return self.first_byte }
-    module func byte_end() int { return self.last_byte }
+    func byte_start() int { return self.first_byte }
+    func byte_end() int { return self.last_byte }
 
     func capture(value:int) Capture? {
         if value < 0 || value >= self.capture_names.count() { return null }

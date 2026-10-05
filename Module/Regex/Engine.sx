@@ -244,6 +244,19 @@ func add_thread(
             ))
             continue
         }
+        if kind == StateKind.negative_lookahead {
+            let child = program.states[thread.state].second
+            var matches = false
+            if value = next { matches = consumes(program, child, value.scalar) }
+            if !matches {
+                output.schedule(Thread(
+                    state:program.states[thread.state].first,
+                    first:thread.first, first_byte:thread.first_byte,
+                    starts:thread.starts, ends:thread.ends, counters:thread.counters
+                ))
+            }
+            continue
+        }
         if kind == StateKind.epsilon {
             output.schedule(Thread(
                 state:program.states[thread.state].first,

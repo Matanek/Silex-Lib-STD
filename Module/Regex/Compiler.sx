@@ -20,6 +20,7 @@ enum StateKind {
     counter_reset
     counter_gate
     counter_increment
+    negative_lookahead
 }
 
 struct State {
@@ -136,6 +137,15 @@ class Compiler {
         if syntax.kind == SyntaxKind.word_boundary { return self.word_boundary(StateKind.word_boundary) }
         if syntax.kind == SyntaxKind.non_word_boundary {
             return self.word_boundary(StateKind.non_word_boundary)
+        }
+        if syntax.kind == SyntaxKind.negative_lookahead {
+            let child = self.node(syntax_nodes, syntax.children[0])
+            let accepted = self.emit(State(StateKind.accept, -1, -1, 0, [], false, 0))
+            self.patch(child.outs, accepted)
+            let assertion = self.emit(State(StateKind.negative_lookahead, -1, child.start, 0, [], false, 0))
+            var outs:Patch[] = []
+            outs.append(Patch(state:assertion, edge:1))
+            return Fragment(start:assertion, outs:outs)
         }
         if syntax.kind == SyntaxKind.repeat { return self.repeat(syntax_nodes, syntax) }
         panic("unknown regex syntax node")
@@ -274,7 +284,8 @@ func fixed_syntax_width(nodes:@SyntaxNode[], index:int) int {
     let node = nodes[index]
     if node.kind == SyntaxKind.empty || node.kind == SyntaxKind.start_anchor ||
         node.kind == SyntaxKind.end_anchor || node.kind == SyntaxKind.word_boundary ||
-        node.kind == SyntaxKind.non_word_boundary { return 0 }
+        node.kind == SyntaxKind.non_word_boundary ||
+        node.kind == SyntaxKind.negative_lookahead { return 0 }
     if node.kind == SyntaxKind.literal || node.kind == SyntaxKind.any ||
         node.kind == SyntaxKind.character_class { return 1 }
     if node.kind == SyntaxKind.concatenate {

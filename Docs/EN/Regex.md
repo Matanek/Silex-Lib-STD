@@ -125,5 +125,22 @@ of active states; ambiguous repetition cannot cause exponential backtracking.
 
 Large fixed-width finite repetitions use counters instead of duplicating the
 subprogram. Other finite bounds remain limited to 10,000 so compilation stays
-bounded. Backreferences and arbitrary lookaround are intentionally unsupported:
+bounded. Single-atom negative assertions add one predicate per active state.
+Backreferences and arbitrary lookaround are intentionally unsupported:
 they would compromise the predictable time and memory contract for large texts.
+
+## Negative assertions and position units
+
+`(?!atom)` succeeds if the next scalar does not match the atom, without consuming
+input. The atom may be a literal character, `.` or a class such as `\S`, `[a-z]`
+or `\p{L}`. It succeeds at end of input. Case and dot-all options also apply
+inside the assertion. Sequences, quantifiers or capturing groups inside the
+assertion return `unsupported_construct`; positive assertions, lookbehind and
+backreferences remain unsupported. This bounded form retains the predictable
+engine cost and lets the GPT-2 pattern `\s+(?!\S)` preserve whitespace exactly.
+
+`Match.start/end` and `Capture.start/end` count Unicode scalars.
+`byte_start/byte_end` return half-open UTF-8 byte intervals in the matched source
+text. For example, `é+` in `🙂éé!` covers scalars `[1, 3)` and bytes `[4, 8)`.
+These positions are available across the public package boundary, without
+exposing engine tables.

@@ -1,5 +1,6 @@
 use STD.Collections.Dictionary
 use STD.Text.UTF8
+use STD.Regex
 
 test "read an immutable dictionary across the package boundary" {
     var values = Dictionary<str, int[]>()
@@ -18,4 +19,13 @@ test "measure encoded bytes from a read only text borrow" {
     assert(!bounded("é", 1))
     assert(bounded("é", 2))
     assert(bounded("", 0))
+}
+
+test "regex negative assertion and explicit byte offsets cross the public boundary" {
+    let expression = try Regex.compile("(?<word>é+)(?!界)") else error { panic(error.detail) }
+    let found = expression.first("🙂éé!")!
+    assert(found.start() == 1 && found.end() == 3)
+    assert(found.byte_start() == 4 && found.byte_end() == 8)
+    assert(found.capture("word")!.byte_start() == 4)
+    assert(found.capture("word")!.byte_end() == 8)
 }

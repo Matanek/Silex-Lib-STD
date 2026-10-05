@@ -48,3 +48,20 @@ if found = pair.first("language=Silex") {
 
 Le remplacement accepte texte littéral ou callback. Voir les
 [recettes Regex](Recipes/Regex/).
+
+## Assertions négatives et unités des positions
+
+`(?!atom)` réussit si le scalaire suivant ne correspond pas à l’atome, sans
+consommer le texte. L’atome peut être un caractère littéral, `.` ou une classe
+comme `\S`, `[a-z]` ou `\p{L}`. En fin de texte, l’assertion réussit. Les options
+de casse et de dot-all s’appliquent aussi dans l’assertion. Une séquence, un
+quantificateur ou un groupe capturant dans cette assertion rend
+`unsupported_construct` ; les assertions positives, lookbehind et références
+arrière restent non supportées. Cette forme bornée garde le coût prévisible du
+moteur ; le profil GPT-2 `\s+(?!\S)` peut ainsi conserver les blancs exactement.
+
+`Match.start/end` et `Capture.start/end` comptent les scalaires Unicode.
+`byte_start/byte_end` donnent des intervalles `[start, end)` en octets UTF-8,
+sur le texte source du match. Par exemple, `é+` dans `🙂éé!` couvre les scalaires
+`[1, 3)` et les octets `[4, 8)`. Ces bornes sont lisibles depuis un consommateur
+extérieur, sans exposer les tables du moteur.

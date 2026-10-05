@@ -97,7 +97,7 @@ public struct JobHandle<T:Job> {
 }
 
 public class Executor {
-    private var runtime:Runtime
+    private var runtime:Runtime = Runtime()
 
     init() {
         self.runtime.start(default_worker_count())

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `Threading.Executor` explicitly creates its own runtime before starting workers, following class-field initialization in an explicit constructor.
+
 - Add single-atom negative Regex assertions `(?!atom)` without consuming
   input, plus explicit byte offsets on matches and captures.
 

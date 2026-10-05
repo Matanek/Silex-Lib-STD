@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `Threading.Executor` déclare explicitement la création de son runtime propre avant de démarrer ses workers, conformément à l’initialisation des champs de classe dans un constructeur explicite.
+
 - Ajouter l’assertion Regex négative sur un seul atome `(?!atom)`, sans
   consommer le texte, et les offsets explicites en octets des matches/captures.
 

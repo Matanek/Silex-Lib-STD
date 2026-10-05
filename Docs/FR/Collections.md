@@ -22,6 +22,11 @@ if previous = scores.set("Ada", 14) {
 }
 ```
 
+`find(key)` rend une valeur optionnelle possédée et peut lire un dictionnaire
+immuable. Une absence rend `null`. Listes et structures gardent leur sémantique
+de copie ; les classes conservent leur identité partagée. `get(key)` conserve
+son rôle d’emprunt mutable vers une valeur connue, avec précondition de présence.
+
 `set` rend l’ancienne valeur lorsqu’elle existait. `get`, `remove`,
 `contains`, `reserve`, `clear`, `count` et `capacity` couvrent le cycle de vie.
 L’itérateur expose des entrées clé/valeur :

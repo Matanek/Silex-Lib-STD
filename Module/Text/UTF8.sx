@@ -24,6 +24,8 @@ public struct ScalarError {
     let scalar_index:int
 }
 
+public func byte_count(text:@str) int { return C.byte_count(text) as int }
+
 public func bytes(text:str) uint8[] { return read_bytes(text) }
 
 func read_bytes(text:@str) uint8[] {

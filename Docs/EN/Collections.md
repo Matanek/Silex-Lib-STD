@@ -30,6 +30,11 @@ if previous = scores.set("Ada", 14) {
 }
 ```
 
+`find(key)` returns an owned optional value and can read an immutable dictionary.
+Missing keys return `null`. Lists and structs retain copy semantics; class
+references retain shared identity. `get(key)` remains a mutable borrow of a
+known value, requiring the key to be present.
+
 `set(key, value)` renvoie l'ancienne valeur lorsqu'il remplace une association,
 et `null` lorsqu'il ajoute une nouvelle clé. `get(key)` emprunte la valeur
 stockée et exige que la clé existe ; utiliser `contains(key)` lorsque son

@@ -1,0 +1,21 @@
+use STD.Collections.Dictionary
+use STD.Text.UTF8
+
+test "read an immutable dictionary across the package boundary" {
+    var values = Dictionary<str, int[]>()
+    values.set("input", [1, 2])
+    let frozen = values
+    assert(frozen.find("missing") == null)
+    var detached = frozen.find("input")!
+    detached[0] = 99
+    assert(frozen.find("input")![0] == 1)
+    assert(frozen.find("input")![1] == 2)
+}
+
+test "measure encoded bytes from a read only text borrow" {
+    func bounded(text:@str, maximum:int) bool { return UTF8.byte_count(text) <= maximum }
+    assert(UTF8.byte_count("é\0🙂") == 7)
+    assert(!bounded("é", 1))
+    assert(bounded("é", 2))
+    assert(bounded("", 0))
+}

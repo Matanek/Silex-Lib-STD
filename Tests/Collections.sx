@@ -236,3 +236,41 @@ test "collection reservation and clearing" {
     stack.clear()
     assert(stack.is_empty(), "stack clear")
 }
+
+
+test "dictionary lookup reads immutable storage and returns detached values" {
+    var prepared = Dictionary<int, int[]>()
+    prepared.set(7, [1, 2])
+    let dictionary = prepared
+    assert(dictionary.find(99) == null)
+    assert(dictionary.find(7)!.count() == 2)
+    assert(dictionary.find(7)![0] == 1 && dictionary.find(7)![1] == 2)
+    var detached = dictionary.find(7)!
+    detached[0] = 9
+    detached.append(3)
+    assert(dictionary.find(7)!.count() == 2)
+    assert(dictionary.find(7)![0] == 1 && dictionary.find(7)![1] == 2)
+    prepared.set(7, [4])
+    assert(dictionary.find(7)!.count() == 2)
+    assert(dictionary.find(7)![0] == 1 && dictionary.find(7)![1] == 2)
+}
+
+test "dictionary lookup preserves class identity and custom key equality" {
+    func hash(key:@int) uint { return 1 }
+    func equal(left:@int, right:@int) bool { return left % 10 == right % 10 }
+    var token = Token(name:"shared")
+    var dictionary = Dictionary<int, Token>(hash, equal)
+    dictionary.set(17, token)
+    assert(dictionary.find(7)! == token)
+    assert(dictionary.find(8) == null)
+}
+
+
+test "dictionary lookup separates a stored null from an absent key" {
+    var values = Dictionary<int, int?>()
+    values.set(7, null)
+    let frozen = values
+    assert(frozen.find(8) == null)
+    if inner = frozen.find(7) { assert(inner == null) }
+    else { panic("stored null must still be a present dictionary value") }
+}

@@ -126,3 +126,13 @@ test "text operations accept ordinary value positions" {
     check(contains_from_borrow(local_text, "local"), "read-reference position")
     check(transform_borrowed(local_text, Text.trim) == "local", "callback position")
 }
+
+
+test "UTF8 byte count reads borrowed text without confusing scalars" {
+    assert(Text.UTF8.byte_count("") == 0)
+    assert(Text.UTF8.byte_count("abc") == 3)
+    assert(Text.UTF8.byte_count("a\0é🙂") == 8)
+    assert("a\0é🙂".count() == 4)
+    let text = "e\u{301} 世界"
+    assert(Text.UTF8.byte_count(text) == Text.UTF8.bytes(text).count())
+}

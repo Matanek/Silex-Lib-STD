@@ -57,6 +57,13 @@ public struct Dictionary<Key, Value> {
         return self.search(key).index >= 0
     }
 
+    // Returns an owned value; arrays/structs are copied and class identity is shared.
+    func find(key:@Key) Value? {
+        let index = self.search(key).index
+        if index < 0 { return null }
+        return self.values[index]
+    }
+
     func find_key(value:@Value) Key? {
         var index = 0
         while index < self.count() {

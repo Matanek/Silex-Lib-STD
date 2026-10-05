@@ -19,3 +19,7 @@ et conflits avec une erreur structurée et un offset.
 Voir [CleanNames](Recipes/Text/CleanNames.md),
 [CountGraphemes](Recipes/Text/CountGraphemes.md) et
 [DecodeDocument](Recipes/Text/DecodeDocument.md).
+
+`Text.UTF8.byte_count(text)` mesure les octets UTF-8 sans créer de liste et
+accepte un emprunt de texte en lecture seule. À distinguer de `str.count()`,
+qui mesure les scalaires Unicode ; le NUL incorporé compte comme un octet.

@@ -34,3 +34,7 @@ for invalid length, invalid sequences or a conflicting BOM.
 [DecodeDocument.sx](Recipes/Text/DecodeDocument.md) detects and decodes a
 UTF-16 document. The executable encoding test round-trips every supported
 encoding with and without a BOM.
+
+`Text.UTF8.byte_count(text)` measures UTF-8 bytes without creating a list and
+accepts a read-only text borrow. Unlike `str.count()`, which measures Unicode
+scalars, it measures encoded size; embedded NUL counts as one byte.

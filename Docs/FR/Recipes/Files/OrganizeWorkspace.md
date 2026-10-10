@@ -19,10 +19,10 @@ func kind_name(kind:FileSystem.Kind) str {
 func prepare_workspace() Result<void, Error> {
     let root = "silex-example-workspace"
     let reports = root + "/reports"
-    try FileSystem.create_directories(reports)
-    try File.write_all(reports + "/latest.txt", "all checks passed\n")
+    try FileSystem.create_directories(reports) else error { return Result<void,Error>.failure(error) }
+    try File.write_all(reports + "/latest.txt", "all checks passed\n") else error { return Result<void,Error>.failure(error) }
 
-    let entries = try FileSystem.list(reports)
+    let entries = try FileSystem.list(reports) else error { return Result<void,Error>.failure(error) }
     for entry in entries {
         print("$(entry.name): $(kind_name(entry.kind))")
     }
@@ -30,7 +30,7 @@ func prepare_workspace() Result<void, Error> {
 }
 
 func main() {
-    match prepare_workspace() {
+    match (try prepare_workspace()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }

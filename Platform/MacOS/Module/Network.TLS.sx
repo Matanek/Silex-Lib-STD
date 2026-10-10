@@ -173,7 +173,7 @@ func transport_read(
 ) int32 {
     let requested = C.load<uint>(length, 0 as uint) as int
     var stream = C.object_from_address<TLS.Stream>(connection)
-    match stream.transport_read(requested) {
+    match (try stream.transport_read(requested)) {
         failure(error) => {
             let stored = C.store<uint>(length, 0 as uint, 0)
             return -9806
@@ -205,7 +205,7 @@ func transport_write(
         index++
     }
     var stream = C.object_from_address<TLS.Stream>(connection)
-    match stream.transport_write(bytes) {
+    match (try stream.transport_write(bytes)) {
         failure(error) => {
             let stored = C.store<uint>(length, 0 as uint, 0)
             return -9806

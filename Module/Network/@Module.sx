@@ -18,11 +18,11 @@ public struct ResolveOptions {
 
 public func parse_ip(text:str) Result<IpAddress, Error> {
     let bytes = UTF8.bytes(text)
-    if contains(bytes, 58) { return parse_ipv6(bytes, text) }
+    if contains(bytes, 58) { return (try parse_ipv6(bytes, text)) }
     if parsed = parse_ipv4(bytes, 0, bytes.count()) {
         return Result<IpAddress, Error>.success(IpAddress.ipv4(parsed))
     }
-    return invalid_address(text)
+    return (try invalid_address(text))
 }
 
 public func format_ip(address:IpAddress) str {
@@ -45,7 +45,7 @@ public func format_endpoint(endpoint:Endpoint) str {
 }
 
 public func resolve(host:str, port:uint16, options:ResolveOptions) Result<Endpoint[], Error> {
-    match parse_ip(host) {
+    match (try parse_ip(host)) {
         success(address) => {
             if accepts(options.family, address) {
                 return Result<Endpoint[], Error>.success([Endpoint(address:address, port:port, scope_id:0)])
@@ -124,7 +124,7 @@ func parse_ipv6(bytes:uint8[], subject:str) Result<IpAddress, Error> {
     var index = 0
     while index + 1 < bytes.count() {
         if bytes[index] == 58 && bytes[index + 1] == 58 {
-            if double_colon >= 0 { return invalid_address(subject) }
+            if double_colon >= 0 { return (try invalid_address(subject)) }
             double_colon = index
             index += 2
         } else { index++ }
@@ -133,20 +133,20 @@ func parse_ipv6(bytes:uint8[], subject:str) Result<IpAddress, Error> {
     var groups:uint16[] = []
     if double_colon < 0 {
         if parsed = parse_groups(bytes, 0, bytes.count()) { groups = parsed }
-        else { return invalid_address(subject) }
-        if groups.count() != 8 { return invalid_address(subject) }
+        else { return (try invalid_address(subject)) }
+        if groups.count() != 8 { return (try invalid_address(subject)) }
     } else {
         var left:uint16[] = []
         var right:uint16[] = []
         if double_colon > 0 {
             if parsed = parse_groups(bytes, 0, double_colon) { left = parsed }
-            else { return invalid_address(subject) }
+            else { return (try invalid_address(subject)) }
         }
         if double_colon + 2 < bytes.count() {
             if parsed = parse_groups(bytes, double_colon + 2, bytes.count()) { right = parsed }
-            else { return invalid_address(subject) }
+            else { return (try invalid_address(subject)) }
         }
-        if left.count() + right.count() >= 8 { return invalid_address(subject) }
+        if left.count() + right.count() >= 8 { return (try invalid_address(subject)) }
         for value in left { groups.append(value) }
         var zeros = 8 - left.count() - right.count()
         while zeros > 0 { groups.append(0 as uint16); zeros-- }
@@ -270,7 +270,7 @@ func decimal(value:uint) str {
 
 func decoded20(bytes:uint8[20], start:int, end:int) str {
     let view = @bytes[start:end]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return text }
         failure(error) => { panic("ASCII network formatting failed") }
     }
@@ -278,7 +278,7 @@ func decoded20(bytes:uint8[20], start:int, end:int) str {
 
 func decoded4(bytes:uint8[4], start:int, end:int) str {
     let view = @bytes[start:end]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return text }
         failure(error) => { panic("ASCII network formatting failed") }
     }

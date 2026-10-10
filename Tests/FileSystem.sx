@@ -19,40 +19,40 @@ test "filesystem operations" {
         let copied = nested + "/copied.txt"
         let renamed = nested + "/renamed.txt"
         let empty = root + "/empty"
-        let ignored_copy = FileSystem.remove_file(copied)
-        let ignored_renamed = FileSystem.remove_file(renamed)
-        try FileSystem.create_directories(nested)
-        try FileSystem.create_directory(empty)
-        try File.write_all(source, "filesystem")
+        let ignored_copy = (try FileSystem.remove_file(copied))
+        let ignored_renamed = (try FileSystem.remove_file(renamed))
+        try FileSystem.create_directories(nested) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.create_directory(empty) else error { return Result<void,Error>.failure(error) }
+        try File.write_all(source, "filesystem") else error { return Result<void,Error>.failure(error) }
 
-        let information = try FileSystem.metadata(source)
-        let direct_information = try FileSystem.symbolic_link_metadata(source)
+        let information = try FileSystem.metadata(source) else error { return Result<void,Error>.failure(error) }
+        let direct_information = try FileSystem.symbolic_link_metadata(source) else error { return Result<void,Error>.failure(error) }
         assert(is_file(information.kind), "file kind")
         assert(is_file(direct_information.kind), "direct file kind")
         assert(information.size == 10, "file size")
 
-        try FileSystem.copy_file(source, copied, true)
-        try FileSystem.rename(copied, renamed)
-        let entries = try FileSystem.list(nested)
+        try FileSystem.copy_file(source, copied, true) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.rename(copied, renamed) else error { return Result<void,Error>.failure(error) }
+        let entries = try FileSystem.list(nested) else error { return Result<void,Error>.failure(error) }
         assert(has_entry(entries, "source.txt"), "source listing")
         assert(has_entry(entries, "renamed.txt"), "renamed listing")
 
-        try FileSystem.set_readonly(source, true)
-        assert((try FileSystem.metadata(source)).readonly, "readonly metadata")
-        try FileSystem.set_readonly(source, false)
-        let canonical = try FileSystem.canonicalize(source)
+        try FileSystem.set_readonly(source, true) else error { return Result<void,Error>.failure(error) }
+        assert((try FileSystem.metadata(source) else error { return Result<void,Error>.failure(error) }).readonly, "readonly metadata")
+        try FileSystem.set_readonly(source, false) else error { return Result<void,Error>.failure(error) }
+        let canonical = try FileSystem.canonicalize(source) else error { return Result<void,Error>.failure(error) }
         assert(canonical.count() > 0, "canonical path")
 
-        try FileSystem.remove_file(source)
-        try FileSystem.remove_file(renamed)
-        try FileSystem.remove_directory(empty)
-        try FileSystem.remove_directory(nested)
-        try FileSystem.remove_directory(root + "/a")
-        try FileSystem.remove_directory(root)
+        try FileSystem.remove_file(source) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_file(renamed) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(empty) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(nested) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(root + "/a") else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(root) else error { return Result<void,Error>.failure(error) }
         return Result<void, Error>.success()
     }
 
-    match run() {
+    match (try run()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }

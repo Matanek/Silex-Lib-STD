@@ -9,7 +9,7 @@ let system_readlink = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>, C
 let system_getpid = C.function<func() C.SignedSize>(library:Boundary.System, name:"getpid")
 
 func arguments() str[]? {
-    match File.read_all("/proc/self/cmdline", 0x10_0000) {
+    match (try File.read_all("/proc/self/cmdline", 0x10_0000)) {
         failure(error) => { return null }
         success(bytes) => { return split_arguments(bytes) }
     }
@@ -69,7 +69,7 @@ func text_at(address:uint, count:int) str {
 }
 
 func decode_valid(bytes:@uint8[..]) str {
-    match UTF8.decode(bytes) {
+    match (try UTF8.decode(bytes)) {
         success(text) => { return text }
         failure(error) => { panic("system process text contains invalid UTF-8") }
     }

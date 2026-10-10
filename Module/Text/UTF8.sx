@@ -55,38 +55,38 @@ public func decode(values:@uint8[..]) Result<str, DecodeError> {
         } elif first >= 240 && first <= 244 {
             length = 4
         } elif first == 192 || first == 193 {
-            return decode_failure(DecodeErrorKind.overlong_sequence(), index)
+            return (try decode_failure(DecodeErrorKind.overlong_sequence(), index))
         } elif first >= 245 && first <= 247 {
-            return decode_failure(DecodeErrorKind.out_of_range(), index)
+            return (try decode_failure(DecodeErrorKind.out_of_range(), index))
         } else {
-            return decode_failure(DecodeErrorKind.invalid_leading_byte(), index)
+            return (try decode_failure(DecodeErrorKind.invalid_leading_byte(), index))
         }
         if index + length > values.count() {
-            return decode_failure(DecodeErrorKind.truncated_sequence(), index)
+            return (try decode_failure(DecodeErrorKind.truncated_sequence(), index))
         }
         var continuation_index = 1
         while continuation_index < length {
             let continuation:uint8 = values[index + continuation_index]
             if continuation < 128 || continuation > 191 {
-                return decode_failure(
+                return (try decode_failure(
                     DecodeErrorKind.invalid_continuation(),
                     index + continuation_index
-                )
+                ))
             }
             continuation_index++
         }
         let second:uint8 = values[index + 1]
         if first == 224 && second < 160 {
-            return decode_failure(DecodeErrorKind.overlong_sequence(), index)
+            return (try decode_failure(DecodeErrorKind.overlong_sequence(), index))
         }
         if first == 237 && second >= 160 {
-            return decode_failure(DecodeErrorKind.surrogate(), index)
+            return (try decode_failure(DecodeErrorKind.surrogate(), index))
         }
         if first == 240 && second < 144 {
-            return decode_failure(DecodeErrorKind.overlong_sequence(), index)
+            return (try decode_failure(DecodeErrorKind.overlong_sequence(), index))
         }
         if first == 244 && second > 143 {
-            return decode_failure(DecodeErrorKind.out_of_range(), index)
+            return (try decode_failure(DecodeErrorKind.out_of_range(), index))
         }
         index += length
     }

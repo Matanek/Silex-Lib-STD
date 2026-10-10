@@ -7,7 +7,7 @@ opérations nommées selon l’intention : `match` pour le texte complet,
 ```sx
 use STD.Regex
 
-let identifier = try Regex.compile("[A-Za-z_][A-Za-z0-9_]*")
+let identifier = Regex.compile("[A-Za-z_][A-Za-z0-9_]*")
 if identifier.match("silex_value") { print("valid identifier") }
 ```
 
@@ -40,7 +40,7 @@ if Regex.Presets.digit().match("７") { print("one Unicode digit") }
 Les captures gardent leur texte et leur position :
 
 ```sx
-let pair = try Regex.compile("(?<key>\\w+)=(?<value>\\w+)")
+let pair = Regex.compile("(?<key>\\w+)=(?<value>\\w+)")
 if found = pair.first("language=Silex") {
     if value = found.capture("value") { print(value.text()) }
 }

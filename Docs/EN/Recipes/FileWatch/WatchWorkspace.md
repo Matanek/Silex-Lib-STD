@@ -21,10 +21,10 @@ func describe(event:FileWatch.Event) {
 }
 
 func main() {
-    match FileWatch.open(".", FileWatch.Options(recursive:true)) {
+    match (try FileWatch.open(".", FileWatch.Options(recursive:true))) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success(var watcher) => {
-            match watcher.next(0) {
+            match (try watcher.next(0)) {
                 failure(error) => { panic(error.operation + ": " + error.detail) }
                 success(event) => { if value = event { describe(value) } }
             }

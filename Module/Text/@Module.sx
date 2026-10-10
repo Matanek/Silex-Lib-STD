@@ -366,7 +366,7 @@ func final_sigma(values:uint32[], index:int) bool {
 
 func encoded(values:uint32[]) str {
     let view = @values[0:values.count()]
-    match UTF8.from_scalars(view) {
+    match (try UTF8.from_scalars(view)) {
         success(text) => { return text }
         failure(error) => { panic("Unicode table produced an invalid scalar") }
     }

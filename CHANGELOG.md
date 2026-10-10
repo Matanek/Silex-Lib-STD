@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Adopts one `Result` declaration: an ordinary call returns the value or
+  stops the program on failure; `try call()` keeps the `Result`. Existing calls
+  storing results and propagating failures are made explicit. This revision
+  requires the development toolchain with these `try` semantics; publication
+  must coordinate compiler and package versions.
+
 - `Threading.Executor` explicitly creates its own runtime before starting workers, following class-field initialization in an explicit constructor.
 
 - Add single-atom negative Regex assertions `(?!atom)` without consuming

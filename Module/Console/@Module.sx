@@ -89,7 +89,7 @@ public func wait_for_enter() {
 
 func decoded(bytes:uint8[]) str {
     let view = @bytes[0:bytes.count()]
-    match decode(view) {
+    match (try decode(view)) {
         success(text) => { return text }
         failure(error) => { panic("console input is not valid UTF-8") }
     }

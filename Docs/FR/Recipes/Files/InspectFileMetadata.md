@@ -9,10 +9,10 @@ use STD.FileSystem
 
 func inspect() Result<void, Error> {
     let path = "metadata-sample.txt"
-    try File.write_all(path, "Silex")
-    let followed = try FileSystem.metadata(path)
-    let direct = try FileSystem.symbolic_link_metadata(path)
-    let canonical = try FileSystem.canonicalize(path)
+    try File.write_all(path, "Silex") else error { return Result<void,Error>.failure(error) }
+    let followed = try FileSystem.metadata(path) else error { return Result<void,Error>.failure(error) }
+    let direct = try FileSystem.symbolic_link_metadata(path) else error { return Result<void,Error>.failure(error) }
+    let canonical = try FileSystem.canonicalize(path) else error { return Result<void,Error>.failure(error) }
     print("Canonical path: $(canonical)")
     print("Size: $(followed.size) bytes")
     print("Readonly: $(direct.readonly)")
@@ -20,7 +20,7 @@ func inspect() Result<void, Error> {
 }
 
 func main() {
-    match inspect() {
+    match (try inspect()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }

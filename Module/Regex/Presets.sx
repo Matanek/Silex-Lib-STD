@@ -1,7 +1,7 @@
 use STD.Regex
 
 func compiled(pattern:str) Regex {
-    match Regex.compile(pattern) {
+    match (try Regex.compile(pattern)) {
         success(expression) => { return expression }
         failure(error) => { panic("invalid built-in Regex preset: $(error.detail)") }
     }

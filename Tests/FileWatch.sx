@@ -8,17 +8,17 @@ test "observe recursive workspace changes" {
         let root = "/private/tmp/silex-std-file-watch-test"
         let nested = root + "/sources"
         let source = nested + "/Main.sx"
-        let ignored_source = FileSystem.remove_file(source)
-        let ignored_nested = FileSystem.remove_directory(nested)
-        let ignored_root = FileSystem.remove_directory(root)
-        try FileSystem.create_directories(nested)
+        let ignored_source = (try FileSystem.remove_file(source))
+        let ignored_nested = (try FileSystem.remove_directory(nested))
+        let ignored_root = (try FileSystem.remove_directory(root))
+        try FileSystem.create_directories(nested) else error { return Result<void,Error>.failure(error) }
 
-        var watcher = try FileWatch.open(root, FileWatch.Options(recursive:true))
-        try File.write_all(source, "func main() {}")
+        var watcher = try FileWatch.open(root, FileWatch.Options(recursive:true)) else error { return Result<void,Error>.failure(error) }
+        try File.write_all(source, "func main() {}") else error { return Result<void,Error>.failure(error) }
         var observed = false
         var attempts = 0
         while !observed && attempts < 30 {
-            let next = try watcher.next(100)
+            let next = try watcher.next(100) else error { return Result<void,Error>.failure(error) }
             if event = next {
                 match event {
                     rescan_required => { observed = true }
@@ -36,14 +36,14 @@ test "observe recursive workspace changes" {
             attempts++
         }
         watcher.close()
-        try FileSystem.remove_file(source)
-        try FileSystem.remove_directory(nested)
-        try FileSystem.remove_directory(root)
+        try FileSystem.remove_file(source) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(nested) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(root) else error { return Result<void,Error>.failure(error) }
         assert(observed, "recursive file watch event")
         return Result<void, Error>.success()
     }
 
-    match run() {
+    match (try run()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }
@@ -55,20 +55,20 @@ test "limit non-recursive watches to direct children" {
         let nested = root + "/nested"
         let nested_file = nested + "/ignored.txt"
         let direct_file = root + "/observed.txt"
-        let ignored_nested_file = FileSystem.remove_file(nested_file)
-        let ignored_direct_file = FileSystem.remove_file(direct_file)
-        let ignored_nested = FileSystem.remove_directory(nested)
-        let ignored_root = FileSystem.remove_directory(root)
-        try FileSystem.create_directories(nested)
+        let ignored_nested_file = (try FileSystem.remove_file(nested_file))
+        let ignored_direct_file = (try FileSystem.remove_file(direct_file))
+        let ignored_nested = (try FileSystem.remove_directory(nested))
+        let ignored_root = (try FileSystem.remove_directory(root))
+        try FileSystem.create_directories(nested) else error { return Result<void,Error>.failure(error) }
 
-        var watcher = try FileWatch.open(root, FileWatch.Options(recursive:false))
-        try File.write_all(nested_file, "nested")
-        try File.write_all(direct_file, "direct")
+        var watcher = try FileWatch.open(root, FileWatch.Options(recursive:false)) else error { return Result<void,Error>.failure(error) }
+        try File.write_all(nested_file, "nested") else error { return Result<void,Error>.failure(error) }
+        try File.write_all(direct_file, "direct") else error { return Result<void,Error>.failure(error) }
         var observed_direct = false
         var observed_nested = false
         var attempts = 0
         while !observed_direct && attempts < 30 {
-            let next = try watcher.next(100)
+            let next = try watcher.next(100) else error { return Result<void,Error>.failure(error) }
             if event = next {
                 match event {
                     rescan_required => { observed_direct = true }
@@ -81,16 +81,16 @@ test "limit non-recursive watches to direct children" {
             attempts++
         }
         watcher.close()
-        try FileSystem.remove_file(nested_file)
-        try FileSystem.remove_file(direct_file)
-        try FileSystem.remove_directory(nested)
-        try FileSystem.remove_directory(root)
+        try FileSystem.remove_file(nested_file) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_file(direct_file) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(nested) else error { return Result<void,Error>.failure(error) }
+        try FileSystem.remove_directory(root) else error { return Result<void,Error>.failure(error) }
         assert(!observed_nested, "non-recursive watch excludes descendants")
         assert(observed_direct, "non-recursive watch includes direct children")
         return Result<void, Error>.success()
     }
 
-    match run() {
+    match (try run()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }
@@ -99,24 +99,24 @@ test "limit non-recursive watches to direct children" {
 test "validate watcher timeout and closed state" {
     func run() Result<void, Error> {
         let root = "/private/tmp/silex-std-file-watch-state-test"
-        let ignored_root = FileSystem.remove_directory(root)
-        try FileSystem.create_directory(root)
-        var watcher = try FileWatch.open(root, FileWatch.Options(recursive:false))
-        match watcher.next(-1) {
+        let ignored_root = (try FileSystem.remove_directory(root))
+        try FileSystem.create_directory(root) else error { return Result<void,Error>.failure(error) }
+        var watcher = try FileWatch.open(root, FileWatch.Options(recursive:false)) else error { return Result<void,Error>.failure(error) }
+        match (try watcher.next(-1)) {
             success(event) => { panic("negative timeout was accepted") }
             failure(error) => { assert(error.operation == "file_watch.next", "negative timeout operation") }
         }
         watcher.close()
         watcher.close()
-        match watcher.next(0) {
+        match (try watcher.next(0)) {
             success(event) => { panic("closed watcher was polled") }
             failure(error) => { assert(error.operation == "file_watch.next", "closed watcher operation") }
         }
-        try FileSystem.remove_directory(root)
+        try FileSystem.remove_directory(root) else error { return Result<void,Error>.failure(error) }
         return Result<void, Error>.success()
     }
 
-    match run() {
+    match (try run()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }

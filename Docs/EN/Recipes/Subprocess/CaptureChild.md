@@ -10,7 +10,7 @@ use STD.Text.UTF8
 
 func print_output(output:Subprocess.Output) {
     let bytes = @output.standard_output[0:output.standard_output.count()]
-    match UTF8.decode(bytes) {
+    match (try UTF8.decode(bytes)) {
         failure(error) => { panic("Child output was not UTF-8") }
         success(text) => { Console.write(text) }
     }
@@ -26,14 +26,14 @@ func parent(executable:str) {
         standard_input:[],
         maximum_output_bytes:4096
     )
-    match Subprocess.run(command) {
+    match (try Subprocess.run(command)) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success(output) => { print_output(output) }
     }
 }
 
 func start_parent() {
-    match Process.executable_path() {
+    match (try Process.executable_path()) {
         failure(error) => { panic(error.detail) }
         success(executable) => { parent(executable) }
     }
@@ -48,7 +48,7 @@ func dispatch(arguments:str[]) {
 }
 
 func main() {
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => { dispatch(arguments) }
     }

@@ -150,7 +150,7 @@ public class Watcher {
 
     private func accepts(path:Path) bool {
         if self.recursive || path == self.root { return true }
-        match Paths.parent(path) {
+        match (try Paths.parent(path)) {
             failure(error) => { return false }
             success(parent) => {
                 if value = parent { return value == self.root }
@@ -165,8 +165,8 @@ public class Watcher {
 }
 
 public func open(path:Path, options:Options) Result<Watcher, Error> {
-    let root = try FileSystem.canonicalize(path)
-    let metadata = try FileSystem.metadata(root)
+    let root = try FileSystem.canonicalize(path) else error { return Result<Watcher,Error>.failure(error) }
+    let metadata = try FileSystem.metadata(root) else error { return Result<Watcher,Error>.failure(error) }
     match metadata.kind {
         directory => {}
         else => { return Result<Watcher, Error>.failure(watch_error(Error.Kind.not_directory(), "file_watch.open", root, "watched path must be a directory")) }
@@ -180,20 +180,20 @@ public func open(path:Path, options:Options) Result<Watcher, Error> {
         watcher.close()
         return Result<Watcher, Error>.failure(watch_error(Error.Kind.other(), "file_watch.open", root, "system directory watch creation failed"))
     }
-    if options.recursive { try add_child_directories(watcher, root) }
+    if options.recursive { try add_child_directories(watcher, root) else error { return Result<Watcher,Error>.failure(error) } }
     return Result<Watcher, Error>.success(watcher)
 }
 
 func add_child_directories(watcher:Watcher, path:Path) Result<void, Error> {
-    let entries = try FileSystem.list(path)
+    let entries = try FileSystem.list(path) else error { return Result<void,Error>.failure(error) }
     for entry in entries {
         match entry.kind {
             directory => {
-                let child = try Paths.join(path, entry.name)
+                let child = try Paths.join(path, entry.name) else error { return Result<void,Error>.failure(error) }
                 if !Platform.add_directory(watcher, child) {
                     return Result<void, Error>.failure(watch_error(Error.Kind.other(), "file_watch.open", child, "system directory watch creation failed"))
                 }
-                try add_child_directories(watcher, child)
+                try add_child_directories(watcher, child) else error { return Result<void,Error>.failure(error) }
             }
             else => {}
         }

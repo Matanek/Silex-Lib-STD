@@ -35,7 +35,7 @@ public func join(base:Path, child:Path) Result<Path, Error> {
         return Result<Path, Error>.failure(path_error("path.join", child, "invalid child: " + parsed_child.detail))
     }
     if parsed_child.absolute { return Result<Path, Error>.success(render(parsed_child)) }
-    return normalize(render(parsed_base) + "/" + child)
+    return (try normalize(render(parsed_base) + "/" + child))
 }
 
 public func parent(path:Path) Result<Path?, Error> {

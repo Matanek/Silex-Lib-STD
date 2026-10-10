@@ -25,7 +25,7 @@ test "capture child input and output" {
             standard_input:[111 as uint8, 107 as uint8, 10 as uint8],
             maximum_output_bytes:1024
         )
-        match Subprocess.run(command) {
+        match (try Subprocess.run(command)) {
             failure(error) => { panic(error.detail) }
             success(output) => { validate(output) }
         }
@@ -38,13 +38,13 @@ test "capture child input and output" {
             Console.write_error("err")
             return
         }
-        match Process.executable_path() {
+        match (try Process.executable_path()) {
             failure(error) => { panic(error.detail) }
             success(executable) => { run_parent(executable) }
         }
     }
 
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => { dispatch(arguments) }
     }
@@ -66,19 +66,19 @@ test "stream child input and output before exit" {
             inherit_environment:true,
             environment:[]
         )
-        var process = try Subprocess.spawn(command)
+        var process = try Subprocess.spawn(command) else error { return Result<void,Error>.failure(error) }
         let input = UTF8.bytes("ready\n")
         let input_view = @input[0:input.count()]
-        let written = try process.write_standard_input(input_view)
+        let written = try process.write_standard_input(input_view) else error { return Result<void,Error>.failure(error) }
         assert(written == input.count(), "interactive child input")
-        try process.close_standard_input()
+        try process.close_standard_input() else error { return Result<void,Error>.failure(error) }
 
         var standard_output:uint8[] = []
         var standard_error:uint8[] = []
         var exited = false
         var attempts = 0
         while !exited && attempts < 20 {
-            let next = try process.next_event(250)
+            let next = try process.next_event(250) else error { return Result<void,Error>.failure(error) }
             if event = next {
                 match event {
                     output(stream, bytes) => {
@@ -101,11 +101,11 @@ test "stream child input and output before exit" {
         assert(exited, "interactive child completion")
         let output_view = @standard_output[0:standard_output.count()]
         let error_view = @standard_error[0:standard_error.count()]
-        match UTF8.decode(output_view) {
+        match (try UTF8.decode(output_view)) {
             failure(error) => { panic("interactive standard output is invalid UTF-8") }
             success(text) => { assert(text == "stream:ready", "interactive standard output") }
         }
-        match UTF8.decode(error_view) {
+        match (try UTF8.decode(error_view)) {
             failure(error) => { panic("interactive standard error is invalid UTF-8") }
             success(text) => { assert(text == "diagnostic", "interactive standard error") }
         }
@@ -113,15 +113,15 @@ test "stream child input and output before exit" {
     }
 
     func dispatch() Result<void, Error> {
-        let arguments = try Process.arguments()
+        let arguments = try Process.arguments() else error { return Result<void,Error>.failure(error) }
         if arguments.count() > 1 && arguments[1] == "--subprocess-stream-child" {
             child()
             return Result<void, Error>.success()
         }
-        return parent(try Process.executable_path())
+        return (try parent(try Process.executable_path() else error { return Result<void,Error>.failure(error) }))
     }
 
-    match dispatch() {
+    match (try dispatch()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }
@@ -134,14 +134,14 @@ test "environment changes stay in the child" {
             signaled(signal) => { panic("environment probe was signaled") }
         }
         let view = @output.standard_output[0:output.standard_output.count()]
-        match UTF8.decode(view) {
+        match (try UTF8.decode(view)) {
             failure(error) => { panic("environment probe returned invalid UTF-8") }
             success(text) => { assert(text == expected, "subprocess environment is scoped to the child") }
         }
     }
 
     func expect_environment_output(command:Subprocess.Command, expected:str) {
-        match Subprocess.run(command) {
+        match (try Subprocess.run(command)) {
             failure(error) => { panic(error.detail) }
             success(output) => { validate_environment_output(output, expected) }
         }
@@ -199,8 +199,8 @@ test "terminal child uses the portable terminal transport" {
             environment:[],
             size:Subprocess.TerminalSize(columns:80, rows:24)
         )
-        var terminal = try Subprocess.spawn_terminal(command)
-        try terminal.resize(Subprocess.TerminalSize(columns:100, rows:30))
+        var terminal = try Subprocess.spawn_terminal(command) else error { return Result<void,Error>.failure(error) }
+        try terminal.resize(Subprocess.TerminalSize(columns:100, rows:30)) else error { return Result<void,Error>.failure(error) }
         let input = match System.platform() {
             windows => "ready\r\n"
             macos => "ready\r"
@@ -208,12 +208,12 @@ test "terminal child uses the portable terminal transport" {
         }
         let input_bytes = UTF8.bytes(input)
         let input_view = @input_bytes[0:input_bytes.count()]
-        assert(try terminal.write(input_view) == input_bytes.count(), "complete terminal input")
+        assert(try terminal.write(input_view) else error { return Result<void,Error>.failure(error) } == input_bytes.count(), "complete terminal input")
         var output:uint8[] = []
         var exited = false
         var attempts = 0
         while !exited && attempts < 40 {
-            let next = try terminal.next_event(250)
+            let next = try terminal.next_event(250) else error { return Result<void,Error>.failure(error) }
             if event = next {
                 match event {
                     output(stream, bytes) => { for byte in bytes { output.append(byte) } }
@@ -233,7 +233,7 @@ test "terminal child uses the portable terminal transport" {
         }
         assert(exited, "terminal child completion")
         let output_view = @output[0:output.count()]
-        match UTF8.decode(output_view) {
+        match (try UTF8.decode(output_view)) {
             failure(error) => { panic("terminal output is invalid UTF-8") }
             success(text) => {
                 match System.platform() {
@@ -247,17 +247,17 @@ test "terminal child uses the portable terminal transport" {
     }
 
     func dispatch() Result<void, Error> {
-        let arguments = try Process.arguments()
+        let arguments = try Process.arguments() else error { return Result<void,Error>.failure(error) }
         if arguments.count() > 1 && arguments[1] == "--subprocess-terminal-child" {
             child()
             return Result<void, Error>.success()
         }
         match System.platform() {
-            windows => { return parent(try Process.executable_path(), ["--subprocess-terminal-child"]) }
-            macos => { return parent(try Process.executable_path(), ["--subprocess-terminal-child"]) }
-            linux => { return parent(try Process.executable_path(), ["--subprocess-terminal-child"]) }
+            windows => { return (try parent(try Process.executable_path() else error { return Result<void,Error>.failure(error) }, ["--subprocess-terminal-child"])) }
+            macos => { return (try parent(try Process.executable_path() else error { return Result<void,Error>.failure(error) }, ["--subprocess-terminal-child"])) }
+            linux => { return (try parent(try Process.executable_path() else error { return Result<void,Error>.failure(error) }, ["--subprocess-terminal-child"])) }
         }
     }
 
-    match dispatch() { failure(error) => { panic(error.operation + ": " + error.detail) }; success => {} }
+    match (try dispatch()) { failure(error) => { panic(error.operation + ": " + error.detail) }; success => {} }
 }

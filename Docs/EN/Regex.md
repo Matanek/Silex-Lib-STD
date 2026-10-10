@@ -7,7 +7,7 @@ Unicode-scalar position and a readable detail.
 ```sx
 use STD.Regex
 
-let identifier = try Regex.compile("[A-Za-z_][A-Za-z0-9_]*")
+let identifier = Regex.compile("[A-Za-z_][A-Za-z0-9_]*")
 if identifier.match("silex_value") { print("valid identifier") }
 ```
 
@@ -70,7 +70,7 @@ numbered from one; `(?<name>...)` also makes a capture accessible by name and
 `(?:...)` groups without capturing.
 
 ```sx
-let pair = try Regex.compile("(?<key>\\w+)=(?<value>\\w+)")
+let pair = Regex.compile("(?<key>\\w+)=(?<value>\\w+)")
 if found = pair.first("language=Silex") {
     if value = found.capture("value") { print(value.text()) }
 }

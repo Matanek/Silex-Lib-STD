@@ -98,7 +98,7 @@ func hexadecimal(bytes:@uint8[..]) str {
         encoded.append(hex_digit(byte >> 4))
         encoded.append(hex_digit(byte & 15))
     }
-    match utf8_decode(@encoded[0:encoded.count()]) {
+    match (try utf8_decode(@encoded[0:encoded.count()])) {
         success(text) => { return text }
         failure(error) => { panic("crypto hexadecimal encoding failed") }
     }

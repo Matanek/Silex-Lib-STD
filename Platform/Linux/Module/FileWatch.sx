@@ -60,7 +60,7 @@ func poll(watcher:FileWatch.Watcher, timeout_milliseconds:int) bool {
                 if length > 0 {
                     let name = terminated_text(event + 16, length)
                     if name.count() > 0 {
-                        match Paths.join(base, name) {
+                        match (try Paths.join(base, name)) {
                             failure(error) => { return false }
                             success(joined) => { path = joined }
                         }
@@ -93,13 +93,13 @@ func close(watcher:FileWatch.Watcher) {
 
 func add_tree(watcher:FileWatch.Watcher, path:str) {
     if !add_directory(watcher, path) { watcher.enqueue_rescan(); return }
-    match FileSystem.list(path) {
+    match (try FileSystem.list(path)) {
         failure(error) => { watcher.enqueue_rescan() }
         success(entries) => {
             for entry in entries {
                 match entry.kind {
                     directory => {
-                        match Paths.join(path, entry.name) {
+                        match (try Paths.join(path, entry.name)) {
                             failure(error) => { watcher.enqueue_rescan() }
                             success(child) => { add_tree(watcher, child) }
                         }
@@ -118,7 +118,7 @@ func terminated_text(address:uint, maximum:int) str {
         let byte = C.load<uint8>(address, index as uint)
         if byte == 0 {
             let view = @bytes[0:bytes.count()]
-            match UTF8.decode(view) {
+            match (try UTF8.decode(view)) {
                 success(text) => { return text }
                 failure(error) => { panic("file watch path contains invalid UTF-8") }
             }
@@ -127,7 +127,7 @@ func terminated_text(address:uint, maximum:int) str {
         index++
     }
     let view = @bytes[0:bytes.count()]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return text }
         failure(error) => { panic("file watch path contains invalid UTF-8") }
     }

@@ -7,7 +7,7 @@ use STD.Text.UTF8
 
 func rebuild(text:str) str {
     let scalars = UTF8.scalars(text)
-    match UTF8.from_scalars(@scalars[0:scalars.count()]) {
+    match (try UTF8.from_scalars(@scalars[0:scalars.count()])) {
         failure(error) => { panic("Invalid scalar at $(error.scalar_index)") }
         success(rebuilt) => { return rebuilt }
     }
@@ -18,7 +18,7 @@ func main() {
     let source = "Silex é 😀"
     let encoded = UTF8.bytes(source)
     let view = @encoded[0:encoded.count()]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         failure(error) => { panic("Invalid UTF-8 at byte $(error.byte_offset)") }
         success(text) => { print(rebuild(text)) }
     }

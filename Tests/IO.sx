@@ -15,26 +15,26 @@ test "copy between public file streams" {
             creation:File.Creation.create_or_truncate(),
             append:false
         )
-        var input:OpenFile = try File.open(source, read_options)
-        var output:OpenFile = try File.open(destination, write_options)
-        let count = try IO.copy<OpenFile, OpenFile>(input, output, 1024)
-        try output.flush()
-        try File.close(move input)
-        try File.close(move output)
+        var input:OpenFile = try File.open(source, read_options) else error { return Result<int,Error>.failure(error) }
+        var output:OpenFile = try File.open(destination, write_options) else error { return Result<int,Error>.failure(error) }
+        let count = try IO.copy<OpenFile, OpenFile>(input, output, 1024) else error { return Result<int,Error>.failure(error) }
+        try output.flush() else error { return Result<int,Error>.failure(error) }
+        try File.close(move input) else error { return Result<int,Error>.failure(error) }
+        try File.close(move output) else error { return Result<int,Error>.failure(error) }
         return Result<int, Error>.success(count)
     }
 
     let source = "/private/tmp/silex-std-io-source.txt"
     let destination = "/private/tmp/silex-std-io-destination.txt"
-    match File.write_all(source, "stream copy") {
+    match (try File.write_all(source, "stream copy")) {
         failure(error) => { panic(error.detail) }
         success => {}
     }
-    match copy_stream(source, destination) {
+    match (try copy_stream(source, destination)) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success(count) => { assert(count == 11, "copied byte count") }
     }
-    match File.read_text(destination, 1024) {
+    match (try File.read_text(destination, 1024)) {
         failure(error) => { panic(error.detail) }
         success(text) => { assert(text == "stream copy", "copied file contents") }
     }
@@ -48,28 +48,28 @@ test "public stream algorithms" {
             creation:File.Creation.create_or_truncate(),
             append:false
         )
-        var output:OpenFile = try File.open(path, write_options)
+        var output:OpenFile = try File.open(path, write_options) else error { return Result<void,Error>.failure(error) }
         let payload:uint8[5] = [83, 105, 108, 101, 120]
-        try IO.write_all<OpenFile>(output, @payload[0:payload.count()])
-        try File.close(move output)
+        try IO.write_all<OpenFile>(output, @payload[0:payload.count()]) else error { return Result<void,Error>.failure(error) }
+        try File.close(move output) else error { return Result<void,Error>.failure(error) }
 
         let read_options = File.OpenOptions(
             access:File.Access.read(),
             creation:File.Creation.open_existing(),
             append:false
         )
-        var input:OpenFile = try File.open(path, read_options)
+        var input:OpenFile = try File.open(path, read_options) else error { return Result<void,Error>.failure(error) }
         var header:uint8[2] = [0, 0]
-        try IO.read_exact<OpenFile>(input, &header[0:header.count()])
+        try IO.read_exact<OpenFile>(input, &header[0:header.count()]) else error { return Result<void,Error>.failure(error) }
         assert(header[0] == 83 && header[1] == 105, "exact stream prefix")
-        let remainder = try IO.read_to_end<OpenFile>(input, 3)
+        let remainder = try IO.read_to_end<OpenFile>(input, 3) else error { return Result<void,Error>.failure(error) }
         assert(remainder.count() == 3, "bounded stream remainder")
         assert(remainder[0] == 108 && remainder[2] == 120, "stream remainder contents")
-        try File.close(move input)
+        try File.close(move input) else error { return Result<void,Error>.failure(error) }
         return Result<void, Error>.success()
     }
 
-    match run() {
+    match (try run()) {
         failure(error) => { panic(error.operation + ": " + error.detail) }
         success => {}
     }

@@ -9,7 +9,7 @@ public struct KeyPair {
 public func generate_key_pair() KeyPair {
     while true {
         let random = Crypto.random_bytes(32)
-        match key_pair(@random[0:random.count()]) {
+        match (try key_pair(@random[0:random.count()])) {
             success(pair) => { return pair }
             failure(error) => {}
         }
@@ -18,7 +18,7 @@ public func generate_key_pair() KeyPair {
 }
 
 public func key_pair(secret:@uint8[..]) Result<KeyPair, Crypto.Error> {
-    match public_key(secret) {
+    match (try public_key(secret)) {
         success(value) => {
             var secret_copy:uint8[32]
             var index = 0

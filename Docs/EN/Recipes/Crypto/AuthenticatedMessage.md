@@ -11,8 +11,8 @@ use STD.Crypto
 func exchange() Result<void, Crypto.Error> {
     let alice = X25519.generate_key_pair()
     let bob = X25519.generate_key_pair()
-    let alice_shared = try X25519.shared_secret(@alice.secret[0:32], @bob.public_key[0:32])
-    let bob_shared = try X25519.shared_secret(@bob.secret[0:32], @alice.public_key[0:32])
+    let alice_shared = try X25519.shared_secret(@alice.secret[0:32], @bob.public_key[0:32]) else error { return Result<void,Crypto.Error>.failure(error) }
+    let bob_shared = try X25519.shared_secret(@bob.secret[0:32], @alice.public_key[0:32]) else error { return Result<void,Crypto.Error>.failure(error) }
 
     let salt:uint8[] = [115, 105, 108, 101, 120]
     let context:uint8[] = [100, 101, 109, 111]
@@ -21,13 +21,13 @@ func exchange() Result<void, Crypto.Error> {
         @salt[0:salt.count()],
         @context[0:context.count()],
         32
-    )
+    ) else error { return Result<void,Crypto.Error>.failure(error) }
     let bob_key = try HKDF.derive_sha256(
         @bob_shared[0:32],
         @salt[0:salt.count()],
         @context[0:context.count()],
         32
-    )
+    ) else error { return Result<void,Crypto.Error>.failure(error) }
 
     // A real protocol must never reuse a nonce with the same key.
     let nonce:uint8[12] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
@@ -38,13 +38,13 @@ func exchange() Result<void, Crypto.Error> {
         @nonce[0:12],
         @associated[0:associated.count()],
         @message[0:message.count()]
-    )
+    ) else error { return Result<void,Crypto.Error>.failure(error) }
     let opened = try ChaCha20Poly1305.open(
         @bob_key[0:bob_key.count()],
         @nonce[0:12],
         @associated[0:associated.count()],
         @sealed[0:sealed.count()]
-    )
+    ) else error { return Result<void,Crypto.Error>.failure(error) }
 
     assert(opened.count() == message.count())
     print("authenticated $(opened.count()) bytes")
@@ -52,7 +52,7 @@ func exchange() Result<void, Crypto.Error> {
 }
 
 func main() {
-    match exchange() {
+    match (try exchange()) {
         success => {}
         failure(error) => { panic(error.operation + ": " + error.detail) }
     }

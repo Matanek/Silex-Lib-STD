@@ -42,7 +42,7 @@ public class Stream:IO.Reader, IO.Writer {
         if self.closed {
             return Result<int, StandardError>.failure(standard_error("tls.read", "TLS stream is closed"))
         }
-        match Platform.read(self.context, buffer) {
+        match (try Platform.read(self.context, buffer)) {
             success(count) => { return Result<int, StandardError>.success(count) }
             failure(status) => {
                 return Result<int, StandardError>.failure(standard_error(
@@ -57,7 +57,7 @@ public class Stream:IO.Reader, IO.Writer {
         if self.closed {
             return Result<int, StandardError>.failure(standard_error("tls.write", "TLS stream is closed"))
         }
-        match Platform.write(self.context, buffer) {
+        match (try Platform.write(self.context, buffer)) {
             success(count) => { return Result<int, StandardError>.success(count) }
             failure(status) => {
                 return Result<int, StandardError>.failure(standard_error(
@@ -79,7 +79,7 @@ public class Stream:IO.Reader, IO.Writer {
             while index < count {
                 var byte:uint8[1] = [0]
                 var view = &byte[0:1]
-                match transport.read(view) {
+                match (try transport.read(view)) {
                     success(read) => {
                         if read == 0 { return Result<uint8[], StandardError>.success(result) }
                         result.append(view[0])
@@ -96,7 +96,7 @@ public class Stream:IO.Reader, IO.Writer {
     package func transport_write(bytes:uint8[]) Result<int, StandardError> {
         if var transport = self.transport {
             if bytes.count() == 0 { return Result<int, StandardError>.success(0) }
-            return transport.write(@bytes[0:bytes.count()])
+            return (try transport.write(@bytes[0:bytes.count()]))
         }
         return Result<int, StandardError>.failure(standard_error("tls.transport.write", "TCP transport is closed"))
     }
@@ -104,7 +104,7 @@ public class Stream:IO.Reader, IO.Writer {
     package func close_transport() {
         if var transport = self.transport {
             self.transport = null
-            match TCP.close(move transport) { success => {}; failure(error) => {} }
+            match (try TCP.close(move transport)) { success => {}; failure(error) => {} }
         }
     }
 
@@ -130,7 +130,7 @@ public func default_connect_options() ConnectOptions {
 public func available() bool { return Platform.available() }
 
 public func connect(host:str, port:uint16) Result<Stream, Error> {
-    return connect(host, port, default_connect_options())
+    return (try connect(host, port, default_connect_options()))
 }
 
 public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream, Error> {
@@ -141,15 +141,15 @@ public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream
             "TLS has no certificate-verifying provider for this target"
         ))
     }
-    match TCP.connect(host, port, TCP.ConnectOptions(
+    match (try TCP.connect(host, port, TCP.ConnectOptions(
         connect_timeout_milliseconds:options.connect_timeout_milliseconds,
         stream:TCP.StreamOptions(
             read_timeout_milliseconds:options.read_timeout_milliseconds,
             write_timeout_milliseconds:options.write_timeout_milliseconds
         )
-    )) {
+    ))) {
         success(transport) => {
-            return open(transport, host)
+            return (try open(transport, host))
         }
         failure(error) => {
             return Result<Stream, Error>.failure(failure(ErrorKind.network, host, error.detail))
@@ -158,7 +158,7 @@ public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream
 }
 
 public func connect_endpoint(endpoint:Network.Endpoint, host:str) Result<Stream, Error> {
-    return connect_endpoint(endpoint, host, default_connect_options())
+    return (try connect_endpoint(endpoint, host, default_connect_options()))
 }
 
 public func connect_endpoint(
@@ -173,14 +173,14 @@ public func connect_endpoint(
             "TLS has no certificate-verifying provider for this target"
         ))
     }
-    match TCP.connect(endpoint, TCP.ConnectOptions(
+    match (try TCP.connect(endpoint, TCP.ConnectOptions(
         connect_timeout_milliseconds:options.connect_timeout_milliseconds,
         stream:TCP.StreamOptions(
             read_timeout_milliseconds:options.read_timeout_milliseconds,
             write_timeout_milliseconds:options.write_timeout_milliseconds
         )
-    )) {
-        success(transport) => { return open(transport, host) }
+    ))) {
+        success(transport) => { return (try open(transport, host)) }
         failure(error) => {
             return Result<Stream, Error>.failure(failure(ErrorKind.network, host, error.detail))
         }
@@ -192,7 +192,7 @@ public func connect_endpoint(
 // CONNECT tunnel or another transport-level negotiation.
 public func open(transport:TCP.Stream, host:str) Result<Stream, Error> {
     if !Platform.available() {
-        match TCP.close(move transport) { success => {}; failure(error) => {} }
+        match (try TCP.close(move transport)) { success => {}; failure(error) => {} }
         return Result<Stream, Error>.failure(failure(
             ErrorKind.unsupported_platform,
             host,
@@ -200,7 +200,7 @@ public func open(transport:TCP.Stream, host:str) Result<Stream, Error> {
         ))
     }
     var stream = Stream(transport)
-    match Platform.open(stream, host) {
+    match (try Platform.open(stream, host)) {
         success(context) => {
             stream.set_context(context)
             return Result<Stream, Error>.success(stream)

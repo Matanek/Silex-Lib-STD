@@ -375,7 +375,7 @@ func quote(value:str) str {
     append_byte(output, 92 as uint8, slashes * 2)
     output.append(34 as uint8)
     let view = @output[0:output.count()]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return text }
         failure(error) => { panic("command-line quoting failed") }
     }

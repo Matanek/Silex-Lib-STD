@@ -149,7 +149,7 @@ func parse_events(watcher:FileWatch.Watcher, count:int) {
             return
         }
         let relative = wide_text(entry + 12, byte_count / 2)
-        match Paths.join(watcher.root_path(), relative) {
+        match (try Paths.join(watcher.root_path(), relative)) {
             failure(error) => { watcher.enqueue_rescan() }
             success(path) => {
                 var kind = 5
@@ -175,7 +175,7 @@ func wide_text(address:uint, count:int) str {
         index++
     }
     let view = @bytes[0:bytes.count()]
-    match Encoding.decode(view, Encoding.Kind.utf16_little_endian()) {
+    match (try Encoding.decode(view, Encoding.Kind.utf16_little_endian())) {
         success(text) => { return text }
         failure(error) => { panic("Windows file watch path contains invalid UTF-16") }
     }

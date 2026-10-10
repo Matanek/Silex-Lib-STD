@@ -110,7 +110,7 @@ func text_at(address:uint, maximum:int) str {
 
 func decode_bytes(bytes:uint8[]) str {
     let view = @bytes[0:bytes.count()]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return text }
         failure(error) => { panic("system filesystem text contains invalid UTF-8") }
     }

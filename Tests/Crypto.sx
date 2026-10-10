@@ -87,7 +87,7 @@ test "negative random byte count fails" {
             exited(code) => { assert(code != 0, "negative crypto byte count fails") }
             signaled(signal) => { panic("negative crypto byte count was signaled") }
         }
-        match UTF8.decode(@output.standard_error[0:output.standard_error.count()]) {
+        match (try UTF8.decode(@output.standard_error[0:output.standard_error.count()])) {
             failure(error) => { panic("crypto failure diagnostic is not UTF-8") }
             success(text) => {
                 assert(
@@ -108,20 +108,20 @@ test "negative random byte count fails" {
             standard_input:[],
             maximum_output_bytes:1024
         )
-        match Subprocess.run(command) {
+        match (try Subprocess.run(command)) {
             failure(error) => { panic(error.detail) }
             success(output) => { verify_negative_output(output) }
         }
     }
 
     func verify_negative_random_count() {
-        match Process.executable_path() {
+        match (try Process.executable_path()) {
             failure(error) => { panic(error.detail) }
             success(executable) => { run_negative_child(executable) }
         }
     }
 
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             if arguments.count() > 1 && arguments[1] == "--negative-random-count" {

@@ -11,7 +11,7 @@ func main() {
         Encoding.Kind.utf16_little_endian()
     )
     if encoding = Encoding.detect_bom(@document[0:document.count()]) {
-        match Encoding.decode(@document[0:document.count()], encoding) {
+        match (try Encoding.decode(@document[0:document.count()], encoding)) {
             failure(error) => {
                 panic("Invalid document at byte $(error.byte_offset)")
             }

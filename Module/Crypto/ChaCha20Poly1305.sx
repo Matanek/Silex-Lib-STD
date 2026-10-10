@@ -7,7 +7,7 @@ public func seal(
     associated_data:@uint8[..],
     plaintext:@uint8[..]
 ) Result<uint8[], Crypto.Error> {
-    match validate_key_and_nonce(key, nonce, "crypto.chacha20_poly1305.seal") {
+    match (try validate_key_and_nonce(key, nonce, "crypto.chacha20_poly1305.seal")) {
         failure(error) => { return Result<uint8[], Crypto.Error>.failure(error) }
         success => {}
     }
@@ -28,7 +28,7 @@ public func open(
     associated_data:@uint8[..],
     sealed:@uint8[..]
 ) Result<uint8[], Crypto.Error> {
-    match validate_key_and_nonce(key, nonce, "crypto.chacha20_poly1305.open") {
+    match (try validate_key_and_nonce(key, nonce, "crypto.chacha20_poly1305.open")) {
         failure(error) => { return Result<uint8[], Crypto.Error>.failure(error) }
         success => {}
     }

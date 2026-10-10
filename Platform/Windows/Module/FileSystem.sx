@@ -118,7 +118,7 @@ func wide_text(address:uint, count:int) str {
         index++
     }
     let view = @bytes[0:bytes.count()]
-    match Encoding.decode(view, Encoding.Kind.utf16_little_endian()) {
+    match (try Encoding.decode(view, Encoding.Kind.utf16_little_endian())) {
         success(text) => { return text }
         failure(error) => { panic("Windows filesystem text contains invalid UTF-16") }
     }

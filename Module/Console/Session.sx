@@ -169,7 +169,7 @@ func character(first:int, alt:bool) KeyEvent {
         bytes.append(next as uint8)
     }
     let view = @bytes[0:bytes.count()]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return KeyEvent(key:Key.character(text), shift:false, control:false, alt:alt) }
         failure(error) => { return unknown(bytes) }
     }

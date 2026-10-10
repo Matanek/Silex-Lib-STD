@@ -41,7 +41,7 @@ public struct UUID {
             encoded.append(hex_digit(byte & 15))
             index++
         }
-        match utf8_decode(@encoded[0:encoded.count()]) {
+        match (try utf8_decode(@encoded[0:encoded.count()])) {
             success(text) => { return text }
             failure(error) => { panic("UUID hexadecimal encoding failed") }
         }

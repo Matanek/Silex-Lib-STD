@@ -15,8 +15,8 @@ public struct Entry {
     let kind:Kind
 }
 
-public func metadata(path:Path) Result<Metadata, Error> { return metadata_impl(path, true, "filesystem.metadata") }
-public func symbolic_link_metadata(path:Path) Result<Metadata, Error> { return metadata_impl(path, false, "filesystem.symbolic_link_metadata") }
+public func metadata(path:Path) Result<Metadata, Error> { return (try metadata_impl(path, true, "filesystem.metadata")) }
+public func symbolic_link_metadata(path:Path) Result<Metadata, Error> { return (try metadata_impl(path, false, "filesystem.symbolic_link_metadata")) }
 
 public func canonicalize(path:Path) Result<Path, Error> {
     if result = Platform.canonicalize(path) { return Result<Path, Error>.success(result) }
@@ -37,7 +37,7 @@ public func create_directory(path:Path) Result<void, Error> {
     return Result<void, Error>.failure(filesystem_error("filesystem.create_directory", path, "system directory creation failed"))
 }
 
-public func create_directories(path:Path) Result<void, Error> { return create_tree(path) }
+public func create_directories(path:Path) Result<void, Error> { return (try create_tree(path)) }
 
 public func remove_file(path:Path) Result<void, Error> {
     if Platform.remove_file(path) { return Result<void, Error>.success() }
@@ -80,8 +80,8 @@ func create_tree(path:Path) Result<void, Error> {
         if Platform.metadata_kind(raw) == 2 { return Result<void, Error>.success() }
         return Result<void, Error>.failure(filesystem_error("filesystem.create_directories", path, "path exists and is not a directory"))
     }
-    let parent = try Paths.parent(path)
-    if value = parent { try create_tree(value) }
+    let parent = try Paths.parent(path) else error { return Result<void,Error>.failure(error) }
+    if value = parent { try create_tree(value) else error { return Result<void,Error>.failure(error) } }
     if Platform.create_directory(path) { return Result<void, Error>.success() }
     return Result<void, Error>.failure(filesystem_error("filesystem.create_directories", path, "system directory creation failed"))
 }

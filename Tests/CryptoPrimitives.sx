@@ -41,7 +41,7 @@ test "derive X25519 keys and RFC 5869 HKDF output" {
         0xca, 0xe6, 0xc2, 0x2c, 0x3e, 0xda, 0xa4, 0x8f,
         0x85, 0x7a, 0xe7, 0x0d, 0xe2, 0xba, 0xae, 0x50
     ]
-    let pair = require_key_pair(X25519.key_pair(@secret[0:32]))
+    let pair = require_key_pair((try X25519.key_pair(@secret[0:32])))
     var index = 0
     while index < 32 {
         assert(pair.public_key[index] == expected_public[index])
@@ -63,12 +63,12 @@ test "derive X25519 keys and RFC 5869 HKDF output" {
         0x34, 0x00, 0x72, 0x08, 0xd5, 0xb8, 0x87, 0x18,
         0x58, 0x65
     ]
-    let derived = require_bytes(HKDF.derive_sha256(
+    let derived = require_bytes((try HKDF.derive_sha256(
         @input[0:input.count()],
         @salt[0:salt.count()],
         @context[0:context.count()],
         42
-    ))
+    )))
     assert(derived.count() == expected.count())
     index = 0
     while index < expected.count() {
@@ -87,19 +87,19 @@ test "authenticate encrypted payloads and reject tampering" {
     let nonce:uint8[12] = [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 7]
     let associated:uint8[] = [83, 84, 68, 67, 1, 0, 0, 7]
     let message:uint8[] = [104, 101, 108, 108, 111]
-    var sealed = require_bytes(ChaCha20Poly1305.seal(
+    var sealed = require_bytes((try ChaCha20Poly1305.seal(
         @key[0:32],
         @nonce[0:12],
         @associated[0:associated.count()],
         @message[0:message.count()]
-    ))
+    )))
     assert(sealed.count() == message.count() + 16)
-    let opened = require_bytes(ChaCha20Poly1305.open(
+    let opened = require_bytes((try ChaCha20Poly1305.open(
         @key[0:32],
         @nonce[0:12],
         @associated[0:associated.count()],
         @sealed[0:sealed.count()]
-    ))
+    )))
     assert(opened.count() == message.count())
     var index = 0
     while index < message.count() {
@@ -108,12 +108,12 @@ test "authenticate encrypted payloads and reject tampering" {
     }
 
     sealed[0] = sealed[0] ^ 1
-    match ChaCha20Poly1305.open(
+    match (try ChaCha20Poly1305.open(
         @key[0:32],
         @nonce[0:12],
         @associated[0:associated.count()],
         @sealed[0:sealed.count()]
-    ) {
+    )) {
         success(value) => { panic("tampered ciphertext should be rejected") }
         failure(error) => {
             assert(error.kind == Crypto.ErrorKind.authentication_failed, error.detail)
@@ -123,19 +123,19 @@ test "authenticate encrypted payloads and reject tampering" {
 
 test "reject invalid primitive parameters explicitly" {
     let short_key:uint8[] = [1, 2, 3]
-    match X25519.public_key(@short_key[0:short_key.count()]) {
+    match (try X25519.public_key(@short_key[0:short_key.count()])) {
         success(value) => { panic("short X25519 key should be rejected") }
         failure(error) => { assert(error.kind == Crypto.ErrorKind.invalid_key) }
     }
 
     let input:uint8[] = [1]
     let empty:uint8[] = []
-    match HKDF.derive_sha256(
+    match (try HKDF.derive_sha256(
         @input[0:input.count()],
         @empty[0:empty.count()],
         @empty[0:empty.count()],
         8_161
-    ) {
+    )) {
         success(value) => { panic("oversized HKDF output should be rejected") }
         failure(error) => { assert(error.kind == Crypto.ErrorKind.invalid_output_size) }
     }
@@ -147,12 +147,12 @@ test "reject invalid primitive parameters explicitly" {
         0, 0, 0, 0, 0, 0, 0, 0
     ]
     let short_nonce:uint8[] = [0]
-    match ChaCha20Poly1305.seal(
+    match (try ChaCha20Poly1305.seal(
         @key[0:32],
         @short_nonce[0:short_nonce.count()],
         @empty[0:empty.count()],
         @empty[0:empty.count()]
-    ) {
+    )) {
         success(value) => { panic("short ChaCha20-Poly1305 nonce should be rejected") }
         failure(error) => { assert(error.kind == Crypto.ErrorKind.invalid_nonce) }
     }
@@ -160,7 +160,7 @@ test "reject invalid primitive parameters explicitly" {
 
 func run_crypto_on_worker() bool {
     let pair = X25519.generate_key_pair()
-    match X25519.shared_secret(@pair.secret[0:32], @pair.public_key[0:32]) {
+    match (try X25519.shared_secret(@pair.secret[0:32], @pair.public_key[0:32])) {
         success(value) => {
             for byte in value {
                 if byte != 0 { return true }

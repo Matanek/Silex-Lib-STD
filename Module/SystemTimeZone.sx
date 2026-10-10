@@ -1,7 +1,7 @@
 use STD.File
 
 package func linux_offset_at(unix_seconds:int) int {
-    match File.read_all("/etc/localtime", 1_048_576) {
+    match (try File.read_all("/etc/localtime", 1_048_576)) {
         success(bytes) => {
             return offset_from_tzif(@bytes[0:bytes.count()], unix_seconds)
         }

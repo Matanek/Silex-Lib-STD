@@ -8,22 +8,22 @@ use STD.Text.UTF8
 use STD.Network.TLS
 
 func run() Result<void, TLS.Error> {
-    var stream = try TLS.connect("example.com", 443)
+    var stream = try TLS.connect("example.com", 443) else error { return Result<void,TLS.Error>.failure(error) }
     let request = UTF8.bytes("GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")
-    match IO.write_all<TLS.Stream>(stream, @request[0:request.count()]) {
+    match (try IO.write_all<TLS.Stream>(stream, @request[0:request.count()])) {
         failure(error) => { panic(error.detail) }
         success => {}
     }
     var buffer:uint8[16]
     var view = &buffer[0:buffer.count()]
-    match stream.read(view) {
+    match (try stream.read(view)) {
         failure(error) => { panic(error.detail) }
         success(count) => { assert(count > 0) }
     }
-    return TLS.close(stream)
+    return (try TLS.close(stream))
 }
 
 func main() {
-    match run() { success => { print("TLS certificate and data verified") }; failure(error) => { panic(error.detail) } }
+    match (try run()) { success => { print("TLS certificate and data verified") }; failure(error) => { panic(error.detail) } }
 }
 ```

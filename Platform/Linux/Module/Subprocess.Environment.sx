@@ -3,7 +3,7 @@ use STD.Text.UTF8
 
 func entries() str[] {
     var result:str[] = []
-    match File.read_all("/proc/self/environ", 0x10_0000) {
+    match (try File.read_all("/proc/self/environ", 0x10_0000)) {
         failure(error) => { return result }
         success(bytes) => {
             var start = 0
@@ -24,7 +24,7 @@ func entries() str[] {
 }
 
 func decoded(bytes:@uint8[..]) str {
-    match UTF8.decode(bytes) {
+    match (try UTF8.decode(bytes)) {
         success(text) => { return text }
         failure(error) => { panic("Linux environment contains invalid UTF-8") }
     }

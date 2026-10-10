@@ -47,10 +47,10 @@ public class Stream : IO.Reader, IO.Writer {
         return Result<int, Error>.success(index)
     }
 
-    func shutdown_read() Result<void, Error> { return shutdown(self, false) }
-    func shutdown_write() Result<void, Error> { return shutdown(self, true) }
-    func local_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, false) }
-    func peer_endpoint() Result<Network.Endpoint, Error> { return stream_endpoint(self, true) }
+    func shutdown_read() Result<void, Error> { return (try shutdown(self, false)) }
+    func shutdown_write() Result<void, Error> { return (try shutdown(self, true)) }
+    func local_endpoint() Result<Network.Endpoint, Error> { return (try stream_endpoint(self, false)) }
+    func peer_endpoint() Result<Network.Endpoint, Error> { return (try stream_endpoint(self, true)) }
 
     module func handle() int { return self.descriptor }
     module func is_closed() bool { return self.closed }
@@ -87,20 +87,20 @@ public struct Accepted {
 }
 
 public func connect(endpoint:Network.Endpoint, options:ConnectOptions) Result<Stream, Error> {
-    let connect_timeout = try timeout(options.connect_timeout_milliseconds, "tcp.connect")
-    let read_timeout = try timeout(options.stream.read_timeout_milliseconds, "tcp.connect")
-    let write_timeout = try timeout(options.stream.write_timeout_milliseconds, "tcp.connect")
-    return connect_endpoint(endpoint, connect_timeout, read_timeout, write_timeout)
+    let connect_timeout = try timeout(options.connect_timeout_milliseconds, "tcp.connect") else error { return Result<Stream,Error>.failure(error) }
+    let read_timeout = try timeout(options.stream.read_timeout_milliseconds, "tcp.connect") else error { return Result<Stream,Error>.failure(error) }
+    let write_timeout = try timeout(options.stream.write_timeout_milliseconds, "tcp.connect") else error { return Result<Stream,Error>.failure(error) }
+    return (try connect_endpoint(endpoint, connect_timeout, read_timeout, write_timeout))
 }
 
 public func connect(host:str, port:uint16, options:ConnectOptions) Result<Stream, Error> {
     let endpoints = try Network.resolve(host, port, Network.ResolveOptions(
         family:Network.Family.any(),
         transport:Network.Transport.stream()
-    ))
+    )) else error { return Result<Stream,Error>.failure(error) }
     var last:Error? = null
     for endpoint in endpoints {
-        match connect(endpoint, options) {
+        match (try connect(endpoint, options)) {
             success(var stream) => { return Result<Stream, Error>.success(stream) }
             failure(error) => { last = error }
         }
@@ -122,13 +122,13 @@ public func listen(endpoint:Network.Endpoint, backlog:int) Result<Listener, Erro
 
 public func accept(listener:&Listener, timeout_milliseconds:int?, stream_options:StreamOptions) Result<Accepted, Error> {
     if listener.is_closed() { return Result<Accepted, Error>.failure(failure("tcp.accept", "listener is closed")) }
-    let wait = try timeout(timeout_milliseconds, "tcp.accept")
-    let read = try timeout(stream_options.read_timeout_milliseconds, "tcp.accept")
-    let write = try timeout(stream_options.write_timeout_milliseconds, "tcp.accept")
+    let wait = try timeout(timeout_milliseconds, "tcp.accept") else error { return Result<Accepted,Error>.failure(error) }
+    let read = try timeout(stream_options.read_timeout_milliseconds, "tcp.accept") else error { return Result<Accepted,Error>.failure(error) }
+    let write = try timeout(stream_options.write_timeout_milliseconds, "tcp.accept") else error { return Result<Accepted,Error>.failure(error) }
     let descriptor = Platform.accept(listener.handle(), wait, read, write)
     if descriptor < 0 { return Result<Accepted, Error>.failure(failure("tcp.accept", "system accept failed")) }
     var stream = Stream(descriptor)
-    let peer = try stream.peer_endpoint()
+    let peer = try stream.peer_endpoint() else error { return Result<Accepted,Error>.failure(error) }
     return Result<Accepted, Error>.success(Accepted(stream:stream, peer:peer))
 }
 
@@ -241,7 +241,7 @@ func decimal(value:int) str {
         remaining /= 10
     }
     let view = @bytes[index:20]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return text }
         failure(error) => { panic("ASCII error formatting failed") }
     }

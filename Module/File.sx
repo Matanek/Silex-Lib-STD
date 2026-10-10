@@ -50,12 +50,12 @@ public class File : IO.Reader, IO.Writer {
         return Result<int, Error>.failure(file_error("file.seek", null, "system seek failed"))
     }
 
-    func position() Result<int, Error> { return self.seek(0, SeekFrom.current()) }
+    func position() Result<int, Error> { return (try self.seek(0, SeekFrom.current())) }
 
     func length() Result<int, Error> {
-        let original = try self.position()
-        let result = try self.seek(0, SeekFrom.end())
-        let ignored = try self.seek(original, SeekFrom.start())
+        let original = try self.position() else error { return Result<int,Error>.failure(error) }
+        let result = try self.seek(0, SeekFrom.end()) else error { return Result<int,Error>.failure(error) }
+        let ignored = try self.seek(original, SeekFrom.start()) else error { return Result<int,Error>.failure(error) }
         return Result<int, Error>.success(result)
     }
 
@@ -105,30 +105,30 @@ public func close(file:File) Result<void, Error> {
 public func read_all(path:Path, maximum_bytes:int) Result<uint8[], Error> {
     if maximum_bytes < 0 { return Result<uint8[], Error>.failure(file_error("file.read_all", path, "maximum_bytes must be non-negative")) }
     let options = OpenOptions(access:Access.read(), creation:Creation.open_existing(), append:false)
-    match open(path, options) {
+    match (try open(path, options)) {
         failure(error) => { return Result<uint8[], Error>.failure(error) }
         success(var file) => {
             var result:uint8[] = []
             var byte:uint8[1] = [0]
             while result.count() <= maximum_bytes {
                 var view = &byte[0:1]
-                let count = try file.read(view)
+                let count = try file.read(view) else error { return Result<uint8[],Error>.failure(error) }
                 if count == 0 {
-                    let ignored = close(move file)
+                    let ignored = (try close(move file))
                     return Result<uint8[], Error>.success(result)
                 }
                 result.append(view[0])
             }
-            let ignored = close(move file)
+            let ignored = (try close(move file))
             return Result<uint8[], Error>.failure(file_error("file.read_all", path, "file exceeds the configured maximum byte count"))
         }
     }
 }
 
 public func read_text(path:Path, maximum_bytes:int) Result<str, Error> {
-    let bytes = try read_all(path, maximum_bytes)
+    let bytes = try read_all(path, maximum_bytes) else error { return Result<str,Error>.failure(error) }
     let view = @bytes[0:bytes.count()]
-    match UTF8.decode(view) {
+    match (try UTF8.decode(view)) {
         success(text) => { return Result<str, Error>.success(text) }
         failure(error) => {
             return Result<str, Error>.failure(Error(
@@ -143,16 +143,16 @@ public func read_text(path:Path, maximum_bytes:int) Result<str, Error> {
 
 public func write_all(path:Path, value:@uint8[..]) Result<void, Error> {
     let options = OpenOptions(access:Access.write(), creation:Creation.create_or_truncate(), append:false)
-    match open(path, options) {
+    match (try open(path, options)) {
         failure(error) => { return Result<void, Error>.failure(error) }
         success(var file) => {
-            let written = try file.write(value)
+            let written = try file.write(value) else error { return Result<void,Error>.failure(error) }
             if written != value.count() {
-                let ignored = close(move file)
+                let ignored = (try close(move file))
                 return Result<void, Error>.failure(file_error("file.write_all", path, "short write"))
             }
-            try file.flush()
-            return close(move file)
+            try file.flush() else error { return Result<void,Error>.failure(error) }
+            return (try close(move file))
         }
     }
 }
@@ -160,7 +160,7 @@ public func write_all(path:Path, value:@uint8[..]) Result<void, Error> {
 public func write_all(path:Path, value:str) Result<void, Error> {
     let bytes = UTF8.bytes(value)
     let view = @bytes[0:bytes.count()]
-    return write_all(path, view)
+    return (try write_all(path, view))
 }
 
 func access_code(value:Access) int { return match value { read => 1; write => 2; read_write => 3 } }

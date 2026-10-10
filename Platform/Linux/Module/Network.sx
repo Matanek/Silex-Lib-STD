@@ -202,7 +202,7 @@ func network_u16(address:uint, offset:int) uint16 {
 }
 
 func resolver_address() uint8[4]? {
-    match File.read_all("/etc/resolv.conf", 0x10_0000) {
+    match (try File.read_all("/etc/resolv.conf", 0x10_0000)) {
         failure(error) => { return null }
         success(bytes) => {
             var index = 0

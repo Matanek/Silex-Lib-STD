@@ -13,7 +13,7 @@ public func read_exact<T:Reader>(reader:&T, buffer:&uint8[..]) Result<void, Erro
     while offset < buffer.count() {
         let remaining_count = buffer.count() - offset
         var remaining = &buffer[offset:buffer.count()]
-        let count = try reader.read(remaining)
+        let count = try reader.read(remaining) else error { return Result<void,Error>.failure(error) }
         if count < 0 || count > remaining_count {
             return Result<void, Error>.failure(contract_error(
                 "io.read_exact",
@@ -45,7 +45,7 @@ public func read_to_end<T:Reader>(reader:&T, maximum_bytes:int) Result<uint8[], 
         if remaining < request {
             request = remaining + 1
         }
-        let count = try read_prefix<T>(reader, chunk, request)
+        let count = try read_prefix<T>(reader, chunk, request) else error { return Result<uint8[],Error>.failure(error) }
         if count < 0 || count > request {
             return Result<uint8[], Error>.failure(contract_error(
                 "io.read_to_end",
@@ -73,7 +73,7 @@ public func write_all<T:Writer>(writer:&T, buffer:@uint8[..]) Result<void, Error
     while offset < buffer.count() {
         let remaining_count = buffer.count() - offset
         let remaining = @buffer[offset:buffer.count()]
-        let count = try writer.write(remaining)
+        let count = try writer.write(remaining) else error { return Result<void,Error>.failure(error) }
         if count <= 0 || count > remaining_count {
             var detail = "writer returned a count outside the supplied buffer"
             if count == 0 {
@@ -101,7 +101,7 @@ public func copy<R:Reader, W:Writer>(reader:&R, writer:&W, maximum_bytes:int) Re
         if remaining < request {
             request = remaining + 1
         }
-        let count = try read_prefix<R>(reader, chunk, request)
+        let count = try read_prefix<R>(reader, chunk, request) else error { return Result<int,Error>.failure(error) }
         if count < 0 || count > request {
             return Result<int, Error>.failure(contract_error(
                 "io.copy",
@@ -115,7 +115,7 @@ public func copy<R:Reader, W:Writer>(reader:&R, writer:&W, maximum_bytes:int) Re
             return Result<int, Error>.failure(limit_error("io.copy"))
         }
         let written = @chunk[0:count]
-        try write_all<W>(writer, written)
+        try write_all<W>(writer, written) else error { return Result<int,Error>.failure(error) }
         total += count
     }
     panic("copy loop terminated unexpectedly")
@@ -133,7 +133,7 @@ func byte_buffer(count:int) uint8[] {
 
 func read_prefix<T:Reader>(reader:&T, buffer:&uint8[], count:int) Result<int, Error> {
     var target = &buffer[0:count]
-    return reader.read(target)
+    return (try reader.read(target))
 }
 
 func invalid_limit(operation:str) Error {

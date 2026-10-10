@@ -2,7 +2,7 @@ use STD.Regex
 use STD.Text.UTF8
 
 func compiled(pattern:str) Regex {
-    match Regex.compile(pattern) {
+    match (try Regex.compile(pattern)) {
         success(value) => { return value }
         failure(error) => { panic("regex did not compile at $(error.scalar_index): $(error.detail)") }
     }
@@ -10,7 +10,7 @@ func compiled(pattern:str) Regex {
 }
 
 func compiled_with(pattern:str, options:Regex.Options) Regex {
-    match Regex.compile(pattern, options) {
+    match (try Regex.compile(pattern, options)) {
         success(value) => { return value }
         failure(error) => { panic("regex did not compile at $(error.scalar_index): $(error.detail)") }
     }
@@ -20,7 +20,7 @@ func compiled_with(pattern:str, options:Regex.Options) Regex {
 func surround(found:@Regex.Match) str { return "<$(found.text())>" }
 
 func rejected(pattern:str, expected:Regex.CompileErrorKind, scalar_index:int) {
-    match Regex.compile(pattern) {
+    match (try Regex.compile(pattern)) {
         success(value) => { panic("invalid regex was accepted: $(pattern)") }
         failure(error) => {
             assert(error.kind == expected, "compile error kind")
@@ -206,7 +206,7 @@ test "streaming search handles a large text" {
     var index = 0
     while index < 200_000 { scalars.append(97 as uint32); index++ }
     scalars.append(90 as uint32)
-    match UTF8.from_scalars(@scalars[0:scalars.count()]) {
+    match (try UTF8.from_scalars(@scalars[0:scalars.count()])) {
         success(text) => {
             if found = compiled("Z$").first(text) {
                 assert(found.start() == 200_000, "large input scalar position")

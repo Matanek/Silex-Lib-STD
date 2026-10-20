@@ -48,6 +48,12 @@ for name in names { print(name) }
 for point in points { print(point) }
 ```
 
+`get_keys()` et `get_values()` rendent des listes indépendantes du dictionnaire.
+Les vider ou les réordonner ne modifie pas ses associations. Leurs valeurs
+gardent la sémantique d’affectation ordinaire : les structures et listes sont
+indépendantes, les identités de classes restent partagées, y compris `nocopy`.
+Demandez explicitement `copy` pour cloner profondément un instantané clonable.
+
 Les clés intégrées utilisent leurs règles de hash/égalité. Un domaine peut
 fournir des callbacks cohérents : deux clés égales doivent toujours partager
 le même hash.

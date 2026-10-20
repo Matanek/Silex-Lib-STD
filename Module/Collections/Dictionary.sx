@@ -84,11 +84,11 @@ public struct Dictionary<Key, Value> {
     }
 
     func get_keys() Key[] {
-        return copy self.keys
+        return self.keys
     }
 
     func get_values() Value[] {
-        return copy self.values
+        return self.values
     }
 
     func set(key:Key, value:Value) Value? {

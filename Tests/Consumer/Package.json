@@ -1,0 +1,4 @@
+{
+  "sources": "Tests",
+  "dependencies": { "STD": "^0.22.0" }
+}

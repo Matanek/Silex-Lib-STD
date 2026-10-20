@@ -76,12 +76,12 @@ for name in names { print(name) }
 for point in points { print(point) }
 ```
 
-`get_keys()` et `get_values()` renvoient des listes indépendantes de la
-collection. Vider ou réordonner ces listes ne modifie pas le dictionnaire. Les
-objets de classe qu'elles contiennent conservent toutefois leur identité
-partagée. Ces instantanés sont pratiques pour transmettre des valeurs à une API
-qui attend une liste. Préférer `iterator()` pour traiter directement les
-associations et éviter de perdre le lien entre une clé et sa valeur.
+`get_keys()` and `get_values()` return lists independent of the dictionary.
+Clearing or reordering them does not change its associations. Their values
+follow ordinary assignment semantics: structs and lists are independent, while
+class identities remain shared, including `nocopy` classes. Use an explicit
+`copy` to deeply clone a clonable snapshot. Prefer `iterator()` when processing
+associations to preserve the link between each key and its value.
 
 ## Valeurs uniques
 

@@ -1,0 +1,59 @@
+use STD.Collections.Dictionary
+
+class Lifetime { var drops:int = 0 }
+nocopy class Resource {
+    var lifetime:Lifetime
+    var value:int = 1
+    init(lifetime:Lifetime) { self.lifetime = lifetime }
+    drop { self.lifetime.drops++ }
+}
+func resource_hash(value:@Resource) uint { return value.value as uint }
+func resource_equal(first:@Resource, second:@Resource) bool { return first == second }
+
+func verify_values() {
+    var lifetime = Lifetime()
+    {
+        var resource = Resource(lifetime)
+        var dictionary = Dictionary<str, Resource>()
+        dictionary.set("one", resource)
+        var values = dictionary.get_values()
+        assert(values.count() == 1 && values[0] == resource)
+        values[0].value = 7
+        assert(dictionary.find("one")!.value == 7)
+        dictionary.clear()
+        assert(values.count() == 1 && lifetime.drops == 0)
+        values.clear()
+        assert(lifetime.drops == 0)
+    }
+    assert(lifetime.drops == 1)
+}
+
+func verify_keys() {
+    var lifetime = Lifetime()
+    {
+        var resource = Resource(lifetime)
+        var dictionary = Dictionary<Resource, int>(resource_hash, resource_equal)
+        dictionary.set(resource, 2)
+        var keys = dictionary.get_keys()
+        assert(keys.count() == 1 && keys[0] == resource)
+        keys.clear()
+        assert(dictionary.count() == 1 && dictionary.find(resource) == 2)
+    }
+    assert(lifetime.drops == 1)
+}
+
+func verify_storage() {
+    var dictionary = Dictionary<str, int[]>()
+    dictionary.set("one", [1,2])
+    var values = dictionary.get_values()
+    values[0][0] = 9
+    assert(dictionary.find("one")![0] == 1 && values[0][0] == 9)
+    values.clear()
+    assert(dictionary.count() == 1)
+}
+
+test "dictionary value snapshots share noncopyable identities and own their list" { verify_values() }
+test "dictionary key snapshots preserve class identity without retaining associations" { verify_keys() }
+test "dictionary snapshots keep independent struct and nested array storage" { verify_storage() }
+
+func main() { verify_values(); verify_keys(); verify_storage(); print("Dictionary snapshots : OK") }

@@ -58,6 +58,11 @@ Les clés intégrées utilisent leurs règles de hash/égalité. Un domaine peut
 fournir des callbacks cohérents : deux clés égales doivent toujours partager
 le même hash.
 
+
+Les hashes de chaînes utilisent FNV-1a sur les octets UTF-8 exacts, y compris
+les octets nuls. Le calcul conserve un travail arithmétique fixe par octet ;
+il est linéaire en longueur et ne normalise pas le texte Unicode.
+
 ## Set, Queue et Stack
 
 `Set` déduplique et `add` indique si la valeur était nouvelle.

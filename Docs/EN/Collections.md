@@ -49,6 +49,11 @@ prévisibles. Des fonctions de hachage et d'égalité personnalisées sont aussi
 acceptées, mais le comportement par défaut convient aux types usuels. Deux clés
 considérées égales doivent toujours produire le même hachage.
 
+
+String hashing uses FNV-1a over the exact UTF-8 bytes, including embedded zero
+bytes. Arithmetic work per byte is fixed, so hashing is linear in byte length
+and does not normalize Unicode text.
+
 ## Parcourir un dictionnaire
 
 Utiliser `iterator()` lorsqu'une opération porte sur les associations :

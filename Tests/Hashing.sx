@@ -1,0 +1,73 @@
+use STD.Collections.Hashing
+use STD.Collections.Dictionary
+use Interop.C
+
+// Independent carry propagation is deliberately slow: it is an arithmetic
+// oracle for whole public hashes, never the production path.
+func reference_add(left:uint, right:uint) uint {
+    var result = left; var carry = right
+    while carry != 0 {
+        let next = (result & carry) << 1
+        result = result ^ carry; carry = next
+    }
+    return result
+}
+func reference_hash(text:str) uint {
+    var hash:uint = 14695981039346656037
+    var index:uint = 0
+    let shifts:uint[] = [1, 4, 5, 7, 8, 40]
+    while index < C.byte_count(text) {
+        let value = hash ^ C.byte_at(text, index)
+        hash = value
+        for shift in shifts {
+            hash = reference_add(hash, value << shift)
+        }
+        index++
+    }
+    return hash
+}
+
+test "FNV-1a fixed vectors preserve exact unsigned results" {
+    assert(Hashing.hash_str("") == 14695981039346656037)
+    assert(Hashing.hash_str("a") == 12638187200555641996)
+    assert(Hashing.hash_str("foobar") == 9625390261332436968)
+    assert(Hashing.hash_str("cell:1842:person:grace:domain") == 12089874770505660643)
+}
+
+test "FNV-1a hashes exact UTF-8 bytes including zero" {
+    assert(Hashing.hash_str("é") == 775207407765167617)
+    assert(Hashing.hash_str("e\u{301}") == 13891867729146687007)
+    assert(Hashing.hash_str("Silex — été 👩‍💻 中文") == 2034291533275267594)
+    assert(Hashing.hash_str("a\0é🙂") == 11765823585158260070)
+    assert(Hashing.hash_str("\0") == 12638153115695167455)
+    assert(Hashing.hash_str("a\0é🙂") != Hashing.hash_str("a"))
+}
+
+test "FNV-1a limb carries agree with bitwise reference" {
+    let fragments = ["a", "é", "\0", "👩‍💻", "中文", "\n", "e\u{301}", "cell:4294967295:"]
+    var text = ""
+    var index = 0
+    while index < 160 {
+        text += fragments[index % fragments.count()]
+        assert(Hashing.hash_str(text) == reference_hash(text))
+        index++
+    }
+}
+
+test "string dictionaries preserve Unicode and zero-containing keys across growth" {
+    var values = Dictionary<str, int>()
+    var index = 0
+    while index < 300 {
+        values.set("cell:$(index):é\0中文", index)
+        index++
+    }
+    index = 0
+    while index < 300 {
+        let key = "cell:$(index):é\0中文"
+        assert(values.find(key) == index)
+        assert(values.remove(key))
+        assert(values.find(key) == null)
+        index++
+    }
+    assert(values.is_empty())
+}

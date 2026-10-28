@@ -1,0 +1,19 @@
+use STD.Collections.Hashing
+use STD.Collections.Dictionary
+
+func verify_hashes() {
+    assert(Hashing.hash_str("") == 14695981039346656037)
+    assert(Hashing.hash_str("hello") == 11831194018420276491)
+    assert(Hashing.hash_str("foobar") == 9625390261332436968)
+    assert(Hashing.hash_str("Silex — été 👩‍💻 中文") == 2034291533275267594)
+    assert(Hashing.hash_str("a\0é🙂") == 11765823585158260070)
+    assert(Hashing.hash_str("e\u{301}") == 13891867729146687007)
+    var values = Dictionary<str, int>()
+    values.set("é\0中文", 17)
+    values.set("é", 23)
+    assert(values.find("é\0中文") == 17 && values.find("é") == 23)
+    assert(values.remove("é") && values.find("é\0中文") == 17)
+}
+
+test "portable public hashing consumer" { verify_hashes() }
+func main() { verify_hashes(); print("Portable hashing : OK") }

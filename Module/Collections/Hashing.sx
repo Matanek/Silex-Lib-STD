@@ -1,24 +1,14 @@
 use Interop.C
 
-func wrapping_add(left:uint, right:uint) uint {
-    var result = left
-    var carry = right
-    while carry != 0 {
-        let next = (result & carry) << 1
-        result = result ^ carry
-        carry = next
-    }
-    return result
-}
-
+// FNV-1a multiplies modulo 2^64 by 2^40 + 435. Use two 32-bit
+// limbs so every arithmetic intermediate fits uint under checked arithmetic.
+// low < 2^41 and high < 2^41; retaining their low halves performs the
+// reduction explicitly, with fixed work instead of bit-by-bit carry loops.
 func fnv_multiply(value:uint) uint {
-    var result = value
-    result = wrapping_add(result, value << 1)
-    result = wrapping_add(result, value << 4)
-    result = wrapping_add(result, value << 5)
-    result = wrapping_add(result, value << 7)
-    result = wrapping_add(result, value << 8)
-    return wrapping_add(result, value << 40)
+    let mask:uint = 4294967295
+    let low = (value & mask) * 435
+    let high = (value >> 32) * 435 + (low >> 32) + ((value & 16777215) << 8)
+    return ((high & mask) << 32) ^ (low & mask)
 }
 
 // HASH

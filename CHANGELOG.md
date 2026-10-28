@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Compute string hashes with fixed arithmetic work per UTF-8 byte, preserving
+  the existing portable 64-bit FNV-1a values, including embedded zero bytes.
+
 - `Dictionary.get_keys()` and `get_values()` snapshots preserve shared class
   identities, including `nocopy` resources, while keeping independent list storage.
 

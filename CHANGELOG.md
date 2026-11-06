@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Writes to closed child stdin return `broken_pipe` without fatal SIGPIPE or a leaked handle. `Child.terminate(force:true)` can stop a blocked subprocess; its writer may remain on a worker while the owner drains events.
+
 - Compute string hashes with fixed arithmetic work per UTF-8 byte, preserving
   the existing portable 64-bit FNV-1a values, including embedded zero bytes.
 

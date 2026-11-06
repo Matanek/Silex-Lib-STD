@@ -20,7 +20,7 @@ package func join(thread:uint) bool {
     return waited && closed
 }
 
-func current_thread() uint { return system_current_thread() as uint }
+package func current_thread() uint { return system_current_thread() as uint }
 func is_current_thread(thread:uint) bool {
     return system_thread_id(thread) == system_current_thread()
 }

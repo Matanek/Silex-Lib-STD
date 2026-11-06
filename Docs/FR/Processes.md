@@ -13,6 +13,23 @@ un statut `exited` ou `signaled`. Le texte capturé reste des octets à décoder
 n’arrive qu’après drainage des deux flux. Détruire un enfant actif le termine
 et le reap.
 
+Un appel `child.terminate()` demande l’arrêt (SIGTERM sur POSIX) ;
+`child.terminate(force:true)` impose l’arrêt (SIGKILL sur POSIX, TerminateProcess
+sur Windows). Il faut ensuite drainer les événements pour observer le statut
+final ; la terminaison seule ne constitue pas une réussite de traitement.
+
+`write_standard_input` peut bloquer et écrire partiellement. Pour alimenter un
+processus lent sans bloquer l’application, un worker unique peut écrire stdin
+pendant qu’un seul thread propriétaire appelle `next_event` et `terminate`.
+Ces opérations portent sur des champs et handles distincts. Ne pas fermer stdin,
+détruire l’enfant ni lancer plusieurs writers pendant une écriture ; attendre la
+fence du writer avant `close_standard_input`. `complete()` peut aider l’executor :
+collecter seulement après `fence().is_complete()` dans une boucle interactive.
+Un pipe fermé rend `Error.Kind.broken_pipe` et ferme son handle ; sur POSIX,
+l’écriture protège le thread contre SIGPIPE sans changer la disposition globale,
+le masque initial ni un signal déjà en attente. Cette séparation ne rend pas
+l’ensemble des méthodes de Child librement concurrent.
+
 `spawn_terminal` utilise PTY sur macOS/Linux et ConPTY sur Windows. Les sorties
 partagent le flux terminal et peuvent contenir ANSI/VT. L’API expose taille,
 écriture, resize et événements sans handle natif.

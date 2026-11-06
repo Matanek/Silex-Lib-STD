@@ -1,0 +1,79 @@
+use STD.Subprocess
+use STD.Process
+use STD.Threading
+use STD.Threading.Native
+use STD.Time.Clock
+use STD.File
+use STD.FileSystem
+use STD.Error
+use STD.System
+
+struct Writer:Threading.Job {
+    var child:Subprocess.Child
+    let marker:str
+    var written:int = 0
+    var thread:uint = 0
+    var failed:bool = false
+    func execute() {
+        self.thread = Native.current_thread()
+        var bytes:uint8[] = []
+        for index in 0...1_048_576 { bytes.append(77 as uint8) }
+        while self.written < bytes.count() {
+            let view = @bytes[self.written:bytes.count()]
+            match (try self.child.write_standard_input(view)) {
+                failure(error) => { self.failed = error.kind == Error.Kind.broken_pipe(); return }
+                success(count) => {
+                    self.written += count
+                    if self.written == count { File.write_all(self.marker, "writer started") }
+                }
+            }
+        }
+    }
+}
+
+func validate() {
+    let arguments = Process.arguments()
+    if arguments.count() > 1 && arguments[1] == "--blocked-child" { print("ready"); while true {} }
+    let marker = ".silex/std-writer-$(Process.id())"
+    var child = Subprocess.spawn(Subprocess.SpawnCommand(
+        executable:Process.executable_path(), arguments:["--blocked-child"],
+        current_directory:null, inherit_environment:false, environment:[]))
+    var executor = Threading.Executor(1)
+    var job = executor.submit(Writer(child:child, marker:marker))
+    var clock = Clock()
+    let first = clock.tick()
+    var progressed = 0
+    var started = false
+    while clock.get_total_seconds() < 5.0 {
+        let event = child.next_event(5)
+        progressed++
+        match (try FileSystem.metadata(marker)) {
+            success(info) => { started = true; break }
+            failure(error) => {}
+        }
+    }
+    let blocked = !job.fence().is_complete()
+    child.terminate(force:true)
+    var status:Subprocess.ExitStatus? = null
+    while child.is_running() {
+        if let event = child.next_event(10) {
+            match event { exited(value) => { status = value }; output(stream, bytes) => {} }
+        }
+    }
+    executor.wait_idle()
+    let done = job.complete()
+    FileSystem.remove_file(marker)
+    if let result = status {
+        match System.platform() {
+            windows => { match result { exited(code) => { assert(code == 1) }; signaled(signal) => { panic("unexpected Windows signal") } } }
+            else => { match result { signaled(signal) => { assert(signal == 9) }; exited(code) => { panic("forced POSIX termination was not SIGKILL") } } }
+        }
+    } else { panic("forced termination had no exit event") }
+    assert(started && blocked && progressed > 0)
+    assert(done.failed && done.written > 0 && done.written < 1_048_576)
+    assert(done.thread != Native.current_thread(), "writer ran on the caller thread")
+    print("blocked writer cancelled after $(done.written) bytes; owner progressed $(progressed) times")
+}
+
+func main() { validate() }
+test "a blocked subprocess writer stays off the owner and wakes after forced termination" { validate() }

@@ -1,0 +1,25 @@
+use STD.Process
+use STD.Subprocess
+use STD.Error
+
+func validate() {
+    let arguments = Process.arguments()
+    if arguments.count() > 1 && arguments[1] == "--child" { return }
+    var child = Subprocess.spawn(Subprocess.SpawnCommand(
+        executable:Process.executable_path(), arguments:["--child"],
+        current_directory:null, inherit_environment:false, environment:[]))
+    var exited = false
+    while !exited {
+        if let event = child.next_event(100) {
+            match event { exited(status) => { exited = true }; output(stream, bytes) => {} }
+        }
+    }
+    let bytes:uint8[] = [1 as uint8]
+    match (try child.write_standard_input(@bytes[0:bytes.count()])) {
+        success(count) => { panic("closed child input accepted a byte") }
+        failure(error) => { assert(error.kind == Error.Kind.broken_pipe()); print("closed pipe returned a recoverable error") }
+    }
+}
+
+func main() { validate() }
+test "writes to closed child input return an error without terminating the parent" { validate() }

@@ -40,6 +40,14 @@ let system_kill = C.function<func(int32, int32) int32>(library:Boundary.System, 
 let system_poll = C.function<func(C.MutablePointer<int>, C.Size, int32) int32>(library:Boundary.System, name:"poll")
 let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
 let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
+let signal_empty = C.function<func(C.MutablePointer<uint>) int32>(library:Boundary.System, name:"sigemptyset")
+let signal_add = C.function<func(C.MutablePointer<uint>, int32) int32>(library:Boundary.System, name:"sigaddset")
+let signal_pending = C.function<func(C.MutablePointer<uint>) int32>(library:Boundary.System, name:"sigpending")
+let signal_contains = C.function<func(C.MutablePointer<uint>, int32) int32>(library:Boundary.System, name:"sigismember")
+let signal_mask = C.function<func(int32, C.MutablePointer<uint>, C.MutablePointer<uint>) int32>(library:Boundary.System, name:"pthread_sigmask")
+let signal_wait = C.function<func(C.MutablePointer<uint>, C.MutablePointer<int32>) int32>(library:Boundary.System, name:"sigwait")
+let system_errno = C.function<func() C.Pointer<uint8> >(library:Boundary.System, name:"__error")
+
 
 func spawn(executable:str, arguments:@str[..], has_directory:bool, directory:str, environment:@str[..]) RawChild {
     if arguments.count() + 2 > 128 || environment.count() + 1 > 128 { return child_failure(1) }
@@ -112,12 +120,42 @@ func write_input(handle:uint, buffer:@uint8[..]) RawWrite {
     let poll_address = C.address_bits(C.mutable_pointer(descriptor))
     write_poll(poll_address, 0, handle as int32, true, 4)
     let ready = system_poll(C.mutable_pointer(descriptor), 1 as C.Size, -1)
-    if ready < 0 || !poll_ready(poll_address, 0, 28) { return RawWrite(count:0, error:true) }
+    if ready < 0 || !poll_ready(poll_address, 0, 4) || poll_ready(poll_address, 0, 56) { return RawWrite(count:0, error:true) }
     var count = buffer.count()
     if count > 4096 { count = 4096 }
     let compact = C.string(@buffer[0:count])
-    let written = system_write(handle as int32, C.pointer(compact), count as C.Size)
-    if written < 0 { return RawWrite(count:0, error:true) }
+    return write_without_sigpipe(handle as int32, C.pointer(compact), count)
+}
+
+// Suppress only this write's SIGPIPE on its executing thread. Preserve the
+// caller's signal disposition, original mask and any already-pending signal.
+func write_without_sigpipe(descriptor:int32, bytes:C.Pointer<uint8>, count:int) RawWrite {
+    var signals:uint[16]
+    var previous:uint[16]
+    var pending:uint[16]
+    var discarded:uint[16]
+    if signal_empty(C.mutable_pointer(signals)) != 0 || signal_add(C.mutable_pointer(signals), 13) != 0 {
+        return RawWrite(count:0, error:true)
+    }
+    if signal_mask(1, C.mutable_pointer(signals), C.mutable_pointer(previous)) != 0 {
+        return RawWrite(count:0, error:true)
+    }
+    if signal_pending(C.mutable_pointer(pending)) != 0 {
+        let restored = signal_mask(3, C.mutable_pointer(previous), C.mutable_pointer(discarded))
+        return RawWrite(count:0, error:true)
+    }
+    let already_pending = signal_contains(C.mutable_pointer(pending), 13) == 1
+    let written = system_write(descriptor, bytes, count as C.Size)
+    let error_code = C.load<int32>(system_errno(), 0 as uint)
+    if written < 0 && error_code == 32 && !already_pending {
+        if signal_pending(C.mutable_pointer(pending)) == 0 && signal_contains(C.mutable_pointer(pending), 13) == 1 {
+            // EPIPE produced a thread-directed signal; nobody else can consume it.
+            var consumed:int32 = 0
+            let received = signal_wait(C.mutable_pointer(signals), C.mutable_pointer(consumed))
+        }
+    }
+    let restored = signal_mask(3, C.mutable_pointer(previous), C.mutable_pointer(discarded))
+    if restored != 0 || written < 0 { return RawWrite(count:0, error:true) }
     return RawWrite(count:written, error:false)
 }
 
@@ -159,7 +197,11 @@ func next_event(process:uint, output:uint, error_output:uint, output_open:bool, 
     return raw_event(0, [], 0, false, next_output_open, next_error_open, running, 0)
 }
 
-func terminate_process(process:uint) bool { return system_kill(process as int32, 15) == 0 }
+func terminate_process(process:uint, force:bool) bool {
+    var signal:int32 = 15
+    if force { signal = 9 }
+    return system_kill(process as int32, signal) == 0
+}
 func close_pipe(handle:uint) bool { return system_close(handle as int32) == 0 }
 
 func destroy_child(process:uint, output:uint, error_output:uint, output_open:bool, error_open:bool, running:bool) {

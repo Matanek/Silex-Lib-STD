@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Les writes vers un stdin enfant fermé rendent `broken_pipe` sans SIGPIPE fatal ni fuite de handle. `Child.terminate(force:true)` permet d’arrêter un sous-processus bloqué ; le writer peut rester sur un worker pendant que le propriétaire draine les événements.
+
 - Les instantanés `Dictionary.get_keys()` et `get_values()` conservent les
   identités partagées des classes, y compris `nocopy`, sans dupliquer leurs
   ressources. Le stockage des listes reste indépendant du dictionnaire.

@@ -76,6 +76,7 @@ public class Child {
         let result = Platform.write_input(self.standard_input, buffer)
         if Platform.write_failed(result) {
             self.input_open = false
+            let closed = Platform.close_pipe(self.standard_input)
             return Result<int, Error>.failure(child_error(Error.Kind.broken_pipe(), "subprocess.child.write_standard_input", null, "system pipe write failed"))
         }
         return Result<int, Error>.success(Platform.written_count(result))
@@ -125,9 +126,9 @@ public class Child {
         return Result<Event?, Error>.success(null)
     }
 
-    func terminate() Result<void, Error> {
+    func terminate(force:bool = false) Result<void, Error> {
         if !self.running { return Result<void, Error>.success() }
-        if Platform.terminate_process(self.process) { return Result<void, Error>.success() }
+        if Platform.terminate_process(self.process, force) { return Result<void, Error>.success() }
         return Result<void, Error>.failure(child_error(Error.Kind.other(), "subprocess.child.terminate", null, "system process termination failed"))
     }
 

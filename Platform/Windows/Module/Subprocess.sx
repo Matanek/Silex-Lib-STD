@@ -172,7 +172,7 @@ func next_event(process:uint, output:uint, error_output:uint, output_open:bool, 
     panic("process polling terminated unexpectedly")
 }
 
-func terminate_process(process:uint) bool { return system_terminate(process, 1) != 0 }
+func terminate_process(process:uint, force:bool) bool { return system_terminate(process, 1) != 0 }
 func close_pipe(handle:uint) bool { return system_close(handle) != 0 }
 
 func destroy_child(process:uint, output:uint, error_output:uint, output_open:bool, error_open:bool, running:bool) {

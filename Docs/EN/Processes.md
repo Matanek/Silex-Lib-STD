@@ -48,6 +48,21 @@ the child after `fork`, such as an executable rejected by `exec`, is reported
 as exit code 127; Windows can reject the initial `spawn` directly. See
 [StreamChild.sx](Recipes/Subprocess/StreamChild.md).
 
+`child.terminate()` requests termination (SIGTERM on POSIX);
+`child.terminate(force:true)` forces termination (SIGKILL on POSIX,
+TerminateProcess on Windows). Drain events afterwards to observe the final
+status; termination alone does not mean successful processing.
+
+One worker may write stdin while one owner thread calls `next_event` and
+`terminate`: these operations use distinct fields and handles. Do not close
+stdin, destroy the child or run multiple writers during a write; wait for the
+writer fence before `close_standard_input`. `complete()` may help its executor:
+collect only after `fence().is_complete()` in an interactive loop. A closed pipe
+returns `Error.Kind.broken_pipe` and closes its handle; on POSIX the write
+protects its thread from SIGPIPE while preserving the global disposition,
+original mask and any already-pending signal. This partition does not make
+all Child methods freely concurrent.
+
 ## Host a terminal child
 
 `Subprocess.spawn_terminal` starts a child attached to an operating-system

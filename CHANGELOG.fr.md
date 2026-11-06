@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Les lectures et écritures File utilisent des blocs natifs bornés au lieu d’un appel système par octet, en conservant les signatures, EOF, lectures partielles et erreurs.
+
 - Les writes vers un stdin enfant fermé rendent `broken_pipe` sans SIGPIPE fatal ni fuite de handle. `Child.terminate(force:true)` permet d’arrêter un sous-processus bloqué ; le writer peut rester sur un worker pendant que le propriétaire draine les événements.
 
 - Les instantanés `Dictionary.get_keys()` et `get_values()` conservent les

@@ -16,11 +16,12 @@ public class File : IO.Reader, IO.Writer {
         if self.closed { return Result<int, Error>.failure(file_error("file.read", null, "file is closed")) }
         var index = 0
         while index < buffer.count() {
-            let value = Platform.read_byte(self.descriptor)
-            if value == -1 { return Result<int, Error>.success(index) }
-            if value < 0 { return Result<int, Error>.failure(file_error("file.read", null, "system read failed")) }
-            buffer[index] = value as uint8
-            index++
+            var end = index + 4096
+            if end > buffer.count() { end = buffer.count() }
+            let count = Platform.read_block(self.descriptor, &buffer[index:end])
+            if count == 0 { break }
+            if count < 0 { return Result<int, Error>.failure(file_error("file.read", null, "system read failed")) }
+            index += count
         }
         return Result<int, Error>.success(index)
     }
@@ -29,10 +30,11 @@ public class File : IO.Reader, IO.Writer {
         if self.closed { return Result<int, Error>.failure(file_error("file.write", null, "file is closed")) }
         var index = 0
         while index < buffer.count() {
-            if !Platform.write_byte(self.descriptor, buffer[index]) {
-                return Result<int, Error>.failure(file_error("file.write", null, "system write failed"))
-            }
-            index++
+            var end = index + 4096
+            if end > buffer.count() { end = buffer.count() }
+            let count = Platform.write_block(self.descriptor, @buffer[index:end])
+            if count <= 0 { return Result<int, Error>.failure(file_error("file.write", null, "system write failed")) }
+            index += count
         }
         return Result<int, Error>.success(index)
     }

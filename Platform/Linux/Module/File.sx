@@ -3,7 +3,7 @@ use Interop.Boundary
 
 let system_openat = C.function<func(int32, C.Pointer<uint8>, int32, uint32) int32>(library:Boundary.System, name:"openat")
 let system_close = C.function<func(int32) int32>(library:Boundary.System, name:"close")
-let system_read = C.function<func(int32, C.MutablePointer<uint32>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
+let system_read = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"read")
 let system_write = C.function<func(int32, C.Pointer<uint8>, C.Size) C.SignedSize>(library:Boundary.System, name:"write")
 let system_fsync = C.function<func(int32) int32>(library:Boundary.System, name:"fsync")
 let system_lseek = C.function<func(int32, int, int32) int>(library:Boundary.System, name:"lseek")
@@ -19,16 +19,28 @@ func open(path:str, access:int, creation:int, append:bool) int {
     return system_openat(-100, C.terminated_pointer(path), flags as int32, 438) as int
 }
 func close(descriptor:int) bool { return system_close(descriptor as int32) == 0 }
-func read_byte(descriptor:int) int {
-    var value:uint32 = 0
-    let count = system_read(descriptor as int32, C.mutable_pointer(value), 1 as C.Size)
-    if count == 0 { return -1 }
-    if count != 1 { return -2 }
-    return (value & 255) as int
+// A bounded packed native block, independent of Silex collection layout.
+func read_block(descriptor:int, buffer:&uint8[..]) int {
+    var storage:uint[512]
+    let address = C.address_bits(C.mutable_pointer(storage))
+    let count = system_read(descriptor as int32, C.pointer_bits(address), buffer.count() as C.Size)
+    if count <= 0 { return count as int }
+    var index = 0
+    while index < count {
+        buffer[index] = C.load<uint8>(address, index as uint)
+        index++
+    }
+    return count as int
 }
-func write_byte(descriptor:int, byte:uint8) bool {
-    var value:uint32 = byte as uint32
-    return system_write(descriptor as int32, C.mutable_pointer(value), 1 as C.Size) == 1
+func write_block(descriptor:int, buffer:@uint8[..]) int {
+    var storage:uint[512]
+    let address = C.address_bits(C.mutable_pointer(storage))
+    var index = 0
+    while index < buffer.count() {
+        let stored = C.store<uint8>(address, index as uint, buffer[index])
+        index++
+    }
+    return system_write(descriptor as int32, C.pointer_bits(address), buffer.count() as C.Size) as int
 }
 func flush(descriptor:int) bool { return system_fsync(descriptor as int32) == 0 }
 func seek(descriptor:int, offset:int, from:int) int { return system_lseek(descriptor as int32, offset, from as int32) }

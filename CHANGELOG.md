@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- File reads and writes use bounded native blocks instead of one system call per byte, preserving signatures, EOF, partial reads and errors.
+
 - Writes to closed child stdin return `broken_pipe` without fatal SIGPIPE or a leaked handle. `Child.terminate(force:true)` can stop a blocked subprocess; its writer may remain on a worker while the owner drains events.
 
 - Compute string hashes with fixed arithmetic work per UTF-8 byte, preserving

@@ -1,0 +1,30 @@
+use STD.File
+use STD.FileSystem
+use STD.IO
+use STD.Process
+use STD.Time.Clock
+
+func round_trip(size:int) {
+    let path = ".silex/file-blocks-$(Process.id()).bin"
+    var bytes:uint8[] = []
+    for index in 0...size { bytes.append((index % 251) as uint8) }
+    var file = File.open(path, File.OpenOptions(access:File.Access.read_write, creation:File.Creation.create_new, append:false))
+    assert(file.write(@bytes[0:0]) == 0)
+    IO.write_all<File>(file, @bytes[0:bytes.count()])
+    assert(file.length() == size)
+    assert(file.seek(0, File.SeekFrom.start) == 0)
+    var buffer:uint8[] = []
+    for index in 0...size + 17 { buffer.append(0 as uint8) }
+    assert(file.read(&buffer[0:buffer.count()]) == size)
+    for index in 0...size { assert(buffer[index] == bytes[index]) }
+    assert(file.read(&buffer[0:buffer.count()]) == 0)
+    File.close(file)
+    FileSystem.remove_file(path)
+}
+test "file blocks preserve native boundaries EOF and empty buffers" { round_trip(3 * 4096 + 37) }
+func main() {
+    var clock = Clock()
+    let first = clock.tick()
+    round_trip(1_048_576)
+    print("FILEBLOCKS seconds=$(clock.get_total_seconds())")
+}

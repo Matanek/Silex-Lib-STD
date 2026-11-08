@@ -31,6 +31,10 @@ do
   "$silex" test "$repository_root/Tests/$source" --nocache
 done
 
+public_consumer="$repository_root/Tests/Consumer"
+"$silex" link "$repository_root" --workspace "$public_consumer" --target "$target"
+"$silex" test "$public_consumer/Tests/TemporaryFiles.sx" --nocache
+
 extension=""
 case "$target" in
   windows-*) extension=".exe" ;;

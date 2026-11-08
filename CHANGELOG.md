@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.23.0] - 2026-11-08
 
 - File reads and writes use bounded native blocks instead of one system call per byte, preserving signatures, EOF, partial reads and errors.
 
@@ -14,9 +14,8 @@
 
 - Adopts one `Result` declaration: an ordinary call returns the value or
   stops the program on failure; `try call()` keeps the `Result`. Existing calls
-  storing results and propagating failures are made explicit. This revision
-  requires the development toolchain with these `try` semantics; publication
-  must coordinate compiler and package versions.
+  storing results and propagating failures are made explicit. This version
+  requires Silex 0.48.0 or newer and the coordinated dependency versions.
 
 - `Threading.Executor` explicitly creates its own runtime before starting workers, following class-field initialization in an explicit constructor.
 

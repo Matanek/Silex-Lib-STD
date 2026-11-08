@@ -5,6 +5,7 @@ use STD.Subprocess
 use STD.System
 use STD.Text.UTF8
 use STD.Text
+use STD.Time.Stopwatch
 
 test "capture child input and output" {
     func validate(output:Subprocess.Output) {
@@ -76,8 +77,9 @@ test "stream child input and output before exit" {
         var standard_output:uint8[] = []
         var standard_error:uint8[] = []
         var exited = false
-        var attempts = 0
-        while !exited && attempts < 20 {
+        var deadline = Stopwatch()
+        deadline.start()
+        while !exited && deadline.get_elapsed_seconds() < 5.0 {
             let next = try process.next_event(250) else error { return Result<void,Error>.failure(error) }
             if event = next {
                 match event {
@@ -96,7 +98,6 @@ test "stream child input and output before exit" {
                     }
                 }
             }
-            attempts++
         }
         assert(exited, "interactive child completion")
         let output_view = @standard_output[0:standard_output.count()]
@@ -211,8 +212,11 @@ test "terminal child uses the portable terminal transport" {
         assert(try terminal.write(input_view) else error { return Result<void,Error>.failure(error) } == input_bytes.count(), "complete terminal input")
         var output:uint8[] = []
         var exited = false
-        var attempts = 0
-        while !exited && attempts < 40 {
+        // A PTY hangup can return immediately before waitpid reports exit.
+        // Bound elapsed time rather than the number of these ready events.
+        var deadline = Stopwatch()
+        deadline.start()
+        while !exited && deadline.get_elapsed_seconds() < 10.0 {
             let next = try terminal.next_event(250) else error { return Result<void,Error>.failure(error) }
             if event = next {
                 match event {
@@ -229,7 +233,6 @@ test "terminal child uses the portable terminal transport" {
                     }
                 }
             }
-            attempts++
         }
         assert(exited, "terminal child completion")
         let output_view = @output[0:output.count()]

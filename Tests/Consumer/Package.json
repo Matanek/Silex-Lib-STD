@@ -1,4 +1,4 @@
 {
   "sources": "Tests",
-  "dependencies": { "STD": "^0.22.0" }
+  "dependencies": { "STD": "^0.23.0" }
 }

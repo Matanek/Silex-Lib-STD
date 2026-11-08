@@ -2,6 +2,8 @@
 
 ## [0.23.0] - 2026-11-08
 
+- Corriger la lecture des dossiers et modes de fichiers sur Linux ARM64, ainsi que les bindings inode 64 bits de macOS Intel. Les chemins temporaires Windows sont comparés après normalisation de leurs séparateurs.
+
 - Créer des dossiers temporaires exclusifs et régler le droit d’exécution du propriétaire des fichiers POSIX ; Windows signale explicitement que ce droit n’existe pas.
 
 - Calculer les hashes de chaînes par une quantité fixe de travail arithmétique par octet UTF-8, sans changer les valeurs FNV-1a 64 bits, y compris les octets nuls.

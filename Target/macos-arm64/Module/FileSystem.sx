@@ -1,0 +1,14 @@
+use Interop.C
+use Interop.Boundary
+
+let native_system_stat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:Boundary.System, name:"stat")
+package func system_stat(path:C.Pointer<uint8>, status:C.MutablePointer<int>) int32 { return native_system_stat(path, status) }
+
+let native_system_lstat = C.function<func(C.Pointer<uint8>, C.MutablePointer<int>) int32>(library:Boundary.System, name:"lstat")
+package func system_lstat(path:C.Pointer<uint8>, status:C.MutablePointer<int>) int32 { return native_system_lstat(path, status) }
+
+let native_system_opendir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.System, name:"opendir")
+package func system_opendir(path:C.Pointer<uint8>) C.Pointer<uint8> { return native_system_opendir(path) }
+
+let native_system_readdir = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.System, name:"readdir")
+package func system_readdir(directory:C.Pointer<uint8>) C.Pointer<uint8> { return native_system_readdir(directory) }

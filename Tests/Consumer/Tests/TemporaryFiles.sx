@@ -1,6 +1,7 @@
 use STD.Error
 use STD.File
 use STD.FileSystem
+use STD.Path
 use STD.Subprocess
 use STD.System
 use STD.Text.UTF8
@@ -9,7 +10,8 @@ func verify() {
     let first = FileSystem.create_temporary_directory()
     let second = FileSystem.create_temporary_directory()
     assert(first != second)
-    assert(FileSystem.canonicalize(first) == first)
+    assert(Path.is_absolute(first))
+    assert(Path.normalize(FileSystem.canonicalize(first)) == first)
     assert(FileSystem.list(first).is_empty())
     let executable = first + "/program"
     if System.platform() == System.OperatingSystem.windows {
@@ -39,6 +41,8 @@ func verify() {
             success => { panic("set_executable must reject a directory") }
         }
     }
+    let entries = FileSystem.list(first)
+    assert(entries.count() == 1 && entries[0].name == "program" && entries[0].kind == FileSystem.Kind.file)
     FileSystem.remove_file(executable)
     match try FileSystem.set_executable(executable, true) {
         failure(error) => {}

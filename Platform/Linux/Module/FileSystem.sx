@@ -2,6 +2,7 @@ use Interop.C
 use Interop.Boundary
 use Interop.Linux
 use STD.Text.UTF8
+use STD.System
 
 struct RawMetadata { let kind:int; let size:int; let readonly:bool }
 struct RawEntry { let name:str; let kind:int }
@@ -31,7 +32,7 @@ func metadata(path:str, follow:bool) RawMetadata? {
     if follow { flags = 0 }
     if system_newfstatat(-100, C.terminated_pointer(path), C.mutable_pointer(status), flags) != 0 { return null }
     let address = C.address_bits(C.mutable_pointer(status))
-    let mode = C.load<uint32>(address, 24 as uint)
+    let mode = C.load<uint32>(address, stat_mode_offset())
     return RawMetadata(kind:kind_from_mode(mode), size:C.load<int>(address, 48 as uint), readonly:(mode & 146) == 0)
 }
 
@@ -46,8 +47,18 @@ func canonicalize(path:str) str? {
     return text_at(C.address_bits(C.mutable_pointer(buffer)), count)
 }
 
+func directory_open_flags() int32 {
+    if System.target().architecture == System.Architecture.arm64 { return 0x8_4000 }
+    return 0x9_0000
+}
+
+func stat_mode_offset() uint {
+    if System.target().architecture == System.Architecture.arm64 { return 16 as uint }
+    return 24 as uint
+}
+
 func entries(path:str) RawEntry[]? {
-    let descriptor = system_openat(-100, C.terminated_pointer(path), 0x9_0000, 0)
+    let descriptor = system_openat(-100, C.terminated_pointer(path), directory_open_flags(), 0)
     if descriptor < 0 { return null }
     var result:RawEntry[] = []
     var buffer:int[512]
@@ -115,7 +126,7 @@ func set_readonly(path:str, readonly:bool) bool {
     var status:int[18]
     if system_newfstatat(-100, C.terminated_pointer(path), C.mutable_pointer(status), 0) != 0 { return false }
     let address = C.address_bits(C.mutable_pointer(status))
-    var mode = C.load<uint32>(address, 24 as uint)
+    var mode = C.load<uint32>(address, stat_mode_offset())
     if readonly { mode = mode & 0xFF6D }
     elif (mode & 128) == 0 { mode += 128 }
     return system_chmod(C.terminated_pointer(path), mode) == 0
@@ -199,7 +210,7 @@ func set_executable(path:str, executable:bool) bool {
     var status:int[18]
     if system_newfstatat(-100, C.terminated_pointer(path), C.mutable_pointer(status), 0) != 0 { return false }
     let address = C.address_bits(C.mutable_pointer(status))
-    var mode = C.load<uint32>(address, 24 as uint)
+    var mode = C.load<uint32>(address, stat_mode_offset())
     if kind_from_mode(mode) != 1 { return false }
     if executable { if (mode & 64) == 0 { mode += 64 } } else { mode = mode & 0xFFBF }
     return system_chmod(C.terminated_pointer(path), mode) == 0

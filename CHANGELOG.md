@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Create exclusive temporary directories and change the POSIX owner-execute permission of regular files; Windows explicitly reports that this permission is unsupported.
+
 ## [0.23.0] - 2026-11-08
 
 - File reads and writes use bounded native blocks instead of one system call per byte, preserving signatures, EOF, partial reads and errors.

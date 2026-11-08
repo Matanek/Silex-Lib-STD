@@ -13,6 +13,14 @@ Les positions utilisent `SeekFrom.start`, `current` ou `end`.
 `FileSystem` fournit métadonnées suivies ou directes, canonicalisation, liste,
 création et suppression de dossiers, renommage, copie et readonly. La
 suppression récursive reste une décision explicite de l’application.
+
+`FileSystem.create_temporary_directory()` crée un dossier vide et unique dans
+le répertoire temporaire du système et rend son chemin absolu. Sur POSIX, seul
+le propriétaire y a accès ; Windows conserve les ACL du dossier temporaire.
+L’appelant possède son nettoyage. `set_executable(path, executable)` active ou
+retire le droit d’exécution du propriétaire sur un fichier POSIX, en conservant
+les autres droits ; les dossiers sont refusés. Windows rend `unsupported`.
+
 `Path` valide, normalise, joint et décompose selon les règles de plateforme.
 
 `FileWatch` possède un watcher natif récursif ou direct. `next` attend sous un

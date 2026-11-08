@@ -1,0 +1,52 @@
+use STD.Error
+use STD.File
+use STD.FileSystem
+use STD.Subprocess
+use STD.System
+use STD.Text.UTF8
+
+func verify() {
+    let first = FileSystem.create_temporary_directory()
+    let second = FileSystem.create_temporary_directory()
+    assert(first != second)
+    assert(FileSystem.canonicalize(first) == first)
+    assert(FileSystem.list(first).is_empty())
+    let executable = first + "/program"
+    if System.platform() == System.OperatingSystem.windows {
+        File.write_all(executable, "data")
+        match try FileSystem.set_executable(executable, true) {
+            failure(error) => { assert(error.kind == Error.Kind.unsupported()) }
+            success => { panic("Windows must report that POSIX execute permissions are unsupported") }
+        }
+    } else {
+        File.write_all(executable, "#!/bin/sh\nprintf 'temporary-executable-ok'\n")
+        FileSystem.set_executable(executable, true)
+        let command = Subprocess.Command(executable:executable, arguments:[], current_directory:null,
+            inherit_environment:true, environment:[], standard_input:[], maximum_output_bytes:128)
+        let result = Subprocess.run(command)
+        assert(UTF8.decode(@result.standard_output[0:result.standard_output.count()]) == "temporary-executable-ok")
+        match result.status { exited(code) => { assert(code == 0) }; else => { panic("temporary executable failed") } }
+        FileSystem.set_readonly(executable, true)
+        FileSystem.set_executable(executable, false)
+        assert(FileSystem.metadata(executable).readonly, "execute permission must preserve readonly")
+        FileSystem.set_readonly(executable, false)
+        match try Subprocess.run(command) {
+            failure(error) => {}
+            success(rejected) => { match rejected.status { exited(code) => { assert(code != 0) }; else => {} } }
+        }
+        match try FileSystem.set_executable(first, true) {
+            failure(error) => {}
+            success => { panic("set_executable must reject a directory") }
+        }
+    }
+    FileSystem.remove_file(executable)
+    match try FileSystem.set_executable(executable, true) {
+        failure(error) => {}
+        success => { panic("set_executable must reject a missing file") }
+    }
+    FileSystem.remove_directory(first)
+    FileSystem.remove_directory(second)
+}
+
+test "temporary directories and executable files" { verify() }
+func main() { verify(); print("Temporary directory and executable consumer passed") }

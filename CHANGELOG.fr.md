@@ -1,5 +1,9 @@
 # Historique des changements
 
+## [Unreleased]
+
+- Créer des dossiers temporaires exclusifs et régler le droit d’exécution du propriétaire des fichiers POSIX ; Windows signale explicitement que ce droit n’existe pas.
+
 ## [0.23.0] - 2026-11-08
 
 - Calculer les hashes de chaînes par une quantité fixe de travail arithmétique par octet UTF-8, sans changer les valeurs FNV-1a 64 bits, y compris les octets nuls.

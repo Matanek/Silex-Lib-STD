@@ -1,6 +1,8 @@
 use STD.Path as Paths
 use STD.Path.Path as Path
 use STD.Error
+use STD.System
+use STD.UUID
 
 public enum Kind { file; directory; symbolic_link; other }
 
@@ -62,6 +64,29 @@ public func copy_file(source:Path, destination:Path, replace:bool) Result<void, 
 public func set_readonly(path:Path, readonly:bool) Result<void, Error> {
     if Platform.set_readonly(path, readonly) { return Result<void, Error>.success() }
     return Result<void, Error>.failure(filesystem_error("filesystem.set_readonly", path, "system permission update failed"))
+}
+
+// Creates an exclusively owned directory in the system temporary location.
+public func create_temporary_directory() Result<Path, Error> {
+    let base = Platform.temporary_root()
+    if let directory = base {
+        let root = try canonicalize(directory) else error { return Result<Path,Error>.failure(error) }
+        for _ in 0...8 {
+            let path = try Paths.join(root, "silex-" + UUID.v4().to_str()) else error { return Result<Path,Error>.failure(error) }
+            if Platform.create_private_directory(path) { return Result<Path,Error>.success(path) }
+        }
+    }
+    return Result<Path,Error>.failure(filesystem_error("filesystem.create_temporary_directory", "", "system temporary-directory creation failed"))
+}
+
+// POSIX owner-execute bit; Windows has no corresponding file permission.
+public func set_executable(path:Path, executable:bool) Result<void, Error> {
+    if System.platform() == System.OperatingSystem.windows {
+        return Result<void,Error>.failure(Error(kind:Error.Kind.unsupported(), operation:"filesystem.set_executable",
+            subject:path, detail:"Windows does not expose a POSIX execute permission"))
+    }
+    if Platform.set_executable(path, executable) { return Result<void,Error>.success() }
+    return Result<void,Error>.failure(filesystem_error("filesystem.set_executable", path, "system execute-permission update failed"))
 }
 
 func metadata_impl(path:Path, follow:bool, operation:str) Result<Metadata, Error> {

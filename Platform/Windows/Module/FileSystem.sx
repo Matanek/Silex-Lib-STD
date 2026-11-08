@@ -130,3 +130,15 @@ func wide_string(text:str) str {
     let view = @bytes[0:bytes.count()]
     return C.string(view)
 }
+
+let system_temp_path = C.function<func(uint32, C.MutablePointer<int>) uint32>(library:Boundary.System, name:"GetTempPathW")
+
+func temporary_root() str? {
+    var buffer:int[1024]
+    let count = system_temp_path(4096, C.mutable_pointer(buffer))
+    if count == 0 || count >= 4096 { return null }
+    return wide_text(C.address_bits(C.mutable_pointer(buffer)), count as int)
+}
+
+func create_private_directory(path:str) bool { return create_directory(path) }
+func set_executable(path:str, executable:bool) bool { return false }

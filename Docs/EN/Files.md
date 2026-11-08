@@ -44,6 +44,13 @@ followed and direct metadata and obtains a canonical path.
 [PublishReport.sx](Recipes/Files/PublishReport.md) exercises the complete
 create, copy, rename, protect, list and cleanup lifecycle.
 
+`FileSystem.create_temporary_directory()` creates a unique empty directory in
+the system temporary location and returns its absolute path. On POSIX only
+the owner can access it; Windows inherits the temporary directory ACLs. The
+caller owns cleanup. `set_executable(path, executable)` changes the POSIX
+owner-execute permission of a regular file, preserving all other permissions;
+directories are rejected. Windows returns `unsupported`.
+
 `Path` validates, normalizes, joins and decomposes platform paths. Its
 operations are fallible because malformed paths and platform rules are part of
 the observable contract. See [InspectPath.sx](Recipes/Files/InspectPath.md).

@@ -184,3 +184,23 @@ func decimal(number:int32) str {
         failure(error) => { panic("descriptor formatting failed") }
     }
 }
+
+let system_getenv = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.System, name:"getenv")
+
+func temporary_root() str? {
+    let value = C.address_bits(system_getenv(C.terminated_pointer("TMPDIR")))
+    if value != 0 { return terminated_text(value, 4096) }
+    return "/tmp"
+}
+
+func create_private_directory(path:str) bool { return system_mkdir(C.terminated_pointer(path), 448) == 0 }
+
+func set_executable(path:str, executable:bool) bool {
+    var status:int[18]
+    if system_newfstatat(-100, C.terminated_pointer(path), C.mutable_pointer(status), 0) != 0 { return false }
+    let address = C.address_bits(C.mutable_pointer(status))
+    var mode = C.load<uint32>(address, 24 as uint)
+    if kind_from_mode(mode) != 1 { return false }
+    if executable { if (mode & 64) == 0 { mode += 64 } } else { mode = mode & 0xFFBF }
+    return system_chmod(C.terminated_pointer(path), mode) == 0
+}

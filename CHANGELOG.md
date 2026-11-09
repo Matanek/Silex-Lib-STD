@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.23.0] - 2026-11-08
+## [0.23.0] - 2026-11-09
 
 - Recognize regular Windows files when archive or readonly attributes replace NORMAL. Metadata and directory entries retain their file kind.
 

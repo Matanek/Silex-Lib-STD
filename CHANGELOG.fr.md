@@ -1,6 +1,6 @@
 # Historique des changements
 
-## [0.23.0] - 2026-11-08
+## [0.23.0] - 2026-11-09
 
 - Reconnaître les fichiers Windows ordinaires même lorsque leurs attributs archive ou lecture seule remplacent l’attribut NORMAL. Les métadonnées et listes de dossiers conservent le type fichier.
 

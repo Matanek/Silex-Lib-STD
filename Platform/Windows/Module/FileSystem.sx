@@ -95,8 +95,9 @@ func set_readonly(path:str, readonly:bool) bool {
 func kind_from_attributes(attributes:uint32) int {
     if (attributes & 0x400) != 0 { return 3 }
     if (attributes & 0x10) != 0 { return 2 }
-    if (attributes & 0x80) != 0 { return 1 }
-    return 4
+    if (attributes & 0x40) != 0 { return 4 }
+    // NORMAL is absent when ARCHIVE, READONLY or another file attribute is set.
+    return 1
 }
 
 func wide_length(address:uint, maximum:int) int {

@@ -2,6 +2,8 @@
 
 ## [0.23.0] - 2026-11-08
 
+- Recognize regular Windows files when archive or readonly attributes replace NORMAL. Metadata and directory entries retain their file kind.
+
 - Correct Linux ARM64 directory flags and file-mode layouts, and use macOS Intel 64-bit inode bindings. Compare Windows temporary paths after normalizing their separators.
 
 - Create exclusive temporary directories and change the POSIX owner-execute permission of regular files; Windows explicitly reports that this permission is unsupported.

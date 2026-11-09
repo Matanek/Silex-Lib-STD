@@ -16,6 +16,10 @@ func verify() {
     let executable = first + "/program"
     if System.platform() == System.OperatingSystem.windows {
         File.write_all(executable, "data")
+        assert(FileSystem.metadata(executable).kind == FileSystem.Kind.file)
+        FileSystem.set_readonly(executable, true)
+        assert(FileSystem.metadata(executable).kind == FileSystem.Kind.file)
+        FileSystem.set_readonly(executable, false)
         match try FileSystem.set_executable(executable, true) {
             failure(error) => { assert(error.kind == Error.Kind.unsupported()) }
             success => { panic("Windows must report that POSIX execute permissions are unsupported") }

@@ -2,6 +2,8 @@
 
 ## [0.23.0] - 2026-11-08
 
+- Reconnaître les fichiers Windows ordinaires même lorsque leurs attributs archive ou lecture seule remplacent l’attribut NORMAL. Les métadonnées et listes de dossiers conservent le type fichier.
+
 - Corriger la lecture des dossiers et modes de fichiers sur Linux ARM64, ainsi que les bindings inode 64 bits de macOS Intel. Les chemins temporaires Windows sont comparés après normalisation de leurs séparateurs.
 
 - Créer des dossiers temporaires exclusifs et régler le droit d’exécution du propriétaire des fichiers POSIX ; Windows signale explicitement que ce droit n’existe pas.
